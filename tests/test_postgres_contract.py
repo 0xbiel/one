@@ -17,6 +17,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.config import Settings
+from app.db import _statements
 from app.main import make_app
 
 
@@ -56,6 +57,18 @@ def _admin(client: TestClient) -> tuple[dict[str, str], str]:
     assert completed.status_code == 200, completed.text
     payload = completed.json()
     return {"Authorization": f"Bearer {payload['access_token']}"}, payload["home_id"]
+
+
+def test_migration_statement_splitter_ignores_comments_and_string_semicolons():
+    script = """
+    -- comment with a ; semicolon
+    CREATE TABLE demo (value TEXT DEFAULT 'keep; this'); /* inline ; comment */
+    INSERT INTO demo VALUES ('it''s still one statement');
+    """
+    assert _statements(script) == [
+        "CREATE TABLE demo (value TEXT DEFAULT 'keep; this')",
+        "INSERT INTO demo VALUES ('it''s still one statement')",
+    ]
 
 
 def test_postgres_health_pairing_transaction_and_cascade(postgres_client: TestClient):

@@ -36,6 +36,15 @@ class PairStartResponse(BaseModel):
     user_id: str
     role: str
 
+
+class PairingStatusResponse(BaseModel):
+    pairing_id: str
+    home_id: str
+    status: str = Field(pattern="^(pending|connected|expired)$")
+    expires_at: str
+    connected_at: str | None = None
+    device: dict
+
 class DevicePairingStart(BaseModel):
     # `display_name` is accepted as a compatibility alias for the web client;
     # this endpoint always creates a publisher membership regardless of it.
@@ -491,6 +500,34 @@ def make_app(settings: Settings | None = None) -> FastAPI:
         db.execute("INSERT INTO pairing_codes VALUES (?,?,?,?,?,NULL)", (hash_secret(code), home_id, user_id, "publisher", iso_after(body.expires_in_seconds / 60)))
         audit(actor, "pairing.publisher.start", "user", user_id, home_id)
         return {"pairing_id": user_id, "pairing_code": code, "code": code, "expires_in_seconds": body.expires_in_seconds, "home_id": home_id, "user_id": user_id}
+
+    @app.get("/api/v1/homes/{home_id}/pairing/{pairing_id}/status", response_model=PairingStatusResponse)
+    def device_pairing_status(home_id: str, pairing_id: str, actor: Current):
+        """Return publisher setup state without returning the pairing code."""
+        home_check(actor, home_id)
+        if actor["role"] not in {"admin", "caregiver"}:
+            raise HTTPException(403, "Only an admin or caregiver can view pairing state")
+        row = db.one(
+            """SELECT pc.expires_at, pc.used_at, u.id AS user_id, u.display_name,
+                      pc.role
+               FROM pairing_codes pc
+               JOIN users u ON u.id=pc.user_id
+              WHERE pc.home_id=? AND pc.user_id=? AND pc.role='publisher'
+              ORDER BY pc.expires_at DESC LIMIT 1""",
+            (home_id, pairing_id),
+        )
+        if not row:
+            raise HTTPException(404, "Pairing session not found")
+        is_connected = row["used_at"] is not None
+        is_expired = not is_connected and expired(row["expires_at"])
+        return {
+            "pairing_id": pairing_id,
+            "home_id": home_id,
+            "status": "connected" if is_connected else ("expired" if is_expired else "pending"),
+            "expires_at": row["expires_at"],
+            "connected_at": row["used_at"] if is_connected else None,
+            "device": {"id": row["user_id"], "label": row["display_name"], "role": row["role"]},
+        }
 
     @app.post("/api/v1/pairing/complete")
     def pairing_complete(body: PairComplete):

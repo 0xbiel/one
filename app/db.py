@@ -49,11 +49,74 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 
 
 def _statements(script: str) -> list[str]:
-    """Split the project's deliberately simple migration SQL into commands."""
-    # Migration SQL currently contains no semicolons inside string literals.
-    # Keeping this dependency-free also means the Docker image does not need a
-    # SQL parser merely to initialize its schema.
-    return [statement.strip() for statement in script.split(";") if statement.strip()]
+    """Split migration SQL while respecting strings and SQL comments.
+
+    This is intentionally a small parser rather than a general SQL parser:
+    migrations are trusted repository files, but comments and semicolons in a
+    string literal must not alter statement boundaries during PostgreSQL
+    startup. Both line and block comments are accepted.
+    """
+    statements: list[str] = []
+    buffer: list[str] = []
+    state = "normal"
+    index = 0
+    while index < len(script):
+        char = script[index]
+        next_char = script[index + 1] if index + 1 < len(script) else ""
+        if state == "normal":
+            if char == "'":
+                state = "single"
+                buffer.append(char)
+            elif char == '"':
+                state = "double"
+                buffer.append(char)
+            elif char == "-" and next_char == "-":
+                state = "line_comment"
+                buffer.append(" ")
+                index += 1
+            elif char == "/" and next_char == "*":
+                state = "block_comment"
+                buffer.append(" ")
+                index += 1
+            elif char == ";":
+                statement = "".join(buffer).strip()
+                if statement:
+                    statements.append(statement)
+                buffer = []
+            else:
+                buffer.append(char)
+        elif state == "line_comment":
+            if char in "\r\n":
+                state = "normal"
+                buffer.append(char)
+        elif state == "block_comment":
+            if char == "*" and next_char == "/":
+                state = "normal"
+                index += 1
+        elif state == "single":
+            buffer.append(char)
+            if char == "'":
+                if next_char == "'":
+                    buffer.append(next_char)
+                    index += 1
+                else:
+                    state = "normal"
+            elif char == "\\" and next_char:
+                buffer.append(next_char)
+                index += 1
+        else:  # double-quoted identifier
+            buffer.append(char)
+            if char == '"':
+                if next_char == '"':
+                    buffer.append(next_char)
+                    index += 1
+                else:
+                    state = "normal"
+        index += 1
+    statement = "".join(buffer).strip()
+    if statement:
+        statements.append(statement)
+    return statements
 
 
 def _portable_schema() -> str:
@@ -203,6 +266,9 @@ class Database:
     def _initialize_postgresql(self) -> None:
         with self._lock:
             try:
+                # Serialize startup across API processes so two replicas do
+                # not both observe a missing migration and race its INSERT.
+                self.conn.execute("SELECT pg_advisory_xact_lock(hashtext('one.schema.migrations'))")
                 self.conn.execute(SCHEMA_MIGRATIONS)
                 applied = {
                     row["version"]

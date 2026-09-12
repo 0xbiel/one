@@ -1015,6 +1015,52 @@
         "title": "PairStartResponse",
         "type": "object"
       },
+      "PairingStatusResponse": {
+        "properties": {
+          "connected_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connected At"
+          },
+          "device": {
+            "additionalProperties": true,
+            "title": "Device",
+            "type": "object"
+          },
+          "expires_at": {
+            "title": "Expires At",
+            "type": "string"
+          },
+          "home_id": {
+            "title": "Home Id",
+            "type": "string"
+          },
+          "pairing_id": {
+            "title": "Pairing Id",
+            "type": "string"
+          },
+          "status": {
+            "pattern": "^(pending|connected|expired)$",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "pairing_id",
+          "home_id",
+          "status",
+          "expires_at",
+          "device"
+        ],
+        "title": "PairingStatusResponse",
+        "type": "object"
+      },
       "ProvisionalMapIn": {
         "properties": {
           "camera_id": {
@@ -3110,6 +3156,55 @@
           }
         },
         "summary": "Device Pairing Start"
+      }
+    },
+    "/api/v1/homes/{home_id}/pairing/{pairing_id}/status": {
+      "get": {
+        "description": "Return publisher setup state without returning the pairing code.",
+        "operationId": "device_pairing_status_api_v1_homes__home_id__pairing__pairing_id__status_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "pairing_id",
+            "required": true,
+            "schema": {
+              "title": "Pairing Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PairingStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Device Pairing Status"
       }
     },
     "/api/v1/homes/{home_id}/privacy/delete": {

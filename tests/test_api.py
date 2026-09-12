@@ -47,6 +47,12 @@ def test_email_identity_survives_device_change_and_verifies_once(tmp_path):
     payload = created.json()
     assert payload["email"] == "caregiver@example.com"
     assert payload["delivery"] == "development_outbox"
+    duplicate = c.post("/api/v1/auth/email/request", json={
+        "purpose": "create",
+        "email": "  CAREGIVER@example.com",
+        "display_name": "Duplicate",
+    })
+    assert duplicate.status_code == 409
     verified = c.post("/api/v1/auth/email/verify", json={"email": "CAREGIVER@example.com", "code": payload["dev_code"]})
     assert verified.status_code == 200
     token = verified.json()["access_token"]
@@ -91,8 +97,14 @@ def test_publisher_pairing_token_scopes_and_video_consent(tmp_path):
     settings.livekit_api_key, settings.livekit_api_secret = "lk-key", "lk-secret"
     started = c.post(f"/api/v1/homes/{home}/pairing/start", headers=admin_headers, json={"label": "Hall iPhone"})
     assert started.status_code == 200 and started.json()["home_id"] == home
+    pairing_id = started.json()["pairing_id"]
+    pending = c.get(f"/api/v1/homes/{home}/pairing/{pairing_id}/status", headers=admin_headers)
+    assert pending.status_code == 200 and pending.json()["status"] == "pending"
+    assert "pairing_code" not in pending.json() and "code" not in pending.json()
     publisher = c.post("/api/v1/pairing/complete", json={"code": started.json()["pairing_code"]})
     assert publisher.status_code == 200
+    connected = c.get(f"/api/v1/homes/{home}/pairing/{pairing_id}/status", headers=admin_headers)
+    assert connected.status_code == 200 and connected.json()["status"] == "connected" and connected.json()["connected_at"]
     publisher_headers = {"Authorization": f"Bearer {publisher.json()['access_token']}"}
     assert c.post(f"/api/v1/homes/{home}/consents", headers=publisher_headers, json={"purpose": "video_capture", "policy_version": "2026-09-01", "granted": True}).status_code == 403
     denied = c.post(f"/api/v1/homes/{home}/livekit/token", headers=publisher_headers, json={})
@@ -151,7 +163,7 @@ def test_assistant_degraded_and_consent_export_delete(tmp_path):
     consent = c.post(f"/api/v1/homes/{home}/consents", headers=h, json={"purpose": "camera", "policy_version": "2026-01"})
     assert consent.status_code == 200
     summary = c.post(f"/api/v1/homes/{home}/check-ins", headers=h, json={"transcript": "Hello"})
-    assert summary.status_code == 200 and summary.json()["degraded"] is True and summary.json()["inference_status"] in {"connection_error", "http_401", "timeout", "invalid_model_response"}
+    assert summary.status_code == 200 and summary.json()["degraded"] is True and summary.json()["inference_status"] in {"disabled", "connection_error", "http_401", "timeout", "invalid_model_response"}
     export = c.post(f"/api/v1/homes/{home}/privacy/export", headers=h)
     assert export.status_code == 200 and "consents" in export.json()["data"]
     assert export.json()["data"]["audit_log"]

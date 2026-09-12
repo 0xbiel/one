@@ -16,6 +16,8 @@ CREATE TABLE IF NOT EXISTS email_verifications (
 CREATE INDEX IF NOT EXISTS email_verifications_lookup_idx
   ON email_verifications(email, expires_at);
 
+-- API writes canonical case-folded, trimmed addresses. This index also
+-- protects direct SQL/import paths from duplicate ASCII case/space variants.
 CREATE UNIQUE INDEX IF NOT EXISTS users_normalized_email_idx
   ON users(lower(trim(email)))
   WHERE email IS NOT NULL;
