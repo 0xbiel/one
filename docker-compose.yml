@@ -36,7 +36,10 @@ services:
         VITE_API_BASE_URL: ${ONE_FRONTEND_API_BASE_URL:-/api/v1}
         VITE_DEMO_MODE: ${ONE_FRONTEND_DEMO_MODE:-false}
     depends_on: [api]
-    ports: ["127.0.0.1:${ONE_FRONTEND_PORT:-4173}:80"]
+    # Keep the default private to this Mac. Set ONE_FRONTEND_BIND=0.0.0.0
+    # only for a controlled LAN test; Tailscale Serve can proxy the loopback
+    # default without exposing the container on the whole LAN.
+    ports: ["${ONE_FRONTEND_BIND:-127.0.0.1}:${ONE_FRONTEND_PORT:-4173}:80"]
   postgres:
     image: postgres:16-alpine
     environment:
