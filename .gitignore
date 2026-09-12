@@ -1,0 +1,8 @@
+.env
+.venv/
+*.db
+data/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.DS_Store

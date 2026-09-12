@@ -1,0 +1,67 @@
+services:
+  api:
+    build: .
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      ONE_DATABASE_URL: ${ONE_DATABASE_URL:-sqlite:///./data/one.db}
+      ONE_OBJECT_STORE_PATH: ${ONE_OBJECT_STORE_PATH:-/app/data/objects}
+      ONE_BOOTSTRAP_SECRET: ${ONE_BOOTSTRAP_SECRET:-change-me-in-production}
+      ONE_LIVEKIT_URL: ${ONE_LIVEKIT_URL:-ws://localhost:7880}
+      # These match LiveKit's --dev placeholder credentials. Replace them for
+      # any shared LAN or production deployment; no hosted LiveKit account is
+      # used by this stack.
+      ONE_LIVEKIT_API_KEY: ${ONE_LIVEKIT_API_KEY:-devkey}
+      ONE_LIVEKIT_API_SECRET: ${ONE_LIVEKIT_API_SECRET:-secret}
+      ONE_LM_STUDIO_URL: ${ONE_LM_STUDIO_URL:-http://host.docker.internal:1234/v1}
+      ONE_LM_STUDIO_MODEL: ${ONE_LM_STUDIO_MODEL:-qwen3.6-35b-a3b}
+      ONE_LM_STUDIO_API_KEY: ${ONE_LM_STUDIO_API_KEY:-}
+    depends_on: [postgres, redis, minio, livekit]
+    ports: ["127.0.0.1:8000:8000"]
+    volumes: ["one_objects:/app/data/objects"]
+  frontend:
+    build:
+      context: ../one-frontend
+      args:
+        VITE_API_BASE_URL: ${ONE_FRONTEND_API_BASE_URL:-/api/v1}
+        VITE_DEMO_MODE: ${ONE_FRONTEND_DEMO_MODE:-false}
+    depends_on: [api]
+    ports: ["127.0.0.1:${ONE_FRONTEND_PORT:-4173}:80"]
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${ONE_POSTGRES_DB:-one}
+      POSTGRES_USER: ${ONE_POSTGRES_USER:-one}
+      POSTGRES_PASSWORD: ${ONE_POSTGRES_PASSWORD:-change-me}
+    volumes: ["one_pg:/var/lib/postgresql/data"]
+  redis:
+    image: redis:7-alpine
+  minio:
+    image: quay.io/minio/minio:latest
+    command: server /data --console-address :9001
+    environment:
+      MINIO_ROOT_USER: ${ONE_MINIO_ROOT_USER:-one-local}
+      MINIO_ROOT_PASSWORD: ${ONE_MINIO_ROOT_PASSWORD:-change-me-change-me}
+    volumes: ["one_minio:/data"]
+  livekit:
+    image: livekit/livekit-server:latest
+    # Self-hosted development server; no LiveKit Cloud subscription required.
+    command: --dev --bind 0.0.0.0
+    ports: ["7880:7880", "7881:7881", "7882:7882/udp"]
+  caddy:
+    image: caddy:2-alpine
+    depends_on: [api, frontend]
+    # Keep the local reverse proxy off the host's public interfaces. Use
+    # Tailscale Serve for phone access, or override these bindings explicitly
+    # when a controlled LAN ingress is required.
+    ports:
+      - "127.0.0.1:${ONE_CADDY_HTTPS_PORT:-8443}:443"
+      - "127.0.0.1:${ONE_CADDY_HTTP_PORT:-8080}:80"
+    volumes: ["./Caddyfile:/etc/caddy/Caddyfile:ro", "caddy_data:/data", "caddy_config:/config"]
+volumes:
+  one_objects:
+  one_pg:
+  one_minio:
+  caddy_data:
+  caddy_config:
