@@ -87,7 +87,9 @@ def _postgres_sql(sql: str) -> str:
     """Translate the intentionally SQLite-shaped query API to psycopg SQL."""
     # The application uses qmark placeholders everywhere so isolated SQLite
     # tests and Postgres share the same query strings.
-    translated = sql.replace("?", "%s")
+    # psycopg uses `%` for its parameter grammar. Escape literal percent signs
+    # first (for example a SQL LIKE pattern), then introduce the `%s` markers.
+    translated = sql.replace("%", "%%").replace("?", "%s")
     # SQLite's `IS ?` is a null-safe equality comparison. PostgreSQL only
     # permits IS with NULL/TRUE/FALSE literals, so use its equivalent.
     return re.sub(r"\bIS\s+%s\b", "IS NOT DISTINCT FROM %s", translated, flags=re.IGNORECASE)

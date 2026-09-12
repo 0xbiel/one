@@ -114,6 +114,7 @@ def test_postgres_health_pairing_transaction_and_cascade(postgres_client: TestCl
         "medication_check_ins",
     } <= actual_tables
     assert [row["version"] for row in db.many("SELECT version FROM schema_migrations ORDER BY version")] == [1, 2]
+    assert db.one("SELECT '100%' AS label")["label"] == "100%"
 
     # A second application process must see the same migration set.  This
     # catches non-idempotent or multi-statement initialization before serving
