@@ -52,10 +52,40 @@ class ConsentIn(BaseModel):
     # representation process is separately documented; this field never
     # infers authority from a caregiver role.
     subject_user_id: str | None = None
-class CameraIn(BaseModel): name: str = Field(min_length=1, max_length=120); room_id: str | None = None
+class CameraIn(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    room_id: str | None = None
+    resolution_width: int | None = Field(default=None, gt=0, le=7680)
+    resolution_height: int | None = Field(default=None, gt=0, le=4320)
+    metadata: dict = Field(default_factory=dict)
+class CameraUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    room_id: str | None = None
+    resolution_width: int | None = Field(default=None, gt=0, le=7680)
+    resolution_height: int | None = Field(default=None, gt=0, le=4320)
+    metadata: dict = Field(default_factory=dict)
 class RoomIn(BaseModel): name: str = Field(min_length=1, max_length=120)
 class MapIn(BaseModel): room_id: str | None = None; coordinate_frame: str = Field(default="roomplan-local", max_length=80); map_data: dict
-class CalibrationIn(BaseModel): camera_id: str; map_id: str; intrinsics: dict; extrinsics: dict; accuracy_m: float | None = Field(default=None, ge=0, le=100)
+class ProvisionalMapIn(BaseModel):
+    camera_id: str
+    room_id: str | None = None
+    resolution_width: int = Field(gt=0, le=7680)
+    resolution_height: int = Field(gt=0, le=4320)
+    zones: list[dict] = Field(default_factory=list, max_length=100)
+class RoomPlanMapIn(BaseModel):
+    room_id: str | None = None
+    normalized_scan: dict
+    scan_metadata: dict = Field(default_factory=dict)
+class CalibrationIn(BaseModel):
+    camera_id: str
+    map_id: str
+    intrinsics: dict
+    extrinsics: dict
+    accuracy_m: float | None = Field(default=None, ge=0, le=100)
+    resolution_width: int | None = Field(default=None, gt=0, le=7680)
+    resolution_height: int | None = Field(default=None, gt=0, le=4320)
+    camera_metadata: dict = Field(default_factory=dict)
+    source: str = Field(default="manual", max_length=40)
 class ObjectIn(BaseModel): label: str = Field(min_length=1, max_length=80); display_name: str | None = Field(default=None, max_length=120)
 class ObservationIn(BaseModel): object_id: str | None = None; camera_id: str | None = None; map_id: str | None = None; x: float | None = None; y: float | None = None; z: float | None = None; uncertainty_m: float | None = Field(default=None, ge=0, le=100); confidence: float = Field(default=0.0, ge=0, le=1); detector_version: str = "local-cv-v1"
 class CheckInIn(BaseModel): subject_user_id: str | None = None; transcript: str = Field(default="", max_length=4000)
@@ -293,13 +323,17 @@ def make_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(403, "Active video_capture consent is required")
 
     def camera_view(row: dict) -> dict:
-        return {
+        metadata = json.loads(row.get("metadata_json") or "{}")
+        view = {
             **row,
+            "metadata": metadata,
             "label": row["name"],
             "platform": "browser",
             "status": "paused" if is_paused(row["home_id"]) else ("online" if row["enabled"] else "offline"),
             "lastSeenAt": row["created_at"],
         }
+        view.pop("metadata_json", None)
+        return view
 
     @app.get("/api/v1/health")
     def health():
@@ -385,7 +419,18 @@ def make_app(settings: Settings | None = None) -> FastAPI:
 
     @app.post("/api/v1/homes/{home_id}/cameras")
     def camera(home_id: str, body: CameraIn, actor: Current):
-        home_check(actor, home_id); publisher_block(actor); cid = str(uuid.uuid4()); db.execute("INSERT INTO cameras VALUES (?,?,?,?,?,?)", (cid, home_id, body.name, body.room_id, 1, now_iso())); return {"id": cid, **body.model_dump(), "enabled": True}
+        home_check(actor, home_id); publisher_block(actor); cid = str(uuid.uuid4()); db.execute("INSERT INTO cameras(id,home_id,name,room_id,enabled,created_at,resolution_width,resolution_height,metadata_json) VALUES (?,?,?,?,?,?,?,?,?)", (cid, home_id, body.name, body.room_id, 1, now_iso(), body.resolution_width, body.resolution_height, json.dumps(body.metadata))); return {"id": cid, **body.model_dump(), "enabled": True}
+
+    @app.patch("/api/v1/homes/{home_id}/cameras/{camera_id}")
+    def camera_update(home_id: str, camera_id: str, body: CameraUpdate, actor: Current):
+        home_check(actor, home_id); publisher_block(actor)
+        row = db.one("SELECT * FROM cameras WHERE id=? AND home_id=?", (camera_id, home_id))
+        if not row: raise HTTPException(404, "Camera not found")
+        values = {"name": body.name if body.name is not None else row["name"], "room_id": body.room_id if "room_id" in body.model_fields_set else row["room_id"], "resolution_width": body.resolution_width if "resolution_width" in body.model_fields_set else row["resolution_width"], "resolution_height": body.resolution_height if "resolution_height" in body.model_fields_set else row["resolution_height"], "metadata_json": json.dumps(body.metadata) if "metadata" in body.model_fields_set else row.get("metadata_json", "{}")}
+        changed = any(values[key] != row.get(key) for key in ("name", "room_id", "resolution_width", "resolution_height", "metadata_json"))
+        db.execute("UPDATE cameras SET name=?, room_id=?, resolution_width=?, resolution_height=?, metadata_json=? WHERE id=? AND home_id=?", (*values.values(), camera_id, home_id))
+        if changed: db.execute("UPDATE calibrations SET status='invalidated', invalidated_at=?, invalidation_reason='camera metadata or resolution changed' WHERE home_id=? AND camera_id=? AND status='active'", (now_iso(), home_id, camera_id))
+        return {"id": camera_id, "name": values["name"], "room_id": values["room_id"], "resolution_width": values["resolution_width"], "resolution_height": values["resolution_height"], "metadata": body.metadata, "calibrations_invalidated": changed}
 
     @app.get("/api/v1/homes/{home_id}/cameras")
     def cameras(home_id: str, actor: Current):
@@ -403,7 +448,27 @@ def make_app(settings: Settings | None = None) -> FastAPI:
 
     @app.post("/api/v1/homes/{home_id}/maps")
     def room_map(home_id: str, body: MapIn, actor: Current):
-        home_check(actor, home_id); publisher_block(actor); row = db.one("SELECT COALESCE(MAX(revision),0)+1 revision FROM room_maps WHERE home_id=? AND room_id IS ?", (home_id, body.room_id)); mid = str(uuid.uuid4()); key = f"maps/{home_id}/{mid}.json"; store.put_json(key, body.map_data); db.execute("INSERT INTO room_maps VALUES (?,?,?,?,?,?,?,?)", (mid, home_id, body.room_id, row["revision"], body.coordinate_frame, key, json.dumps(body.map_data), now_iso())); return {"id": mid, "revision": row["revision"], "coordinate_frame": body.coordinate_frame, "artifact_key": key}
+        home_check(actor, home_id); publisher_block(actor); row = db.one("SELECT COALESCE(MAX(revision),0)+1 revision FROM room_maps WHERE home_id=? AND room_id IS ?", (home_id, body.room_id)); mid = str(uuid.uuid4()); key = f"maps/{home_id}/{mid}.json"; store.put_json(key, body.map_data); created = now_iso(); db.execute("INSERT INTO room_maps(id,home_id,room_id,revision,coordinate_frame,artifact_key,map_json,created_at,source,approximate,localization_status,metadata_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", (mid, home_id, body.room_id, row["revision"], body.coordinate_frame, key, json.dumps(body.map_data), created, "manual", 0, "unlocalized", "{}")); db.execute("UPDATE calibrations SET status='invalidated', invalidated_at=?, invalidation_reason='map revision changed' WHERE home_id=? AND status='active' AND map_id != ?", (created, home_id, mid)); return {"id": mid, "revision": row["revision"], "coordinate_frame": body.coordinate_frame, "artifact_key": key}
+
+    def create_map(home_id: str, room_id: str | None, coordinate_frame: str, map_data: dict, source: str, approximate: bool, localization_status: str, metadata: dict, actor: dict) -> dict:
+        row = db.one("SELECT COALESCE(MAX(revision),0)+1 revision FROM room_maps WHERE home_id=? AND room_id IS ?", (home_id, room_id))
+        mid = str(uuid.uuid4()); key = f"maps/{home_id}/{mid}.json"; store.put_json(key, map_data)
+        db.execute("INSERT INTO room_maps(id,home_id,room_id,revision,coordinate_frame,artifact_key,map_json,created_at,source,approximate,localization_status,metadata_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", (mid, home_id, room_id, row["revision"], coordinate_frame, key, json.dumps(map_data), now_iso(), source, int(approximate), localization_status, json.dumps(metadata)))
+        db.execute("UPDATE calibrations SET status='invalidated', invalidated_at=?, invalidation_reason='map revision changed' WHERE home_id=? AND status='active' AND map_id != ?", (now_iso(), home_id, mid))
+        audit(actor, "map.create", "room_map", mid, home_id)
+        return {"id": mid, "revision": row["revision"], "coordinate_frame": coordinate_frame, "source": source, "approximate": approximate, "localization_status": localization_status, "metadata": metadata}
+
+    @app.post("/api/v1/homes/{home_id}/maps/provisional")
+    def provisional_map(home_id: str, body: ProvisionalMapIn, actor: Current):
+        home_check(actor, home_id); publisher_block(actor)
+        camera = db.one("SELECT * FROM cameras WHERE id=? AND home_id=? AND enabled=1", (body.camera_id, home_id))
+        if not camera: raise HTTPException(404, "Camera not found or disabled")
+        return create_map(home_id, body.room_id, "camera-zone-local", {"zones": body.zones}, "camera-provisional", True, "zone-only", {"camera_id": body.camera_id, "resolution_width": body.resolution_width, "resolution_height": body.resolution_height}, actor)
+
+    @app.post("/api/v1/homes/{home_id}/maps/roomplan")
+    def roomplan_map(home_id: str, body: RoomPlanMapIn, actor: Current):
+        home_check(actor, home_id); publisher_block(actor)
+        return create_map(home_id, body.room_id, "roomplan-local", body.normalized_scan, "roomplan-normalized", True, "unlocalized", body.scan_metadata, actor)
 
     def map_view(row: dict) -> dict:
         """Return a JSON-safe map read model without exposing storage internals."""
@@ -419,6 +484,10 @@ def make_app(settings: Settings | None = None) -> FastAPI:
             "coordinate_frame": row["coordinate_frame"],
             "map_data": map_data,
             "created_at": row["created_at"],
+            "source": row.get("source", "manual"),
+            "approximate": bool(row.get("approximate", 0)),
+            "localization_status": row.get("localization_status", "unlocalized"),
+            "metadata": json.loads(row.get("metadata_json") or "{}"),
         }
 
     @app.get("/api/v1/homes/{home_id}/maps")
@@ -459,7 +528,19 @@ def make_app(settings: Settings | None = None) -> FastAPI:
 
     @app.post("/api/v1/homes/{home_id}/calibrations")
     def calibration(home_id: str, body: CalibrationIn, actor: Current):
-        home_check(actor, home_id); publisher_block(actor); cid = str(uuid.uuid4()); db.execute("INSERT INTO calibrations VALUES (?,?,?,?,?,?,?,?)", (cid, home_id, body.camera_id, body.map_id, json.dumps(body.intrinsics), json.dumps(body.extrinsics), body.accuracy_m, now_iso())); return {"id": cid, **body.model_dump()}
+        home_check(actor, home_id); publisher_block(actor)
+        if not db.one("SELECT id FROM cameras WHERE id=? AND home_id=?", (body.camera_id, home_id)): raise HTTPException(404, "Camera not found")
+        if not db.one("SELECT id FROM room_maps WHERE id=? AND home_id=?", (body.map_id, home_id)): raise HTTPException(404, "Map not found")
+        cid = str(uuid.uuid4()); created = now_iso()
+        db.execute("UPDATE calibrations SET status='invalidated', invalidated_at=?, invalidation_reason='superseded by new calibration' WHERE home_id=? AND camera_id=? AND status='active'", (created, home_id, body.camera_id))
+        db.execute("INSERT INTO calibrations(id,home_id,camera_id,map_id,intrinsics_json,extrinsics_json,accuracy_m,created_at,resolution_width,resolution_height,camera_metadata_json,source,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)", (cid, home_id, body.camera_id, body.map_id, json.dumps(body.intrinsics), json.dumps(body.extrinsics), body.accuracy_m, created, body.resolution_width, body.resolution_height, json.dumps(body.camera_metadata), body.source, "active"))
+        return {"id": cid, **body.model_dump(), "status": "active", "invalidated_previous": True}
+
+    @app.get("/api/v1/homes/{home_id}/calibrations")
+    def calibrations(home_id: str, actor: Current):
+        home_check(actor, home_id); publisher_block(actor)
+        rows = db.many("SELECT * FROM calibrations WHERE home_id=? ORDER BY created_at DESC", (home_id,))
+        return {"data": [{**row, "intrinsics": json.loads(row.pop("intrinsics_json")), "extrinsics": json.loads(row.pop("extrinsics_json")), "camera_metadata": json.loads(row.pop("camera_metadata_json") or "{}")} for row in rows]}
 
     @app.post("/api/v1/homes/{home_id}/objects")
     def object_create(home_id: str, body: ObjectIn, actor: Current):

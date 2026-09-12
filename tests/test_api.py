@@ -94,6 +94,20 @@ def test_camera_map_observation_and_sse_schema(tmp_path):
         assert next(response.iter_lines()).startswith(": connected")
 
 
+def test_camera_provisional_roomplan_revision_and_calibration_invalidation(tmp_path):
+    c = client(tmp_path); token, home = auth(c); h = {"Authorization": f"Bearer {token}"}
+    camera = c.post(f"/api/v1/homes/{home}/cameras", headers=h, json={"name": "Hall", "resolution_width": 640, "resolution_height": 480}).json()
+    provisional = c.post(f"/api/v1/homes/{home}/maps/provisional", headers=h, json={"camera_id": camera["id"], "resolution_width": 640, "resolution_height": 480, "zones": [{"id": "hall", "confidence": 0.4}]})
+    assert provisional.status_code == 200 and provisional.json()["approximate"] is True and provisional.json()["localization_status"] == "zone-only"
+    roomplan = c.post(f"/api/v1/homes/{home}/maps/roomplan", headers=h, json={"normalized_scan": {"rooms": [{"id": "hall"}]}, "scan_metadata": {"device": "iPhone"}})
+    assert roomplan.status_code == 200 and roomplan.json()["source"] == "roomplan-normalized"
+    calibration = c.post(f"/api/v1/homes/{home}/calibrations", headers=h, json={"camera_id": camera["id"], "map_id": roomplan.json()["id"], "intrinsics": {}, "extrinsics": {}, "resolution_width": 640, "resolution_height": 480})
+    assert calibration.status_code == 200 and calibration.json()["status"] == "active"
+    changed = c.patch(f"/api/v1/homes/{home}/cameras/{camera['id']}", headers=h, json={"resolution_width": 1280, "resolution_height": 720})
+    assert changed.status_code == 200 and changed.json()["calibrations_invalidated"] is True
+    assert c.get(f"/api/v1/homes/{home}/calibrations", headers=h).json()["data"][0]["status"] == "invalidated"
+
+
 def test_assistant_degraded_and_consent_export_delete(tmp_path):
     c = client(tmp_path); token, home = auth(c); h = {"Authorization": f"Bearer {token}"}
     consent = c.post(f"/api/v1/homes/{home}/consents", headers=h, json={"purpose": "camera", "policy_version": "2026-01"})

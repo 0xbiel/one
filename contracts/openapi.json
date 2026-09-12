@@ -20,6 +20,11 @@
             "title": "Camera Id",
             "type": "string"
           },
+          "camera_metadata": {
+            "additionalProperties": true,
+            "title": "Camera Metadata",
+            "type": "object"
+          },
           "extrinsics": {
             "additionalProperties": true,
             "title": "Extrinsics",
@@ -32,6 +37,38 @@
           },
           "map_id": {
             "title": "Map Id",
+            "type": "string"
+          },
+          "resolution_height": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 4320.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolution Height"
+          },
+          "resolution_width": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 7680.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolution Width"
+          },
+          "source": {
+            "default": "manual",
+            "maxLength": 40,
+            "title": "Source",
             "type": "string"
           }
         },
@@ -46,11 +83,42 @@
       },
       "CameraIn": {
         "properties": {
+          "metadata": {
+            "additionalProperties": true,
+            "title": "Metadata",
+            "type": "object"
+          },
           "name": {
             "maxLength": 120,
             "minLength": 1,
             "title": "Name",
             "type": "string"
+          },
+          "resolution_height": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 4320.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolution Height"
+          },
+          "resolution_width": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 7680.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolution Width"
           },
           "room_id": {
             "anyOf": [
@@ -68,6 +136,67 @@
           "name"
         ],
         "title": "CameraIn",
+        "type": "object"
+      },
+      "CameraUpdate": {
+        "properties": {
+          "metadata": {
+            "additionalProperties": true,
+            "title": "Metadata",
+            "type": "object"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "resolution_height": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 4320.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolution Height"
+          },
+          "resolution_width": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 7680.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolution Width"
+          },
+          "room_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Room Id"
+          }
+        },
+        "title": "CameraUpdate",
         "type": "object"
       },
       "CheckInIn": {
@@ -744,6 +873,53 @@
         "title": "PairStartResponse",
         "type": "object"
       },
+      "ProvisionalMapIn": {
+        "properties": {
+          "camera_id": {
+            "title": "Camera Id",
+            "type": "string"
+          },
+          "resolution_height": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 4320.0,
+            "title": "Resolution Height",
+            "type": "integer"
+          },
+          "resolution_width": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 7680.0,
+            "title": "Resolution Width",
+            "type": "integer"
+          },
+          "room_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Room Id"
+          },
+          "zones": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "maxItems": 100,
+            "title": "Zones",
+            "type": "array"
+          }
+        },
+        "required": [
+          "camera_id",
+          "resolution_width",
+          "resolution_height"
+        ],
+        "title": "ProvisionalMapIn",
+        "type": "object"
+      },
       "RoomIn": {
         "properties": {
           "name": {
@@ -757,6 +933,36 @@
           "name"
         ],
         "title": "RoomIn",
+        "type": "object"
+      },
+      "RoomPlanMapIn": {
+        "properties": {
+          "normalized_scan": {
+            "additionalProperties": true,
+            "title": "Normalized Scan",
+            "type": "object"
+          },
+          "room_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Room Id"
+          },
+          "scan_metadata": {
+            "additionalProperties": true,
+            "title": "Scan Metadata",
+            "type": "object"
+          }
+        },
+        "required": [
+          "normalized_scan"
+        ],
+        "title": "RoomPlanMapIn",
         "type": "object"
       },
       "ValidationError": {
@@ -982,6 +1188,41 @@
       }
     },
     "/api/v1/homes/{home_id}/calibrations": {
+      "get": {
+        "operationId": "calibrations_api_v1_homes__home_id__calibrations_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Calibrations"
+      },
       "post": {
         "operationId": "calibration_api_v1_homes__home_id__calibrations_post",
         "parameters": [
@@ -1108,6 +1349,62 @@
           }
         },
         "summary": "Camera"
+      }
+    },
+    "/api/v1/homes/{home_id}/cameras/{camera_id}": {
+      "patch": {
+        "operationId": "camera_update_api_v1_homes__home_id__cameras__camera_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "camera_id",
+            "required": true,
+            "schema": {
+              "title": "Camera Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CameraUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Camera Update"
       }
     },
     "/api/v1/homes/{home_id}/caregiver-summary": {
@@ -1821,6 +2118,100 @@
           }
         },
         "summary": "Current Map"
+      }
+    },
+    "/api/v1/homes/{home_id}/maps/provisional": {
+      "post": {
+        "operationId": "provisional_map_api_v1_homes__home_id__maps_provisional_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProvisionalMapIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Provisional Map"
+      }
+    },
+    "/api/v1/homes/{home_id}/maps/roomplan": {
+      "post": {
+        "operationId": "roomplan_map_api_v1_homes__home_id__maps_roomplan_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoomPlanMapIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Roomplan Map"
       }
     },
     "/api/v1/homes/{home_id}/maps/{map_id}": {

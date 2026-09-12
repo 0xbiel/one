@@ -22,10 +22,10 @@ CREATE TABLE IF NOT EXISTS home_runtime (home_id TEXT PRIMARY KEY, paused INTEGE
 CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, home_id TEXT NOT NULL, expires_at TEXT NOT NULL, created_at TEXT NOT NULL, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS pairing_codes (code_hash TEXT PRIMARY KEY, home_id TEXT NOT NULL, user_id TEXT NOT NULL, role TEXT NOT NULL, expires_at TEXT NOT NULL, used_at TEXT, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS consents (id TEXT PRIMARY KEY, home_id TEXT NOT NULL, subject_user_id TEXT NOT NULL, purpose TEXT NOT NULL, policy_version TEXT NOT NULL, granted_at TEXT NOT NULL, revoked_at TEXT, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE);
-CREATE TABLE IF NOT EXISTS cameras (id TEXT PRIMARY KEY, home_id TEXT NOT NULL, name TEXT NOT NULL, room_id TEXT, enabled INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE);
+CREATE TABLE IF NOT EXISTS cameras (id TEXT PRIMARY KEY, home_id TEXT NOT NULL, name TEXT NOT NULL, room_id TEXT, enabled INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, resolution_width INTEGER, resolution_height INTEGER, metadata_json TEXT NOT NULL DEFAULT '{}', FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS rooms (id TEXT PRIMARY KEY, home_id TEXT NOT NULL, name TEXT NOT NULL, created_at TEXT NOT NULL, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE);
-CREATE TABLE IF NOT EXISTS room_maps (id TEXT PRIMARY KEY, home_id TEXT NOT NULL, room_id TEXT, revision INTEGER NOT NULL, coordinate_frame TEXT NOT NULL, artifact_key TEXT, map_json TEXT NOT NULL, created_at TEXT NOT NULL, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE);
-CREATE TABLE IF NOT EXISTS calibrations (id TEXT PRIMARY KEY, home_id TEXT NOT NULL, camera_id TEXT NOT NULL, map_id TEXT NOT NULL, intrinsics_json TEXT NOT NULL, extrinsics_json TEXT NOT NULL, accuracy_m REAL, created_at TEXT NOT NULL, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE);
+CREATE TABLE IF NOT EXISTS room_maps (id TEXT PRIMARY KEY, home_id TEXT NOT NULL, room_id TEXT, revision INTEGER NOT NULL, coordinate_frame TEXT NOT NULL, artifact_key TEXT, map_json TEXT NOT NULL, created_at TEXT NOT NULL, source TEXT NOT NULL DEFAULT 'manual', approximate INTEGER NOT NULL DEFAULT 0, localization_status TEXT NOT NULL DEFAULT 'unlocalized', metadata_json TEXT NOT NULL DEFAULT '{}', FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE);
+CREATE TABLE IF NOT EXISTS calibrations (id TEXT PRIMARY KEY, home_id TEXT NOT NULL, camera_id TEXT NOT NULL, map_id TEXT NOT NULL, intrinsics_json TEXT NOT NULL, extrinsics_json TEXT NOT NULL, accuracy_m REAL, created_at TEXT NOT NULL, resolution_width INTEGER, resolution_height INTEGER, camera_metadata_json TEXT NOT NULL DEFAULT '{}', source TEXT NOT NULL DEFAULT 'manual', status TEXT NOT NULL DEFAULT 'active', invalidated_at TEXT, invalidation_reason TEXT, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS objects (id TEXT PRIMARY KEY, home_id TEXT NOT NULL, label TEXT NOT NULL, display_name TEXT, enabled INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS observations (id TEXT PRIMARY KEY, home_id TEXT NOT NULL, object_id TEXT, camera_id TEXT, map_id TEXT, x REAL, y REAL, z REAL, uncertainty_m REAL, confidence REAL, detector_version TEXT, observed_at TEXT NOT NULL, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS events (id TEXT PRIMARY KEY, home_id TEXT NOT NULL, event_type TEXT NOT NULL, status TEXT NOT NULL, explanation TEXT, confidence REAL, evidence_json TEXT NOT NULL, first_seen_at TEXT NOT NULL, last_seen_at TEXT NOT NULL, expires_at TEXT NOT NULL, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE);
@@ -81,6 +81,9 @@ def _family_migration() -> str:
     # The family tables are also present in the current SQLite baseline, so an
     # absent migration directory remains safe for packaged/local test builds.
     return _migration_file("002_family_mode.sql")
+
+def _mapping_migration() -> str:
+    return _migration_file("003_camera_roomplan.sql")
 
 
 def _postgres_sql(sql: str) -> str:
@@ -155,6 +158,21 @@ class Database:
             if not self._sqlite_migration_applied(2):
                 self.conn.executescript(_family_migration())
                 self._record_sqlite_migration(2)
+            if not self._sqlite_migration_applied(3):
+                tables = {
+                    table: {row[1] for row in self.conn.execute(f"PRAGMA table_info({table})").fetchall()}
+                    for table in ("cameras", "room_maps", "calibrations")
+                }
+                additions = {
+                    "cameras": [("resolution_width", "INTEGER"), ("resolution_height", "INTEGER"), ("metadata_json", "TEXT NOT NULL DEFAULT '{}'")],
+                    "room_maps": [("source", "TEXT NOT NULL DEFAULT 'manual'"), ("approximate", "INTEGER NOT NULL DEFAULT 0"), ("localization_status", "TEXT NOT NULL DEFAULT 'unlocalized'"), ("metadata_json", "TEXT NOT NULL DEFAULT '{}'")],
+                    "calibrations": [("resolution_width", "INTEGER"), ("resolution_height", "INTEGER"), ("camera_metadata_json", "TEXT NOT NULL DEFAULT '{}'") , ("source", "TEXT NOT NULL DEFAULT 'manual'"), ("status", "TEXT NOT NULL DEFAULT 'active'"), ("invalidated_at", "TEXT"), ("invalidation_reason", "TEXT")],
+                }
+                for table, columns in additions.items():
+                    for column, definition in columns:
+                        if column not in tables[table]:
+                            self.conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+                self._record_sqlite_migration(3)
             # Keep the zero-setup SQLite adapter forward-compatible with a
             # database created before caregiver assignment was introduced.
             plan_columns = {row[1] for row in self.conn.execute("PRAGMA table_info(medication_plans)").fetchall()}
@@ -195,6 +213,13 @@ class Database:
                     self.conn.execute(
                         "INSERT INTO schema_migrations(version, applied_at) VALUES (%s, %s)",
                         (2, now_iso()),
+                    )
+                if 3 not in applied:
+                    for statement in _statements(_mapping_migration()):
+                        self.conn.execute(statement)
+                    self.conn.execute(
+                        "INSERT INTO schema_migrations(version, applied_at) VALUES (%s, %s)",
+                        (3, now_iso()),
                     )
                 self.conn.commit()
             except Exception:
