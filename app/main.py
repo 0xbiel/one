@@ -17,7 +17,7 @@ from .db import Database, now_iso
 from .events import EventBus, sse
 from .integrations import LMStudioAdapter, livekit_jwt, verify_livekit_webhook
 from .media import EncryptedLocalClipStore
-from .security import expired, hash_secret, new_pairing_code, new_token, iso_after
+from .security import expired, hash_secret, new_pairing_code, new_token, iso_after, normalize_email
 from .storage import LocalObjectStore
 from .vision import Calibration, CameraVisionPipeline, DeterministicDemoDetector, Frame
 
@@ -44,6 +44,33 @@ class DevicePairingStart(BaseModel):
     expires_in_seconds: int = Field(default=600, ge=60, le=900)
 
 class PairComplete(BaseModel): code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
+
+
+class EmailAuthRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=254)
+    purpose: str = Field(default="login", pattern="^(create|login)$")
+    display_name: str | None = Field(default=None, min_length=1, max_length=120)
+    home_name: str = Field(default="ONE Home", min_length=1, max_length=120)
+    role: str = Field(default="admin", pattern="^(admin|resident|caregiver)$")
+
+
+class EmailAuthVerify(BaseModel):
+    email: str = Field(min_length=3, max_length=254)
+    code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
+
+
+class EmailAuthRequestResponse(BaseModel):
+    verification_id: str
+    expires_in_seconds: int
+    delivery: str
+    # Development/test only. Production integrations must deliver this via a
+    # configured mail provider and never expose it in an HTTP response.
+    dev_code: str | None = None
+    email: str
+    purpose: str
+    home_id: str
+    user_id: str
+    role: str
 class ConsentIn(BaseModel):
     purpose: str = Field(min_length=1, max_length=120)
     policy_version: str = Field(min_length=1, max_length=40)
@@ -125,6 +152,7 @@ class FamilyInviteIn(BaseModel):
 class FamilyInviteAcceptIn(BaseModel):
     code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
     display_name: str | None = Field(default=None, max_length=120)
+    email: str | None = Field(default=None, min_length=3, max_length=254)
 
 
 class MedicationPlanIn(BaseModel):
@@ -356,9 +384,17 @@ def make_app(settings: Settings | None = None) -> FastAPI:
     def pairing_start(body: PairStart, x_bootstrap_secret: str | None = Header(default=None)):
         if settings.env == "production" and x_bootstrap_secret != settings.bootstrap_secret: raise HTTPException(403, "Bootstrap authorization required")
         if settings.env != "production" and x_bootstrap_secret not in (None, settings.bootstrap_secret): raise HTTPException(403, "Invalid bootstrap secret")
+        email = None
+        if body.email:
+            try:
+                email = normalize_email(body.email)
+            except ValueError as exc:
+                raise HTTPException(422, "A valid email address is required") from exc
+            if db.one("SELECT id FROM users WHERE lower(trim(email))=?", (email,)):
+                raise HTTPException(409, "An account already exists for this email")
         home_id, user_id, code = str(uuid.uuid4()), str(uuid.uuid4()), new_pairing_code()
         db.execute("INSERT INTO homes VALUES (?,?,?)", (home_id, body.home_name, now_iso()))
-        db.execute("INSERT INTO users VALUES (?,?,?,?)", (user_id, body.display_name, body.email, now_iso()))
+        db.execute("INSERT INTO users VALUES (?,?,?,?)", (user_id, body.display_name, email, now_iso()))
         db.execute("INSERT INTO memberships VALUES (?,?,?)", (home_id, user_id, body.role))
         db.execute("INSERT INTO home_runtime VALUES (?,?,?)", (home_id, 0, now_iso()))
         db.execute("INSERT INTO pairing_codes VALUES (?,?,?,?,?,NULL)", (hash_secret(code), home_id, user_id, body.role, iso_after(10)))
@@ -369,6 +405,77 @@ def make_app(settings: Settings | None = None) -> FastAPI:
             "user_id": user_id,
             "role": body.role,
         }
+
+    @app.post("/api/v1/auth/email/request", response_model=EmailAuthRequestResponse)
+    def email_auth_request(body: EmailAuthRequest):
+        """Create a short-lived passwordless sign-in challenge.
+
+        The development outbox returns the code once so a local Docker setup
+        works without an email subscription. A production mail adapter should
+        consume the same event and keep ``dev_code`` absent.
+        """
+        try:
+            email = normalize_email(body.email)
+        except ValueError as exc:
+            raise HTTPException(422, "A valid email address is required") from exc
+
+        existing = db.one("SELECT * FROM users WHERE lower(trim(email))=? ORDER BY created_at LIMIT 1", (email,))
+        if body.purpose == "create":
+            if existing:
+                raise HTTPException(409, "An account already exists for this email")
+            if not body.display_name:
+                raise HTTPException(422, "Display name is required to create an account")
+            home_id, user_id, created = str(uuid.uuid4()), str(uuid.uuid4()), now_iso()
+            with db.transaction() as conn:
+                conn.execute("INSERT INTO homes VALUES (?,?,?)", (home_id, body.home_name, created))
+                conn.execute("INSERT INTO users VALUES (?,?,?,?)", (user_id, body.display_name, email, created))
+                conn.execute("INSERT INTO memberships VALUES (?,?,?)", (home_id, user_id, body.role))
+                conn.execute("INSERT INTO home_runtime VALUES (?,?,?)", (home_id, 0, created))
+        else:
+            if not existing:
+                raise HTTPException(404, "No ONE account exists for this email")
+            user_id = existing["id"]
+            membership = db.one("SELECT home_id, role FROM memberships WHERE user_id=? AND role != 'publisher' ORDER BY home_id LIMIT 1", (user_id,))
+            if not membership:
+                raise HTTPException(403, "This account has no caregiver or resident household")
+            home_id = membership["home_id"]
+
+        membership = db.one("SELECT role FROM memberships WHERE home_id=? AND user_id=?", (home_id, user_id))
+        role = membership["role"] if membership else body.role
+        code, verification_id, created = new_pairing_code(), str(uuid.uuid4()), now_iso()
+        db.execute("INSERT INTO email_verifications VALUES (?,?,?,?,?,?,?,?,?)", (verification_id, email, user_id, home_id, body.purpose, hash_secret(code), iso_after(10), None, created))
+        return {
+            "verification_id": verification_id,
+            "expires_in_seconds": 600,
+            "delivery": "development_outbox" if settings.env != "production" else "email_provider_required",
+            "dev_code": code if settings.env != "production" else None,
+            "email": email,
+            "purpose": body.purpose,
+            "home_id": home_id,
+            "user_id": user_id,
+            "role": role,
+        }
+
+    @app.post("/api/v1/auth/email/verify")
+    def email_auth_verify(body: EmailAuthVerify):
+        try:
+            email = normalize_email(body.email)
+        except ValueError as exc:
+            raise HTTPException(422, "A valid email address is required") from exc
+        verification = db.one("SELECT * FROM email_verifications WHERE email=? AND code_hash=? AND used_at IS NULL ORDER BY created_at DESC LIMIT 1", (email, hash_secret(body.code)))
+        if not verification or expired(verification["expires_at"]):
+            raise HTTPException(400, "Invalid or expired email verification code")
+        user = db.one("SELECT id FROM users WHERE id=? AND lower(trim(email))=?", (verification["user_id"], email))
+        membership = db.one("SELECT role FROM memberships WHERE home_id=? AND user_id=?", (verification["home_id"], verification["user_id"]))
+        if not user or not membership or membership["role"] == "publisher":
+            raise HTTPException(403, "Email account is not allowed in this household")
+        now = now_iso()
+        token = new_token()
+        with db.transaction() as conn:
+            conn.execute("UPDATE email_verifications SET used_at=? WHERE id=?", (now, verification["id"]))
+            conn.execute("INSERT INTO sessions VALUES (?,?,?,?,?)", (hash_secret(token), user["id"], verification["home_id"], iso_after(settings.session_ttl_minutes), now))
+            conn.execute("INSERT INTO audit_log VALUES (?,?,?,?,?,?,?,?)", (str(uuid.uuid4()), verification["home_id"], user["id"], "email.auth.verify", "user", user["id"], "{}", now))
+        return {"access_token": token, "token_type": "bearer", "expires_in": settings.session_ttl_minutes * 60, "home_id": verification["home_id"], "user_id": user["id"], "role": membership["role"], "email": email}
 
     @app.post("/api/v1/homes/{home_id}/pairing/start")
     def device_pairing_start(home_id: str, body: DevicePairingStart, actor: Current):
@@ -693,8 +800,14 @@ def make_app(settings: Settings | None = None) -> FastAPI:
     @app.post("/api/v1/homes/{home_id}/family/invites")
     def family_invite(home_id: str, body: FamilyInviteIn, actor: Current):
         home_check(actor, home_id); family_actor(actor); require_consent(home_id, actor["user_id"], "family_mode")
+        email = None
+        if body.email:
+            try:
+                email = normalize_email(body.email)
+            except ValueError as exc:
+                raise HTTPException(422, "A valid invite email is required") from exc
         invite_id, code, created = str(uuid.uuid4()), new_pairing_code(), now_iso()
-        db.execute("INSERT INTO family_invites VALUES (?,?,?,?,?,?,?,?,?,?)", (invite_id, home_id, actor["user_id"], body.email, body.display_name, body.role, hash_secret(code), iso_after(body.expires_in_seconds / 60), None, created))
+        db.execute("INSERT INTO family_invites VALUES (?,?,?,?,?,?,?,?,?,?)", (invite_id, home_id, actor["user_id"], email, body.display_name, body.role, hash_secret(code), iso_after(body.expires_in_seconds / 60), None, created))
         audit(actor, "family.invite.create", "family_invite", invite_id, home_id)
         # The plaintext code is returned once for a local synthetic demo; it
         # is never written to audit logs or persisted by the service.
@@ -705,16 +818,42 @@ def make_app(settings: Settings | None = None) -> FastAPI:
         invite = db.one("SELECT * FROM family_invites WHERE code_hash=? AND accepted_at IS NULL", (hash_secret(body.code),))
         if not invite or expired(invite["expires_at"]):
             raise HTTPException(400, "Invalid or expired family invitation")
-        user_id, created = str(uuid.uuid4()), now_iso()
-        display_name = body.display_name or invite["display_name"]
+        invite_email = None
+        if invite.get("email"):
+            try:
+                invite_email = normalize_email(invite["email"])
+            except ValueError as exc:
+                raise HTTPException(500, "Invitation email is invalid") from exc
+            if not body.email:
+                raise HTTPException(422, "The invitation email is required")
+            try:
+                supplied_email = normalize_email(body.email)
+            except ValueError as exc:
+                raise HTTPException(422, "A valid email address is required") from exc
+            if supplied_email != invite_email:
+                raise HTTPException(403, "Invitation email does not match this account")
+            existing = db.one("SELECT * FROM users WHERE lower(trim(email))=? ORDER BY created_at LIMIT 1", (invite_email,))
+            if not existing:
+                raise HTTPException(404, "Create an account with the invited email before joining this household")
+            user_id = existing["id"]
+            display_name = existing["display_name"]
+        else:
+            user_id, created = str(uuid.uuid4()), now_iso()
+            display_name = body.display_name or invite["display_name"]
+            supplied_email = None
         with db.transaction() as conn:
-            conn.execute("INSERT INTO users VALUES (?,?,?,?)", (user_id, display_name, invite["email"], created))
-            conn.execute("INSERT INTO memberships VALUES (?,?,?)", (invite["home_id"], user_id, invite["role"]))
+            created = now_iso()
+            if not invite_email:
+                conn.execute("INSERT INTO users VALUES (?,?,?,?)", (user_id, display_name, supplied_email, created))
+            existing_membership = db.one("SELECT role FROM memberships WHERE home_id=? AND user_id=?", (invite["home_id"], user_id))
+            if not existing_membership:
+                conn.execute("INSERT INTO memberships VALUES (?,?,?)", (invite["home_id"], user_id, invite["role"]))
             conn.execute("UPDATE family_invites SET accepted_at=? WHERE id=?", (created, invite["id"]))
             conn.execute("INSERT INTO audit_log VALUES (?,?,?,?,?,?,?,?)", (str(uuid.uuid4()), invite["home_id"], user_id, "family.invite.accept", "family_invite", invite["id"], "{}", created))
         token = new_token()
         db.execute("INSERT INTO sessions VALUES (?,?,?,?,?)", (hash_secret(token), user_id, invite["home_id"], iso_after(settings.session_ttl_minutes), created))
-        return {"access_token": token, "token_type": "bearer", "expires_in": settings.session_ttl_minutes * 60, "home_id": invite["home_id"], "user_id": user_id, "role": invite["role"]}
+        role = existing_membership["role"] if existing_membership else invite["role"]
+        return {"access_token": token, "token_type": "bearer", "expires_in": settings.session_ttl_minutes * 60, "home_id": invite["home_id"], "user_id": user_id, "role": role, "email": invite_email}
 
     def medication_plan_view(row: dict) -> dict:
         return {

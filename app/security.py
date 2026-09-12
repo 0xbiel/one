@@ -1,5 +1,6 @@
 import hashlib
 import hmac
+import re
 import secrets
 from datetime import datetime, timedelta, timezone
 
@@ -22,6 +23,14 @@ def new_token(length: int = 32) -> str:
 
 def new_pairing_code() -> str:
     return f"{secrets.randbelow(1_000_000):06d}"
+
+
+def normalize_email(value: str) -> str:
+    """Return the stable identifier form used for account and invite lookups."""
+    normalized = value.strip().casefold()
+    if not re.fullmatch(r"[^@\s]{1,64}@[A-Za-z0-9][A-Za-z0-9.-]{0,252}", normalized):
+        raise ValueError("Invalid email address")
+    return normalized
 
 
 def expired(value: str) -> bool:

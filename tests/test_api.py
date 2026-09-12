@@ -35,6 +35,44 @@ def test_health_and_pairing(tmp_path):
     assert c.get("/api/v1/homes/invalid/cameras", headers={"Authorization": f"Bearer {token}"}).status_code == 403
 
 
+def test_email_identity_survives_device_change_and_verifies_once(tmp_path):
+    c = client(tmp_path)
+    created = c.post("/api/v1/auth/email/request", json={
+        "purpose": "create",
+        "email": " Caregiver@Example.COM ",
+        "display_name": "Caregiver",
+        "home_name": "Persistent Home",
+    })
+    assert created.status_code == 200
+    payload = created.json()
+    assert payload["email"] == "caregiver@example.com"
+    assert payload["delivery"] == "development_outbox"
+    verified = c.post("/api/v1/auth/email/verify", json={"email": "CAREGIVER@example.com", "code": payload["dev_code"]})
+    assert verified.status_code == 200
+    token = verified.json()["access_token"]
+    assert c.get("/api/v1/me", headers={"Authorization": f"Bearer {token}"}).json()["home"]["name"] == "Persistent Home"
+    assert c.post("/api/v1/auth/email/verify", json={"email": "caregiver@example.com", "code": payload["dev_code"]}).status_code == 400
+    login = c.post("/api/v1/auth/email/request", json={"purpose": "login", "email": "caregiver@example.com"})
+    assert login.status_code == 200
+    assert c.post("/api/v1/auth/email/verify", json={"email": "caregiver@example.com", "code": login.json()["dev_code"]}).status_code == 200
+
+
+def test_email_invitation_requires_matching_existing_identity(tmp_path):
+    c = client(tmp_path)
+    owner = c.post("/api/v1/auth/email/request", json={"purpose": "create", "email": "owner@example.com", "display_name": "Owner"}).json()
+    owner_session = c.post("/api/v1/auth/email/verify", json={"email": "owner@example.com", "code": owner["dev_code"]}).json()
+    headers = {"Authorization": f"Bearer {owner_session['access_token']}"}
+    home = owner_session["home_id"]
+    assert c.post(f"/api/v1/homes/{home}/consents", headers=headers, json={"purpose": "family_mode", "policy_version": "2026-09-01"}).status_code == 200
+    invite = c.post(f"/api/v1/homes/{home}/family/invites", headers=headers, json={"email": "sibling@example.com", "display_name": "Sibling", "role": "caregiver"}).json()
+    assert c.post("/api/v1/family/invites/accept", json={"code": invite["code"], "email": "sibling@example.com"}).status_code == 404
+    account = c.post("/api/v1/auth/email/request", json={"purpose": "create", "email": "sibling@example.com", "display_name": "Sibling"}).json()
+    c.post("/api/v1/auth/email/verify", json={"email": "sibling@example.com", "code": account["dev_code"]})
+    accepted = c.post("/api/v1/family/invites/accept", json={"code": invite["code"], "email": "SIBLING@example.com"})
+    assert accepted.status_code == 200 and accepted.json()["home_id"] == home
+    assert c.post("/api/v1/family/invites/accept", json={"code": invite["code"], "email": "sibling@example.com"}).status_code == 400
+
+
 def test_errors_use_safe_replayable_envelope(tmp_path):
     c = client(tmp_path)
     request_id = "9f4d9f1f-f1a3-49b5-a2d8-8f4b5ecf20a1"

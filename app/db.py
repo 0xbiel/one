@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS memberships (home_id TEXT NOT NULL, user_id TEXT NOT 
 CREATE TABLE IF NOT EXISTS home_runtime (home_id TEXT PRIMARY KEY, paused INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, home_id TEXT NOT NULL, expires_at TEXT NOT NULL, created_at TEXT NOT NULL, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS pairing_codes (code_hash TEXT PRIMARY KEY, home_id TEXT NOT NULL, user_id TEXT NOT NULL, role TEXT NOT NULL, expires_at TEXT NOT NULL, used_at TEXT, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE);
+CREATE TABLE IF NOT EXISTS email_verifications (id TEXT PRIMARY KEY, email TEXT NOT NULL, user_id TEXT NOT NULL, home_id TEXT NOT NULL, purpose TEXT NOT NULL CHECK(purpose IN ('create','login')), code_hash TEXT NOT NULL UNIQUE, expires_at TEXT NOT NULL, used_at TEXT, created_at TEXT NOT NULL, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS consents (id TEXT PRIMARY KEY, home_id TEXT NOT NULL, subject_user_id TEXT NOT NULL, purpose TEXT NOT NULL, policy_version TEXT NOT NULL, granted_at TEXT NOT NULL, revoked_at TEXT, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS cameras (id TEXT PRIMARY KEY, home_id TEXT NOT NULL, name TEXT NOT NULL, room_id TEXT, enabled INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, resolution_width INTEGER, resolution_height INTEGER, metadata_json TEXT NOT NULL DEFAULT '{}', FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS rooms (id TEXT PRIMARY KEY, home_id TEXT NOT NULL, name TEXT NOT NULL, created_at TEXT NOT NULL, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE);
@@ -84,6 +85,10 @@ def _family_migration() -> str:
 
 def _mapping_migration() -> str:
     return _migration_file("003_camera_roomplan.sql")
+
+
+def _identity_migration() -> str:
+    return _migration_file("004_email_identity.sql")
 
 
 def _postgres_sql(sql: str) -> str:
@@ -173,6 +178,9 @@ class Database:
                         if column not in tables[table]:
                             self.conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
                 self._record_sqlite_migration(3)
+            if not self._sqlite_migration_applied(4):
+                self.conn.executescript(_identity_migration())
+                self._record_sqlite_migration(4)
             # Keep the zero-setup SQLite adapter forward-compatible with a
             # database created before caregiver assignment was introduced.
             plan_columns = {row[1] for row in self.conn.execute("PRAGMA table_info(medication_plans)").fetchall()}
@@ -220,6 +228,13 @@ class Database:
                     self.conn.execute(
                         "INSERT INTO schema_migrations(version, applied_at) VALUES (%s, %s)",
                         (3, now_iso()),
+                    )
+                if 4 not in applied:
+                    for statement in _statements(_identity_migration()):
+                        self.conn.execute(statement)
+                    self.conn.execute(
+                        "INSERT INTO schema_migrations(version, applied_at) VALUES (%s, %s)",
+                        (4, now_iso()),
                     )
                 self.conn.commit()
             except Exception:

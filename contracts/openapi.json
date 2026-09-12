@@ -340,6 +340,135 @@
         "title": "DevicePairingStart",
         "type": "object"
       },
+      "EmailAuthRequest": {
+        "properties": {
+          "display_name": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "email": {
+            "maxLength": 254,
+            "minLength": 3,
+            "title": "Email",
+            "type": "string"
+          },
+          "home_name": {
+            "default": "ONE Home",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Home Name",
+            "type": "string"
+          },
+          "purpose": {
+            "default": "login",
+            "pattern": "^(create|login)$",
+            "title": "Purpose",
+            "type": "string"
+          },
+          "role": {
+            "default": "admin",
+            "pattern": "^(admin|resident|caregiver)$",
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "title": "EmailAuthRequest",
+        "type": "object"
+      },
+      "EmailAuthRequestResponse": {
+        "properties": {
+          "delivery": {
+            "title": "Delivery",
+            "type": "string"
+          },
+          "dev_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dev Code"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "expires_in_seconds": {
+            "title": "Expires In Seconds",
+            "type": "integer"
+          },
+          "home_id": {
+            "title": "Home Id",
+            "type": "string"
+          },
+          "purpose": {
+            "title": "Purpose",
+            "type": "string"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          },
+          "verification_id": {
+            "title": "Verification Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "verification_id",
+          "expires_in_seconds",
+          "delivery",
+          "email",
+          "purpose",
+          "home_id",
+          "user_id",
+          "role"
+        ],
+        "title": "EmailAuthRequestResponse",
+        "type": "object"
+      },
+      "EmailAuthVerify": {
+        "properties": {
+          "code": {
+            "maxLength": 6,
+            "minLength": 6,
+            "pattern": "^\\d{6}$",
+            "title": "Code",
+            "type": "string"
+          },
+          "email": {
+            "maxLength": 254,
+            "minLength": 3,
+            "title": "Email",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "code"
+        ],
+        "title": "EmailAuthVerify",
+        "type": "object"
+      },
       "FamilyAssistantIn": {
         "properties": {
           "message": {
@@ -383,6 +512,19 @@
               }
             ],
             "title": "Display Name"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "maxLength": 254,
+                "minLength": 3,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
           }
         },
         "required": [
@@ -1096,6 +1238,81 @@
           }
         },
         "summary": "Retention Run"
+      }
+    },
+    "/api/v1/auth/email/request": {
+      "post": {
+        "description": "Create a short-lived passwordless sign-in challenge.\n\nThe development outbox returns the code once so a local Docker setup\nworks without an email subscription. A production mail adapter should\nconsume the same event and keep ``dev_code`` absent.",
+        "operationId": "email_auth_request_api_v1_auth_email_request_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailAuthRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailAuthRequestResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Email Auth Request"
+      }
+    },
+    "/api/v1/auth/email/verify": {
+      "post": {
+        "operationId": "email_auth_verify_api_v1_auth_email_verify_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailAuthVerify"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Email Auth Verify"
       }
     },
     "/api/v1/clips/{clip_id}/content": {
