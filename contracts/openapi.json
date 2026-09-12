@@ -711,6 +711,39 @@
         "title": "PairStart",
         "type": "object"
       },
+      "PairStartResponse": {
+        "properties": {
+          "expires_in_seconds": {
+            "title": "Expires In Seconds",
+            "type": "integer"
+          },
+          "home_id": {
+            "title": "Home Id",
+            "type": "string"
+          },
+          "pairing_code": {
+            "title": "Pairing Code",
+            "type": "string"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "pairing_code",
+          "expires_in_seconds",
+          "home_id",
+          "user_id",
+          "role"
+        ],
+        "title": "PairStartResponse",
+        "type": "object"
+      },
       "RoomIn": {
         "properties": {
           "name": {
@@ -2852,7 +2885,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/PairStartResponse"
+                }
               }
             },
             "description": "Successful Response"

@@ -17,6 +17,7 @@ services:
       ONE_LM_STUDIO_URL: ${ONE_LM_STUDIO_URL:-http://host.docker.internal:1234/v1}
       ONE_LM_STUDIO_MODEL: ${ONE_LM_STUDIO_MODEL:-qwen3.6-35b-a3b}
       ONE_LM_STUDIO_API_KEY: ${ONE_LM_STUDIO_API_KEY:-}
+      ONE_CORS_ORIGINS: ${ONE_CORS_ORIGINS:-http://localhost:4173,http://localhost:4174,http://127.0.0.1:4173,http://127.0.0.1:4174}
     depends_on: [postgres, redis, minio, livekit]
     ports: ["127.0.0.1:8000:8000"]
     volumes: ["one_objects:/app/data/objects"]

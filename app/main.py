@@ -28,6 +28,14 @@ class PairStart(BaseModel):
     home_name: str = Field(default="ONE Home", min_length=1, max_length=120)
     role: str = Field(default="admin", pattern="^(admin|resident|caregiver)$")
 
+
+class PairStartResponse(BaseModel):
+    pairing_code: str
+    expires_in_seconds: int
+    home_id: str
+    user_id: str
+    role: str
+
 class DevicePairingStart(BaseModel):
     # `display_name` is accepted as a compatibility alias for the web client;
     # this endpoint always creates a publisher membership regardless of it.
@@ -303,7 +311,7 @@ def make_app(settings: Settings | None = None) -> FastAPI:
         device = db.one("SELECT id, home_id, name, room_id, enabled, created_at FROM cameras WHERE home_id=? ORDER BY created_at LIMIT 1", (actor["home_id"],))
         return {"actor": {"id": actor["user_id"], "role": actor["role"], "name": actor["display_name"]}, "home": {"id": home["id"], "name": home["name"], "residentName": resident["display_name"] if resident else "Resident"}, "device": camera_view(device) if device else None, "paused": is_paused(actor["home_id"])}
 
-    @app.post("/api/v1/pairing/start")
+    @app.post("/api/v1/pairing/start", response_model=PairStartResponse)
     def pairing_start(body: PairStart, x_bootstrap_secret: str | None = Header(default=None)):
         if settings.env == "production" and x_bootstrap_secret != settings.bootstrap_secret: raise HTTPException(403, "Bootstrap authorization required")
         if settings.env != "production" and x_bootstrap_secret not in (None, settings.bootstrap_secret): raise HTTPException(403, "Invalid bootstrap secret")
@@ -313,7 +321,13 @@ def make_app(settings: Settings | None = None) -> FastAPI:
         db.execute("INSERT INTO memberships VALUES (?,?,?)", (home_id, user_id, body.role))
         db.execute("INSERT INTO home_runtime VALUES (?,?,?)", (home_id, 0, now_iso()))
         db.execute("INSERT INTO pairing_codes VALUES (?,?,?,?,?,NULL)", (hash_secret(code), home_id, user_id, body.role, iso_after(10)))
-        return {"pairing_code": code, "expires_in_seconds": 600, "home_id": home_id, "user_id": user_id}
+        return {
+            "pairing_code": code,
+            "expires_in_seconds": 600,
+            "home_id": home_id,
+            "user_id": user_id,
+            "role": body.role,
+        }
 
     @app.post("/api/v1/homes/{home_id}/pairing/start")
     def device_pairing_start(home_id: str, body: DevicePairingStart, actor: Current):

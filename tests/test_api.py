@@ -24,10 +24,14 @@ def auth(c):
 def test_health_and_pairing(tmp_path):
     c = client(tmp_path)
     assert c.get("/api/v1/health").json()["status"] == "ok"
-    token, home = auth(c)
+    started = c.post("/api/v1/pairing/start", json={"display_name": "Admin", "home_name": "Test Home", "role": "caregiver"})
+    assert started.status_code == 200 and started.json()["role"] == "caregiver"
+    completed = c.post("/api/v1/pairing/complete", json={"code": started.json()["pairing_code"]})
+    assert completed.status_code == 200
+    token, home = completed.json()["access_token"], completed.json()["home_id"]
     assert home
     me = c.get("/api/v1/me", headers={"Authorization": f"Bearer {token}"})
-    assert me.status_code == 200 and me.json()["actor"]["role"] == "admin" and me.json()["home"]["id"] == home
+    assert me.status_code == 200 and me.json()["actor"]["role"] == "caregiver" and me.json()["home"]["id"] == home
     assert c.get("/api/v1/homes/invalid/cameras", headers={"Authorization": f"Bearer {token}"}).status_code == 403
 
 
