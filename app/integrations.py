@@ -16,8 +16,11 @@ class LMStudioAdapter:
         self.last_error: str | None = None
 
     def summarize(self, context: dict) -> dict | None:
+        if not self.settings.llm_enabled:
+            self.last_error = "disabled"
+            return None
         payload = {
-            "model": self.settings.lm_studio_model,
+            "model": self.settings.effective_llm_model,
             "temperature": 0.1,
             "max_tokens": 300,
             "messages": [
@@ -27,11 +30,11 @@ class LMStudioAdapter:
             "response_format": {"type": "json_object"},
         }
         headers = {"Content-Type": "application/json"}
-        if self.settings.lm_studio_api_key:
-            headers["Authorization"] = f"Bearer {self.settings.lm_studio_api_key}"
-        request = urllib.request.Request(self.settings.lm_studio_url.rstrip("/") + "/chat/completions", data=json.dumps(payload).encode(), headers=headers, method="POST")
+        if self.settings.effective_llm_api_key:
+            headers["Authorization"] = f"Bearer {self.settings.effective_llm_api_key}"
+        request = urllib.request.Request(self.settings.effective_llm_base_url + "/chat/completions", data=json.dumps(payload).encode(), headers=headers, method="POST")
         try:
-            with urllib.request.urlopen(request, timeout=15) as response:
+            with urllib.request.urlopen(request, timeout=self.settings.llm_timeout_seconds) as response:
                 result = json.loads(response.read())
             content = result["choices"][0]["message"]["content"]
             parsed = json.loads(content) if isinstance(content, str) else content
@@ -60,8 +63,11 @@ class LMStudioAdapter:
         or camera stream. The API constructs ``context`` from medication plans
         and check-ins only and validates the small response shape here.
         """
+        if not self.settings.llm_enabled:
+            self.last_error = "disabled"
+            return None
         payload = {
-            "model": self.settings.lm_studio_model,
+            "model": self.settings.effective_llm_model,
             "temperature": 0.1,
             "max_tokens": 220,
             "messages": [
@@ -71,11 +77,11 @@ class LMStudioAdapter:
             "response_format": {"type": "json_object"},
         }
         headers = {"Content-Type": "application/json"}
-        if self.settings.lm_studio_api_key:
-            headers["Authorization"] = f"Bearer {self.settings.lm_studio_api_key}"
-        request = urllib.request.Request(self.settings.lm_studio_url.rstrip("/") + "/chat/completions", data=json.dumps(payload).encode(), headers=headers, method="POST")
+        if self.settings.effective_llm_api_key:
+            headers["Authorization"] = f"Bearer {self.settings.effective_llm_api_key}"
+        request = urllib.request.Request(self.settings.effective_llm_base_url + "/chat/completions", data=json.dumps(payload).encode(), headers=headers, method="POST")
         try:
-            with urllib.request.urlopen(request, timeout=15) as response:
+            with urllib.request.urlopen(request, timeout=self.settings.llm_timeout_seconds) as response:
                 result = json.loads(response.read())
             content = result["choices"][0]["message"]["content"]
             parsed = json.loads(content) if isinstance(content, str) else content

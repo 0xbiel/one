@@ -18,7 +18,14 @@ The pinned client contract is committed at `contracts/openapi.json`. Regenerate 
 after route or schema changes with `python scripts/generate_openapi.py`; CI rejects
 contract drift.
 
-If LM Studio authentication is enabled, set `ONE_LM_STUDIO_API_KEY` or the existing `LLM_API_KEY` alias (the adapter sends `Authorization: Bearer ...`). Leave it blank only when the local LM Studio server has authentication disabled.
+By default the adapter targets local LM Studio at `http://127.0.0.1:1234/v1`
+with model `qwen3.6-35b-a3b`. Existing `ONE_LM_STUDIO_*` settings remain
+supported. To use any OpenAI-compatible endpoint, set `ONE_LLM_BASE_URL`,
+`ONE_LLM_MODEL`, and (when required) `ONE_LLM_API_KEY`; `ONE_LLM_PROVIDER` is
+an optional label for deployment metadata. `ONE_LLM_TIMEOUT_SECONDS` controls
+the request timeout (default 15 seconds). Secrets are sent only as bearer
+headers and are never logged or returned by the API. Set `ONE_LLM_ENABLED=false`
+to skip all LLM requests and use the deterministic fallback paths.
 
 ## Contracts and safety
 

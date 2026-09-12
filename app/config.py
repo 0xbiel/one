@@ -19,6 +19,16 @@ class Settings(BaseSettings):
     lm_studio_url: str = "http://127.0.0.1:1234/v1"
     lm_studio_model: str = "qwen3.6-35b-a3b"
     lm_studio_api_key: str | None = Field(default=None, validation_alias=AliasChoices("ONE_LM_STUDIO_API_KEY", "ONE_LLM_API_KEY", "LLM_API_KEY"))
+    # OpenAI-compatible provider overrides. The legacy LM Studio fields above
+    # remain the defaults so existing .env files and Settings(...) callers are
+    # unchanged. Keys are only used in-memory and are never included in logs or
+    # response models.
+    llm_enabled: bool = True
+    llm_provider: str | None = None
+    llm_base_url: str | None = Field(default=None, validation_alias=AliasChoices("ONE_LLM_BASE_URL", "LLM_BASE_URL"))
+    llm_model: str | None = Field(default=None, validation_alias=AliasChoices("ONE_LLM_MODEL", "LLM_MODEL"))
+    llm_api_key: str | None = Field(default=None, validation_alias=AliasChoices("ONE_LLM_API_KEY", "LLM_API_KEY"))
+    llm_timeout_seconds: float = Field(default=15.0, gt=0, validation_alias=AliasChoices("ONE_LLM_TIMEOUT_SECONDS", "LLM_TIMEOUT_SECONDS"))
     cors_origins: str = "http://localhost:5173,http://localhost:3000,http://localhost:4173,http://localhost:4174,http://127.0.0.1:5173,http://127.0.0.1:4173,http://127.0.0.1:4174"
 
     @property
@@ -40,6 +50,18 @@ class Settings(BaseSettings):
         if scheme in {"postgres", "postgresql"}:
             return "postgresql"
         return "unsupported"
+
+    @property
+    def effective_llm_base_url(self) -> str:
+        return (self.llm_base_url or self.lm_studio_url).rstrip("/")
+
+    @property
+    def effective_llm_model(self) -> str:
+        return self.llm_model or self.lm_studio_model
+
+    @property
+    def effective_llm_api_key(self) -> str | None:
+        return self.llm_api_key or self.lm_studio_api_key
 
 
 @lru_cache

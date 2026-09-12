@@ -308,7 +308,7 @@ def make_app(settings: Settings | None = None) -> FastAPI:
             "status": "ok" if database["status"] == "ok" else "degraded",
             "database": database["backend"],
             "database_status": database["status"],
-            "local_inference_model": settings.lm_studio_model,
+            "local_inference_model": settings.effective_llm_model,
         }
 
     @app.get("/api/v1/me")
@@ -845,7 +845,7 @@ def make_app(settings: Settings | None = None) -> FastAPI:
         result["evidence_ids"] = [item for item in result.get("evidence_ids", []) if item in allowed_evidence][:20]
         result["evidence_timestamps"] = {row["id"]: row["updated_at"] for row in checks if row["id"] in result["evidence_ids"]}
         audit(actor, "assistant.family_summary", "user", subject["id"], home_id)
-        return {"data": result, "degraded": degraded, "inference_status": lm.last_error if degraded else "ok", "subject_user_id": subject["id"], "context_scope": "medication plans and check-ins only", "medical_advice": False, "model_version": settings.lm_studio_model if not degraded else "rules-family-v1"}
+        return {"data": result, "degraded": degraded, "inference_status": lm.last_error if degraded else "ok", "subject_user_id": subject["id"], "context_scope": "medication plans and check-ins only", "medical_advice": False, "model_version": settings.effective_llm_model if not degraded else "rules-family-v1"}
 
     @app.post("/api/v1/admin/retention/run")
     def retention_run(actor: Current):
@@ -902,7 +902,7 @@ def make_app(settings: Settings | None = None) -> FastAPI:
     def check_in(home_id: str, body: CheckInIn, actor: Current):
         home_check(actor, home_id); publisher_block(actor); events = db.many("SELECT id,event_type,confidence,last_seen_at FROM events WHERE home_id=? AND expires_at>? ORDER BY last_seen_at DESC LIMIT 20", (home_id, now_iso())); context = {"transcript": body.transcript, "events": events, "baseline": "personal baseline is intentionally bounded to recent derived observations"}; result = lm.summarize(context); degraded = result is None
         if degraded: result = {"status": "attention" if events else "unknown", "trend": "unknown", "explanation": "Recent household observations are available for human review." if events else "Not enough observations for a comparison.", "evidence_ids": [e["id"] for e in events], "limitations": "Local language model unavailable; this is a deterministic fallback and not medical advice."}
-        sid = str(uuid.uuid4()); exp = (datetime.now(timezone.utc)+timedelta(days=30)).replace(microsecond=0).isoformat(); db.execute("INSERT INTO summaries VALUES (?,?,?,?,?,?,?,?,?,?,?)", (sid, home_id, body.subject_user_id or actor["user_id"], result["status"], result["trend"], result["explanation"], json.dumps(result.get("evidence_ids", [])), result["limitations"], settings.lm_studio_model if not degraded else "rules-fallback-v1", now_iso(), exp)); audit(actor, "assistant.check_in", "summary", sid, home_id); return {"id": sid, **result, "degraded": degraded, "inference_status": lm.last_error if degraded else "ok", "model_version": settings.lm_studio_model if not degraded else "rules-fallback-v1"}
+        sid = str(uuid.uuid4()); exp = (datetime.now(timezone.utc)+timedelta(days=30)).replace(microsecond=0).isoformat(); db.execute("INSERT INTO summaries VALUES (?,?,?,?,?,?,?,?,?,?,?)", (sid, home_id, body.subject_user_id or actor["user_id"], result["status"], result["trend"], result["explanation"], json.dumps(result.get("evidence_ids", [])), result["limitations"], settings.effective_llm_model if not degraded else "rules-fallback-v1", now_iso(), exp)); audit(actor, "assistant.check_in", "summary", sid, home_id); return {"id": sid, **result, "degraded": degraded, "inference_status": lm.last_error if degraded else "ok", "model_version": settings.effective_llm_model if not degraded else "rules-fallback-v1"}
 
     @app.get("/api/v1/homes/{home_id}/caregiver-summary")
     def caregiver_summary(home_id: str, actor: Current):
