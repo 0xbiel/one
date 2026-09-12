@@ -9,7 +9,7 @@ python -m venv .venv && source .venv/bin/activate
 pip install -e '.[dev]'
 test -f .env || cp .env.example .env
 ONE_DATABASE_URL=sqlite:///./one.db uvicorn app.main:app --reload --port 8000
-pytest
+ONE_DATABASE_URL=sqlite:///./one.db pytest
 ```
 
 OpenAPI is at `/api/v1/openapi.json`. Start pairing with `POST /api/v1/pairing/start`, complete the one-time six-digit code, then send `Authorization: Bearer <access_token>`.
