@@ -31,6 +31,16 @@ class Settings(BaseSettings):
             return self.database_url.removeprefix("sqlite:///")
         return None
 
+    @property
+    def database_backend(self) -> str:
+        """Return the supported storage backend selected by ONE_DATABASE_URL."""
+        scheme = self.database_url.split(":", 1)[0].lower()
+        if scheme == "sqlite":
+            return "sqlite"
+        if scheme in {"postgres", "postgresql"}:
+            return "postgresql"
+        return "unsupported"
+
 
 @lru_cache
 def get_settings() -> Settings:

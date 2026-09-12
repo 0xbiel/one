@@ -5,7 +5,7 @@ services:
       - path: .env
         required: false
     environment:
-      ONE_DATABASE_URL: ${ONE_DATABASE_URL:-sqlite:///./data/one.db}
+      ONE_DATABASE_URL: ${ONE_DATABASE_URL:-postgresql://${ONE_POSTGRES_USER:-one}:${ONE_POSTGRES_PASSWORD:-change-me}@postgres:5432/${ONE_POSTGRES_DB:-one}}
       ONE_OBJECT_STORE_PATH: ${ONE_OBJECT_STORE_PATH:-/app/data/objects}
       ONE_BOOTSTRAP_SECRET: ${ONE_BOOTSTRAP_SECRET:-change-me-in-production}
       ONE_LIVEKIT_URL: ${ONE_LIVEKIT_URL:-ws://localhost:7880}
@@ -18,7 +18,15 @@ services:
       ONE_LM_STUDIO_MODEL: ${ONE_LM_STUDIO_MODEL:-qwen3.6-35b-a3b}
       ONE_LM_STUDIO_API_KEY: ${ONE_LM_STUDIO_API_KEY:-}
       ONE_CORS_ORIGINS: ${ONE_CORS_ORIGINS:-http://localhost:4173,http://localhost:4174,http://127.0.0.1:4173,http://127.0.0.1:4174}
-    depends_on: [postgres, redis, minio, livekit]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      minio:
+        condition: service_started
+      livekit:
+        condition: service_started
     ports: ["127.0.0.1:8000:8000"]
     volumes: ["one_objects:/app/data/objects"]
   frontend:
@@ -36,6 +44,11 @@ services:
       POSTGRES_USER: ${ONE_POSTGRES_USER:-one}
       POSTGRES_PASSWORD: ${ONE_POSTGRES_PASSWORD:-change-me}
     volumes: ["one_pg:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${ONE_POSTGRES_USER:-one} -d ${ONE_POSTGRES_DB:-one}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
   redis:
     image: redis:7-alpine
   minio:

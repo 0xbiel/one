@@ -1,8 +1,10 @@
 import json
+import re
 import sqlite3
 import threading
 from contextlib import contextmanager
 from datetime import datetime, timezone
+from pathlib import Path
 
 from .config import Settings
 
@@ -37,21 +39,120 @@ CREATE TABLE IF NOT EXISTS medication_check_ins (id TEXT PRIMARY KEY, home_id TE
 """
 
 
+SCHEMA_MIGRATIONS = """
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    version INTEGER PRIMARY KEY,
+    applied_at TEXT NOT NULL
+);
+"""
+
+
+def _statements(script: str) -> list[str]:
+    """Split the project's deliberately simple migration SQL into commands."""
+    # Migration SQL currently contains no semicolons inside string literals.
+    # Keeping this dependency-free also means the Docker image does not need a
+    # SQL parser merely to initialize its schema.
+    return [statement.strip() for statement in script.split(";") if statement.strip()]
+
+
+def _portable_schema() -> str:
+    """Remove SQLite's foreign-key pragma before sending the schema to Postgres."""
+    return "\n".join(
+        line for line in SCHEMA.splitlines() if not line.strip().upper().startswith("PRAGMA ")
+    )
+
+
+def _migration_file(filename: str, fallback: str = "") -> str:
+    migration = Path(__file__).resolve().parent.parent / "migrations" / filename
+    try:
+        return migration.read_text(encoding="utf-8")
+    except OSError:
+        return fallback
+
+
+def _core_migration() -> str:
+    # Keep the deployment schema source in the numbered migration set. The
+    # fallback keeps installed wheels/self-contained images bootable when the
+    # repository's migration directory is not packaged.
+    return _migration_file("001_initial.sql", _portable_schema())
+
+
+def _family_migration() -> str:
+    # The family tables are also present in the current SQLite baseline, so an
+    # absent migration directory remains safe for packaged/local test builds.
+    return _migration_file("002_family_mode.sql")
+
+
+def _postgres_sql(sql: str) -> str:
+    """Translate the intentionally SQLite-shaped query API to psycopg SQL."""
+    # The application uses qmark placeholders everywhere so isolated SQLite
+    # tests and Postgres share the same query strings.
+    translated = sql.replace("?", "%s")
+    # SQLite's `IS ?` is a null-safe equality comparison. PostgreSQL only
+    # permits IS with NULL/TRUE/FALSE literals, so use its equivalent.
+    return re.sub(r"\bIS\s+%s\b", "IS NOT DISTINCT FROM %s", translated, flags=re.IGNORECASE)
+
+
+class _TransactionConnection:
+    """Small connection facade that preserves qmark SQL inside transactions."""
+
+    def __init__(self, database: "Database"):
+        self._database = database
+
+    def execute(self, sql: str, params: tuple = ()):
+        return self._database.conn.execute(self._database._sql(sql), params)
+
+    def __getattr__(self, name: str):
+        return getattr(self._database.conn, name)
+
+
 class Database:
     def __init__(self, settings: Settings):
         self.settings = settings
         self._lock = threading.RLock()
-        path = settings.sqlite_path
-        if path is None:
-            raise RuntimeError("Production PostgreSQL is configured via ONE_DATABASE_URL; install psycopg and add the adapter before deployment")
-        self.path = path
-        if path != ":memory:":
-            import os
-            os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
-        self.conn = sqlite3.connect(path, check_same_thread=False)
-        self.conn.row_factory = sqlite3.Row
+        self.backend = settings.database_backend
+        self.path: str | None = None
+        if self.backend == "sqlite":
+            path = settings.sqlite_path
+            if path is None:  # defensive; Settings validates the scheme below
+                raise RuntimeError("Invalid SQLite database URL")
+            self.path = path
+            if path != ":memory:":
+                import os
+                os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
+            self.conn = sqlite3.connect(path, check_same_thread=False)
+            self.conn.row_factory = sqlite3.Row
+            self._initialize_sqlite()
+        elif self.backend == "postgresql":
+            try:
+                import psycopg
+                from psycopg.rows import dict_row
+            except ImportError as exc:
+                raise RuntimeError(
+                    "PostgreSQL is configured but psycopg is not installed; "
+                    "install the optional dependency with `pip install -e '.[postgres]'`"
+                ) from exc
+            try:
+                self.conn = psycopg.connect(settings.database_url, row_factory=dict_row)
+            except Exception as exc:
+                raise RuntimeError(
+                    "Unable to connect to PostgreSQL for ONE_DATABASE_URL "
+                    f"({type(exc).__name__}); verify the database is reachable and credentials are valid"
+                ) from exc
+            self._initialize_postgresql()
+        else:
+            raise RuntimeError(
+                "Unsupported ONE_DATABASE_URL scheme; use sqlite:///... or postgresql://..."
+            )
+
+    def _initialize_sqlite(self) -> None:
         with self._lock:
             self.conn.executescript(SCHEMA)
+            self.conn.executescript(SCHEMA_MIGRATIONS)
+            self._record_sqlite_migration(1)
+            if not self._sqlite_migration_applied(2):
+                self.conn.executescript(_family_migration())
+                self._record_sqlite_migration(2)
             # Keep the zero-setup SQLite adapter forward-compatible with a
             # database created before caregiver assignment was introduced.
             plan_columns = {row[1] for row in self.conn.execute("PRAGMA table_info(medication_plans)").fetchall()}
@@ -59,30 +160,81 @@ class Database:
                 self.conn.execute("ALTER TABLE medication_plans ADD COLUMN assigned_caregiver_id TEXT")
             self.conn.commit()
 
-    @contextmanager
-    def transaction(self):
+    def _sqlite_migration_applied(self, version: int) -> bool:
+        return self.conn.execute(
+            "SELECT 1 FROM schema_migrations WHERE version=?", (version,)
+        ).fetchone() is not None
+
+    def _record_sqlite_migration(self, version: int) -> None:
+        if not self._sqlite_migration_applied(version):
+            self.conn.execute(
+                "INSERT INTO schema_migrations(version, applied_at) VALUES (?, ?)",
+                (version, now_iso()),
+            )
+
+    def _initialize_postgresql(self) -> None:
         with self._lock:
             try:
-                yield self.conn
+                self.conn.execute(SCHEMA_MIGRATIONS)
+                applied = {
+                    row["version"]
+                    for row in self.conn.execute("SELECT version FROM schema_migrations").fetchall()
+                }
+                if 1 not in applied:
+                    for statement in _statements(_core_migration()):
+                        self.conn.execute(statement)
+                    self.conn.execute(
+                        "INSERT INTO schema_migrations(version, applied_at) VALUES (%s, %s)",
+                        (1, now_iso()),
+                    )
+                if 2 not in applied:
+                    for statement in _statements(_family_migration()):
+                        self.conn.execute(statement)
+                    self.conn.execute(
+                        "INSERT INTO schema_migrations(version, applied_at) VALUES (%s, %s)",
+                        (2, now_iso()),
+                    )
                 self.conn.commit()
             except Exception:
                 self.conn.rollback()
                 raise
 
-    def execute(self, sql: str, params: tuple = ()) -> sqlite3.Cursor:
+    @contextmanager
+    def transaction(self):
         with self._lock:
-            cur = self.conn.execute(sql, params)
+            try:
+                yield _TransactionConnection(self)
+                self.conn.commit()
+            except Exception:
+                self.conn.rollback()
+                raise
+
+    def _sql(self, sql: str) -> str:
+        return _postgres_sql(sql) if self.backend == "postgresql" else sql
+
+    def execute(self, sql: str, params: tuple = ()):
+        with self._lock:
+            cur = self.conn.execute(self._sql(sql), params)
             self.conn.commit()
             return cur
 
     def one(self, sql: str, params: tuple = ()) -> dict | None:
         with self._lock:
-            row = self.conn.execute(sql, params).fetchone()
+            row = self.conn.execute(self._sql(sql), params).fetchone()
             return dict(row) if row else None
 
     def many(self, sql: str, params: tuple = ()) -> list[dict]:
         with self._lock:
-            return [dict(row) for row in self.conn.execute(sql, params).fetchall()]
+            return [dict(row) for row in self.conn.execute(self._sql(sql), params).fetchall()]
+
+    def health(self) -> dict:
+        """Return a safe, non-secret connectivity report for the API health route."""
+        with self._lock:
+            try:
+                self.conn.execute(self._sql("SELECT 1")).fetchone()
+                return {"status": "ok", "backend": self.backend}
+            except Exception as exc:
+                return {"status": "error", "backend": self.backend, "error": type(exc).__name__}
 
     def export_home(self, home_id: str) -> dict:
         # Export user-visible records, including the minimal rights/audit

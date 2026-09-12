@@ -302,7 +302,14 @@ def make_app(settings: Settings | None = None) -> FastAPI:
         }
 
     @app.get("/api/v1/health")
-    def health(): return {"status": "ok", "database": "sqlite", "local_inference_model": settings.lm_studio_model}
+    def health():
+        database = db.health()
+        return {
+            "status": "ok" if database["status"] == "ok" else "degraded",
+            "database": database["backend"],
+            "database_status": database["status"],
+            "local_inference_model": settings.lm_studio_model,
+        }
 
     @app.get("/api/v1/me")
     def me(actor: Current):
@@ -850,7 +857,8 @@ def make_app(settings: Settings | None = None) -> FastAPI:
         counts = {}
         for table, column in (("clips", "expires_at"), ("events", "expires_at"), ("summaries", "expires_at")):
             counts[table] = db.execute(f"DELETE FROM {table} WHERE {column}<=?", (cutoff,)).rowcount
-        counts["observations"] = db.execute("DELETE FROM observations WHERE observed_at<=datetime(?, '-30 days')", (cutoff,)).rowcount
+        observation_cutoff = (datetime.now(timezone.utc) - timedelta(days=30)).replace(microsecond=0).isoformat()
+        counts["observations"] = db.execute("DELETE FROM observations WHERE observed_at<=?", (observation_cutoff,)).rowcount
         audit(actor, "retention.run"); return {"deleted": counts, "ran_at": cutoff}
 
     @app.get("/api/v1/homes/{home_id}/events/stream")

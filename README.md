@@ -1,14 +1,14 @@
 # ONE local-first backend
 
-This is the runnable FastAPI foundation for ONE. It is intentionally a modular monolith for the local-LAN MVP: SQLite is the zero-setup development/test backend, while PostgreSQL/Redis/MinIO/LiveKit/Caddy are supplied in `docker-compose.yml` for deployment wiring.
+This is the runnable FastAPI foundation for ONE. It is intentionally a modular monolith for the local-LAN MVP: Docker uses PostgreSQL as the authoritative database, while SQLite remains an explicit zero-setup development/test fallback. Redis, MinIO, LiveKit, and Caddy are supplied in `docker-compose.yml` as local services.
 
 ## Run locally
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -e '.[dev]'
-cp .env.example .env
-uvicorn app.main:app --reload --port 8000
+test -f .env || cp .env.example .env
+ONE_DATABASE_URL=sqlite:///./one.db uvicorn app.main:app --reload --port 8000
 pytest
 ```
 
@@ -24,7 +24,13 @@ If LM Studio authentication is enabled, set `ONE_LM_STUDIO_API_KEY` or the exist
 
 All product endpoints are versioned under `/api/v1`. Object observations are approximate and include uncertainty; video is not persisted by this API. Events are derived metadata with a 30-day expiry, and clip records are designed for seven-day expiry. The LM Studio adapter uses `qwen3.6-35b-a3b` and falls back explicitly to a deterministic, non-medical summary when the local endpoint is unavailable.
 
-The current SQLite adapter is complete for local development. `ONE_DATABASE_URL` values for PostgreSQL are accepted as configuration intent, but a production PostgreSQL adapter/migrations still needs to be added before deployment; do not point this build at PostgreSQL yet.
+SQLite remains the zero-setup local/test backend. The API also supports PostgreSQL
+through the optional `psycopg` 3 adapter (`pip install -e '.[postgres]'`). Set
+`ONE_DATABASE_URL=postgresql://user:password@host:5432/database`; startup applies
+the tracked migrations in `migrations/` transactionally, and `/api/v1/health`
+reports the selected backend and connectivity status. The Docker image installs
+the PostgreSQL extra and Compose waits for the database health check before
+starting the API.
 
 ## Media/vision slice
 
@@ -66,4 +72,4 @@ process, notices, retention, and rights workflows in `docs/privacy/`.
 
 ## Docker
 
-`docker compose up --build` starts the API plus Postgres, Redis, MinIO, a self-hosted LiveKit development server, and Caddy. The Compose defaults use LiveKit's local `devkey`/`secret` placeholders, so no LiveKit Cloud subscription is involved. Replace every example password/secret before sharing the LAN, set `ONE_LIVEKIT_URL` to a host-reachable `ws://` or trusted `wss://` endpoint for phones, add a real `.env`, and provision the local Caddy CA on client devices before using this on a LAN.
+`docker compose up --build` starts the API plus PostgreSQL, Redis, MinIO, a self-hosted LiveKit development server, and Caddy. Compose applies the numbered migrations and waits for PostgreSQL health before the API starts. The Compose defaults use LiveKit's local `devkey`/`secret` placeholders, so no LiveKit Cloud subscription is involved. Replace every example password/secret before sharing the LAN, set `ONE_LIVEKIT_URL` to a host-reachable `ws://` or trusted `wss://` endpoint for phones, add a real `.env`, and provision the local Caddy CA on client devices before using this on a LAN.
