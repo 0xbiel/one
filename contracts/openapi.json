@@ -573,6 +573,40 @@
         "title": "FamilyInviteIn",
         "type": "object"
       },
+      "FamilyMemberMutationResponse": {
+        "properties": {
+          "data": {
+            "additionalProperties": true,
+            "title": "Data",
+            "type": "object"
+          },
+          "invalidated_sessions": {
+            "default": 0,
+            "title": "Invalidated Sessions",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "FamilyMemberMutationResponse",
+        "type": "object"
+      },
+      "FamilyMemberUpdateIn": {
+        "description": "Editable access for an existing, non-device household member.",
+        "properties": {
+          "role": {
+            "pattern": "^(resident|caregiver)$",
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "role"
+        ],
+        "title": "FamilyMemberUpdateIn",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -2208,6 +2242,112 @@
           }
         },
         "summary": "Family Members"
+      }
+    },
+    "/api/v1/homes/{home_id}/family/members/{user_id}": {
+      "delete": {
+        "description": "Revoke a person's membership and all sessions for this household.",
+        "operationId": "family_member_remove_api_v1_homes__home_id__family_members__user_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FamilyMemberMutationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Family Member Remove"
+      },
+      "patch": {
+        "description": "Change a person's household role without ever granting admin access.",
+        "operationId": "family_member_update_api_v1_homes__home_id__family_members__user_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FamilyMemberUpdateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FamilyMemberMutationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Family Member Update"
       }
     },
     "/api/v1/homes/{home_id}/livekit/token": {

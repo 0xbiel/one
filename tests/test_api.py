@@ -232,6 +232,21 @@ def test_family_invite_is_hashed_single_use_and_role_safe(tmp_path):
     assert self_plan.status_code == 200 and self_plan.json()["created_by"] == caregiver_id
 
 
+def test_family_access_can_be_edited_and_revoked(tmp_path):
+    c = client(tmp_path); token, home = auth(c); h = {"Authorization": f"Bearer {token}"}
+    assert c.post(f"/api/v1/homes/{home}/consents", headers=h, json={"purpose": "family_mode", "policy_version": "2026-09-01"}).status_code == 200
+    invite = c.post(f"/api/v1/homes/{home}/family/invites", headers=h, json={"display_name": "Caregiver", "role": "caregiver"}).json()
+    joined = c.post("/api/v1/family/invites/accept", json={"code": invite["code"]}).json()
+    member_id = joined["user_id"]
+    changed = c.patch(f"/api/v1/homes/{home}/family/members/{member_id}", headers=h, json={"role": "resident"})
+    assert changed.status_code == 200 and changed.json()["data"]["role"] == "resident"
+    assert c.get(f"/api/v1/homes/{home}/family/members", headers={"Authorization": f"Bearer {joined['access_token']}"}).status_code == 401
+    removed = c.delete(f"/api/v1/homes/{home}/family/members/{member_id}", headers=h)
+    assert removed.status_code == 200 and removed.json()["data"]["id"] == member_id
+    assert c.get(f"/api/v1/homes/{home}/family/members", headers=h).status_code == 200
+    assert c.delete(f"/api/v1/homes/{home}/family/members/{member_id}", headers=h).status_code == 404
+
+
 def test_medication_plan_reminders_checkins_and_bounded_assistant(tmp_path):
     c = client(tmp_path); token, home = auth(c); h = {"Authorization": f"Bearer {token}"}
     for purpose in ("family_mode", "medication_management", "family_assistant"):

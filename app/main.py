@@ -164,6 +164,16 @@ class FamilyInviteAcceptIn(BaseModel):
     email: str | None = Field(default=None, min_length=3, max_length=254)
 
 
+class FamilyMemberUpdateIn(BaseModel):
+    """Editable access for an existing, non-device household member."""
+    role: str = Field(pattern="^(resident|caregiver)$")
+
+
+class FamilyMemberMutationResponse(BaseModel):
+    data: dict
+    invalidated_sessions: int = 0
+
+
 class MedicationPlanIn(BaseModel):
     subject_user_id: str
     name: str = Field(min_length=1, max_length=160)
@@ -877,6 +887,41 @@ def make_app(settings: Settings | None = None) -> FastAPI:
             require_consent(home_id, actor["user_id"], "family_mode")
             rows = db.many("SELECT u.id, u.display_name, u.email, u.created_at, m.role FROM users u JOIN memberships m ON m.user_id=u.id WHERE m.home_id=? AND m.role != 'publisher' ORDER BY u.created_at", (home_id,))
         return {"data": [family_member_view(row) for row in rows], "purpose": "family_mode", "representation_required": True}
+
+    @app.patch("/api/v1/homes/{home_id}/family/members/{user_id}", response_model=FamilyMemberMutationResponse)
+    def family_member_update(home_id: str, user_id: str, body: FamilyMemberUpdateIn, actor: Current):
+        """Change a person's household role without ever granting admin access."""
+        home_check(actor, home_id); family_actor(actor); require_consent(home_id, actor["user_id"], "family_mode")
+        if user_id == actor["user_id"]:
+            raise HTTPException(409, "You cannot change your own household access")
+        target = member(home_id, user_id)
+        if target["role"] == "admin":
+            raise HTTPException(403, "Admin access can only be changed by a separate admin workflow")
+        if actor["role"] != "admin" and body.role == "caregiver":
+            # Caregivers can manage residents, but cannot promote someone to a
+            # role with equivalent access without an admin.
+            raise HTTPException(403, "Only an admin can grant caregiver access")
+        db.execute("UPDATE memberships SET role=? WHERE home_id=? AND user_id=?", (body.role, home_id, user_id))
+        sessions = db.execute("DELETE FROM sessions WHERE home_id=? AND user_id=?", (home_id, user_id)).rowcount
+        audit(actor, "family.member.role.update", "user", user_id, home_id)
+        updated = member(home_id, user_id)
+        return {"data": family_member_view(updated), "invalidated_sessions": sessions or 0}
+
+    @app.delete("/api/v1/homes/{home_id}/family/members/{user_id}", response_model=FamilyMemberMutationResponse)
+    def family_member_remove(home_id: str, user_id: str, actor: Current):
+        """Revoke a person's membership and all sessions for this household."""
+        home_check(actor, home_id); family_actor(actor); require_consent(home_id, actor["user_id"], "family_mode")
+        if user_id == actor["user_id"]:
+            raise HTTPException(409, "You cannot remove your own household access")
+        target = member(home_id, user_id)
+        if target["role"] == "admin":
+            raise HTTPException(403, "Admin access cannot be revoked from this endpoint")
+        with db.transaction() as conn:
+            conn.execute("DELETE FROM memberships WHERE home_id=? AND user_id=?", (home_id, user_id))
+            sessions = conn.execute("DELETE FROM sessions WHERE home_id=? AND user_id=?", (home_id, user_id)).rowcount
+            conn.execute("DELETE FROM consents WHERE home_id=? AND subject_user_id=?", (home_id, user_id))
+            conn.execute("INSERT INTO audit_log VALUES (?,?,?,?,?,?,?,?)", (str(uuid.uuid4()), home_id, actor["user_id"], "family.member.remove", "user", user_id, "{}", now_iso()))
+        return {"data": family_member_view(target), "invalidated_sessions": sessions or 0}
 
     @app.post("/api/v1/homes/{home_id}/family/invites")
     def family_invite(home_id: str, body: FamilyInviteIn, actor: Current):
