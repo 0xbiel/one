@@ -1269,6 +1269,58 @@
         "title": "RoomIn",
         "type": "object"
       },
+      "RoomPlanCameraRegistrationIn": {
+        "properties": {
+          "camera_id": {
+            "title": "Camera Id",
+            "type": "string"
+          },
+          "camera_to_world": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "title": "Camera To World",
+            "type": "array"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "map_id": {
+            "title": "Map Id",
+            "type": "string"
+          },
+          "tracking_state": {
+            "default": "normal",
+            "enum": [
+              "normal",
+              "limited",
+              "unavailable"
+            ],
+            "title": "Tracking State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "camera_id",
+          "map_id",
+          "camera_to_world"
+        ],
+        "title": "RoomPlanCameraRegistrationIn",
+        "type": "object"
+      },
       "RoomPlanDimensions3D": {
         "additionalProperties": false,
         "properties": {
@@ -2025,6 +2077,53 @@
           }
         },
         "summary": "Calibration"
+      }
+    },
+    "/api/v1/homes/{home_id}/camera-registrations/roomplan": {
+      "post": {
+        "operationId": "roomplan_camera_registration_api_v1_homes__home_id__camera_registrations_roomplan_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoomPlanCameraRegistrationIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Roomplan Camera Registration"
       }
     },
     "/api/v1/homes/{home_id}/cameras": {

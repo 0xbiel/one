@@ -176,6 +176,82 @@ def test_camera_provisional_roomplan_revision_and_calibration_invalidation(tmp_p
     assert c.get(f"/api/v1/homes/{home}/calibrations", headers=h).json()["data"][0]["status"] == "invalidated"
 
 
+def test_roomplan_camera_registration_tracks_only_active_metric_map(tmp_path):
+    c = client(tmp_path); token, home = auth(c); h = {"Authorization": f"Bearer {token}"}
+    camera = c.post(f"/api/v1/homes/{home}/cameras", headers=h, json={"name": "Hall camera"}).json()
+    roomplan_payload = json.loads((Path(__file__).parent / "fixtures" / "roomplan-lidar-valid.json").read_text())
+    first_map = c.post(f"/api/v1/homes/{home}/maps/roomplan", headers=h, json=roomplan_payload).json()
+    identity_pose = [
+        [1.0, 0.0, 0.0, 1.25],
+        [0.0, 1.0, 0.0, 1.55],
+        [0.0, 0.0, 1.0, -0.75],
+        [0.0, 0.0, 0.0, 1.0],
+    ]
+
+    before = c.get(f"/api/v1/homes/{home}/scene", headers=h).json()
+    assert before["camera"] is None
+    assert before["cameraRegistration"]["status"] == "needs_rescan"
+
+    registered = c.post(
+        f"/api/v1/homes/{home}/camera-registrations/roomplan",
+        headers=h,
+        json={"camera_id": camera["id"], "map_id": first_map["id"], "camera_to_world": identity_pose, "confidence": 0.94, "tracking_state": "normal"},
+    )
+    assert registered.status_code == 200 and registered.json()["status"] == "positioned"
+    positioned = c.get(f"/api/v1/homes/{home}/scene", headers=h).json()["cameraRegistration"]
+    assert positioned["cameraId"] == camera["id"]
+    assert positioned["cameraToWorld"] == identity_pose
+
+    invalid_matrix = c.post(
+        f"/api/v1/homes/{home}/camera-registrations/roomplan",
+        headers=h,
+        json={"camera_id": camera["id"], "map_id": first_map["id"], "camera_to_world": [[1.0, 0.0], [0.0, 1.0]]},
+    )
+    assert invalid_matrix.status_code == 422
+
+    nonfinite_payload = {"camera_id": camera["id"], "map_id": first_map["id"], "camera_to_world": [row[:] for row in identity_pose]}
+    nonfinite_payload["camera_to_world"][0][0] = float("nan")
+    nonfinite = c.post(
+        f"/api/v1/homes/{home}/camera-registrations/roomplan",
+        headers={**h, "Content-Type": "application/json"},
+        content=json.dumps(nonfinite_payload),
+    )
+    assert nonfinite.status_code == 422
+
+    needs_rescan = c.post(
+        f"/api/v1/homes/{home}/camera-registrations/roomplan",
+        headers=h,
+        json={"camera_id": camera["id"], "map_id": first_map["id"], "camera_to_world": identity_pose, "confidence": 0.4, "tracking_state": "limited"},
+    )
+    assert needs_rescan.status_code == 200 and needs_rescan.json()["status"] == "needs_rescan"
+    assert c.get(f"/api/v1/homes/{home}/scene", headers=h).json()["cameraRegistration"]["cameraToWorld"] is None
+
+    second_map = c.post(f"/api/v1/homes/{home}/maps/roomplan", headers=h, json=roomplan_payload).json()
+    current = c.get(f"/api/v1/homes/{home}/scene", headers=h).json()
+    assert current["mapId"] == second_map["id"]
+    assert current["cameraRegistration"]["status"] == "needs_rescan"
+    assert c.post(
+        f"/api/v1/homes/{home}/camera-registrations/roomplan",
+        headers=h,
+        json={"camera_id": camera["id"], "map_id": first_map["id"], "camera_to_world": identity_pose},
+    ).status_code == 409
+
+    c.app.state.db.execute("UPDATE cameras SET enabled=0 WHERE id=? AND home_id=?", (camera["id"], home))
+    assert c.post(
+        f"/api/v1/homes/{home}/camera-registrations/roomplan",
+        headers=h,
+        json={"camera_id": camera["id"], "map_id": second_map["id"], "camera_to_world": identity_pose},
+    ).status_code == 404
+
+    other_camera = c.post(f"/api/v1/homes/{home}/cameras", headers=h, json={"name": "Kitchen camera"}).json()
+    legacy_map = c.post(f"/api/v1/homes/{home}/maps", headers=h, json={"map_data": {"zones": []}}).json()
+    assert c.post(
+        f"/api/v1/homes/{home}/camera-registrations/roomplan",
+        headers=h,
+        json={"camera_id": other_camera["id"], "map_id": legacy_map["id"], "camera_to_world": identity_pose},
+    ).status_code == 422
+
+
 def test_assistant_degraded_and_consent_export_delete(tmp_path):
     c = client(tmp_path); token, home = auth(c); h = {"Authorization": f"Bearer {token}"}
     consent = c.post(f"/api/v1/homes/{home}/consents", headers=h, json={"purpose": "camera", "policy_version": "2026-01"})
