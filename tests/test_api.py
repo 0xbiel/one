@@ -6,10 +6,11 @@ from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.main import make_app
+from app.vision import DeterministicDemoDetector
 
 
 def client(tmp_path: Path):
-    app = make_app(Settings(database_url="sqlite:///:memory:", object_store_path=tmp_path / "objects", bootstrap_secret="test", env="test", lm_studio_url="http://127.0.0.1:9/v1"))
+    app = make_app(Settings(database_url="sqlite:///:memory:", object_store_path=tmp_path / "objects", bootstrap_secret="test", env="test", lm_studio_url="http://127.0.0.1:9/v1"), vision_detector=DeterministicDemoDetector())
     return TestClient(app)
 
 
@@ -148,6 +149,26 @@ def test_camera_map_observation_and_sse_schema(tmp_path):
         assert next(response.iter_lines()).startswith(": connected")
 
 
+def test_caregiver_can_remove_camera_without_erasing_history(tmp_path):
+    c = client(tmp_path)
+    token, home = auth(c)
+    headers = {"Authorization": f"Bearer {token}"}
+    camera = c.post(f"/api/v1/homes/{home}/cameras", headers=headers, json={"name": "Hallway phone"}).json()
+
+    removed = c.delete(f"/api/v1/homes/{home}/cameras/{camera['id']}", headers=headers)
+    assert removed.status_code == 200
+    assert removed.json()["status"] == "deleted"
+    assert c.get(f"/api/v1/homes/{home}/cameras", headers=headers).json()["data"] == []
+    assert c.get("/api/v1/me", headers=headers).json()["device"] is None
+    tombstone = c.app.state.db.one("SELECT enabled FROM cameras WHERE id=?", (camera["id"],))
+    audit = c.app.state.db.one("SELECT action, target_id FROM audit_log WHERE action='camera.delete' AND target_id=?", (camera["id"],))
+    assert tombstone["enabled"] == 0
+    assert audit["action"] == "camera.delete"
+
+    # DELETE remains idempotent for a camera that is already disabled.
+    assert c.delete(f"/api/v1/homes/{home}/cameras/{camera['id']}", headers=headers).status_code == 200
+
+
 def test_camera_provisional_roomplan_revision_and_calibration_invalidation(tmp_path):
     c = client(tmp_path); token, home = auth(c); h = {"Authorization": f"Bearer {token}"}
     camera = c.post(f"/api/v1/homes/{home}/cameras", headers=h, json={"name": "Hall", "resolution_width": 640, "resolution_height": 480}).json()
@@ -282,6 +303,86 @@ def test_bounded_vision_ingestion_requires_camera_and_stabilizes(tmp_path):
     assert stable["detector_version"] == "demo-deterministic-v1" and stable["data"][0]["projection"]["quality"] == "zone-fallback"
     prohibited = {**payload, "candidate_labels": ["person identity"]}
     assert c.post(f"/api/v1/homes/{home}/vision/frames", headers=h, json=prohibited).status_code == 422
+
+
+def test_registered_roomplan_vision_projects_to_zone_and_persists(tmp_path):
+    c = client(tmp_path); token, home = auth(c); h = {"Authorization": f"Bearer {token}"}
+    camera = c.post(f"/api/v1/homes/{home}/cameras", headers=h, json={"name": "Living room camera"}).json()
+    assert c.post(
+        f"/api/v1/homes/{home}/consents",
+        headers=h,
+        json={"purpose": "video_capture", "policy_version": "2026-09-01", "granted": True},
+    ).status_code == 200
+
+    identity = [[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [0.0, 0.0, 0.0, 1.0]]
+    roomplan = {
+        "room_id": None,
+        "normalized_scan": {
+            "schema_version": "roomplan-normalized.v1",
+            "producer": "native-ios",
+            "framework": "RoomPlan",
+            "units": "m",
+            "up_axis": "Y",
+            "coordinate_frame": "roomplan-local",
+            "geometry_type": "3d",
+            "room_id": "living",
+            "walls": [],
+            "floors": [{
+                "id": "floor-living",
+                "category": "floor",
+                "confidence": "high",
+                "center": {"x": 0.0, "y": 0.0, "z": -10.0},
+                "dimensions": {"x": 40.0, "y": 0.1, "z": 40.0},
+                "transform": identity,
+                "vertices": [
+                    {"x": -20.0, "y": 0.0, "z": -30.0},
+                    {"x": 20.0, "y": 0.0, "z": -30.0},
+                    {"x": 20.0, "y": 0.0, "z": 10.0},
+                    {"x": -20.0, "y": 0.0, "z": 10.0},
+                ],
+                "attributes": ["room-boundary"],
+            }],
+            "openings": [],
+            "doors": [],
+            "windows": [],
+            "objects": [],
+            "sections": [{"id": "living", "label": "Living room", "center": {"x": 0.0, "y": 0.0, "z": -10.0}, "story": 0}],
+        },
+        "scan_metadata": {
+            "provenance": "native-roomplan",
+            "device_model": "iPhone15,4",
+            "lidar": True,
+            "roomplan_version": "1.0",
+            "units": "m",
+            "up_axis": "Y",
+            "geometry_type": "3d",
+        },
+    }
+    room_map = c.post(f"/api/v1/homes/{home}/maps/roomplan", headers=h, json=roomplan).json()
+    camera_to_world = [[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 1.5], [0.0, 0.0, 1.0, 0.0], [0.0, 0.0, 0.0, 1.0]]
+    registration = c.post(
+        f"/api/v1/homes/{home}/camera-registrations/roomplan",
+        headers=h,
+        json={"camera_id": camera["id"], "map_id": room_map["id"], "camera_to_world": camera_to_world, "confidence": 0.95, "tracking_state": "normal"},
+    )
+    assert registration.status_code == 200 and registration.json()["status"] == "positioned"
+
+    frame = base64.b64encode(b"stable-roomplan-frame").decode()
+    payload = {"camera_id": camera["id"], "frame_base64": frame, "width": 640, "height": 480, "candidate_labels": ["keys"]}
+    c.post(f"/api/v1/homes/{home}/vision/frames", headers=h, json=payload)
+    c.post(f"/api/v1/homes/{home}/vision/frames", headers=h, json=payload)
+    stable = c.post(f"/api/v1/homes/{home}/vision/frames", headers=h, json=payload)
+    assert stable.status_code == 200
+    body = stable.json()
+    assert body["data"][0]["projection"]["quality"] == "calibrated-floor-ray"
+    assert body["data"][0]["projection"]["world_xyz"] is not None
+    assert body["data"][0]["projection"]["room_zone"]["label"] == "Living room"
+    assert body["observations"][0]["zone"] == "Living room"
+
+    objects = c.get(f"/api/v1/homes/{home}/objects/last-seen", headers=h).json()["data"]
+    detected = next(item for item in objects if item["label"] == "Keys")
+    assert detected["observation"]["map_id"] == room_map["id"]
+    assert detected["zone"]["name"] == "Living room"
 
 
 def test_clip_content_is_encrypted_at_rest_and_requires_home_authorization(tmp_path):

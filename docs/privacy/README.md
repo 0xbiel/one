@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="../../branding/one-logo.png" alt="ONE logo" width="128" />
+</p>
+
 # ONE privacy work pack
 
 This folder is a pre-production compliance work pack, not legal advice or a declaration that ONE is GDPR compliant. It records the current MVP behavior, open decisions, and evidence needed from the eventual controller and qualified EU/Spanish privacy counsel.

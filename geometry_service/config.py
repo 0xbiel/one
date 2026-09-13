@@ -51,15 +51,16 @@ class ServiceSettings:
 
     @classmethod
     def from_env(cls) -> "ServiceSettings":
-        mode = os.getenv("ONE_GEOMETRY_MODE", os.getenv("GEOMETRY_SERVICE_MODE", "model")).strip().lower()
+        mode = os.getenv("ONE_GEOMETRY_MODE", "model").strip().lower()
         if mode == "production":
             mode = "model"
 
-        # ONE_* names are the public configuration contract.  The older names
-        # remain accepted for local compatibility, but are intentionally not
-        # documented as the primary interface.
-        checkpoint = os.getenv("ONE_GEOMETRY_MODEL_PATH", os.getenv("GEOMETRY_SERVICE_CHECKPOINT", "")).strip()
-        config = os.getenv("ONE_GEOMETRY_MODEL_CONFIG", os.getenv("GEOMETRY_SERVICE_CONFIG", "")).strip()
+        # ONE_* names are the public configuration contract. The real model
+        # path is explicit so an absent checkpoint cannot become a fixture.
+        checkpoint = os.getenv("ONE_GEOMETRY_MODEL_PATH", "").strip()
+        config = os.getenv("ONE_GEOMETRY_MODEL_CONFIG", "").strip()
+        if not config:
+            config = str(Path(__file__).with_name("model_config.yolo-world.json"))
         # The browser normally submits 16 frames. Keep the public service
         # contract aligned with the backend's hard ceiling of 20 so an
         # environment override cannot turn this into an unbounded batch.

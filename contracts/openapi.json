@@ -138,6 +138,70 @@
         "title": "CameraIn",
         "type": "object"
       },
+      "CameraLocalizationFrameIn": {
+        "properties": {
+          "frame_base64": {
+            "maxLength": 4000000,
+            "minLength": 1,
+            "title": "Frame Base64",
+            "type": "string"
+          },
+          "height": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 4320.0,
+            "title": "Height",
+            "type": "integer"
+          },
+          "width": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 7680.0,
+            "title": "Width",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "frame_base64",
+          "width",
+          "height"
+        ],
+        "title": "CameraLocalizationFrameIn",
+        "type": "object"
+      },
+      "CameraLocalizationIn": {
+        "properties": {
+          "fov_degrees": {
+            "default": 60.0,
+            "maximum": 120.0,
+            "minimum": 30.0,
+            "title": "Fov Degrees",
+            "type": "number"
+          },
+          "frames": {
+            "items": {
+              "$ref": "#/components/schemas/CameraLocalizationFrameIn"
+            },
+            "maxItems": 8,
+            "minItems": 1,
+            "title": "Frames",
+            "type": "array"
+          },
+          "intrinsics": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Matrix3x3In"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "frames"
+        ],
+        "title": "CameraLocalizationIn",
+        "type": "object"
+      },
       "CameraMapFrameIn": {
         "properties": {
           "captured_at": {
@@ -454,6 +518,12 @@
       },
       "EmailAuthRequest": {
         "properties": {
+          "care_setting": {
+            "default": "home",
+            "pattern": "^(home|residence)$",
+            "title": "Care Setting",
+            "type": "string"
+          },
           "display_name": {
             "anyOf": [
               {
@@ -490,6 +560,12 @@
             "default": "admin",
             "pattern": "^(admin|resident|caregiver)$",
             "title": "Role",
+            "type": "string"
+          },
+          "support_focus": {
+            "default": "general",
+            "pattern": "^(general|mci)$",
+            "title": "Support Focus",
             "type": "string"
           }
         },
@@ -732,6 +808,28 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "ImagePoint": {
+        "properties": {
+          "x": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "X",
+            "type": "number"
+          },
+          "y": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Y",
+            "type": "number"
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ],
+        "title": "ImagePoint",
+        "type": "object"
+      },
       "LiveKitTokenIn": {
         "properties": {
           "mode": {
@@ -773,6 +871,56 @@
           "map_data"
         ],
         "title": "MapIn",
+        "type": "object"
+      },
+      "MapScaleReferenceIn": {
+        "description": "One caregiver-supplied real-world reference for an RGB 2D map.",
+        "properties": {
+          "end": {
+            "$ref": "#/components/schemas/ImagePoint"
+          },
+          "label": {
+            "default": "Measured reference",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          },
+          "length_m": {
+            "exclusiveMinimum": 0.05,
+            "maximum": 100.0,
+            "title": "Length M",
+            "type": "number"
+          },
+          "start": {
+            "$ref": "#/components/schemas/ImagePoint"
+          }
+        },
+        "required": [
+          "start",
+          "end",
+          "length_m"
+        ],
+        "title": "MapScaleReferenceIn",
+        "type": "object"
+      },
+      "Matrix3x3In": {
+        "properties": {
+          "values": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "title": "Values",
+            "type": "array"
+          }
+        },
+        "required": [
+          "values"
+        ],
+        "title": "Matrix3x3In",
         "type": "object"
       },
       "MedicationCheckInIn": {
@@ -1090,6 +1238,12 @@
       },
       "PairStart": {
         "properties": {
+          "care_setting": {
+            "default": "home",
+            "pattern": "^(home|residence)$",
+            "title": "Care Setting",
+            "type": "string"
+          },
           "display_name": {
             "maxLength": 120,
             "minLength": 1,
@@ -1119,6 +1273,12 @@
             "default": "admin",
             "pattern": "^(admin|resident|caregiver)$",
             "title": "Role",
+            "type": "string"
+          },
+          "support_focus": {
+            "default": "general",
+            "pattern": "^(general|mci)$",
+            "title": "Support Focus",
             "type": "string"
           }
         },
@@ -1700,6 +1860,101 @@
         "title": "RoomPlanSection",
         "type": "object"
       },
+      "RoomPlanVisualFrameIn": {
+        "properties": {
+          "camera_to_world": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "title": "Camera To World",
+            "type": "array"
+          },
+          "captured_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Captured At"
+          },
+          "depth_base64": {
+            "maxLength": 2000000,
+            "minLength": 1,
+            "title": "Depth Base64",
+            "type": "string"
+          },
+          "depth_height": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 2048.0,
+            "title": "Depth Height",
+            "type": "integer"
+          },
+          "depth_width": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 2048.0,
+            "title": "Depth Width",
+            "type": "integer"
+          },
+          "frame_base64": {
+            "maxLength": 4000000,
+            "minLength": 1,
+            "title": "Frame Base64",
+            "type": "string"
+          },
+          "height": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 4320.0,
+            "title": "Height",
+            "type": "integer"
+          },
+          "intrinsics": {
+            "$ref": "#/components/schemas/Matrix3x3In"
+          },
+          "width": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 7680.0,
+            "title": "Width",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "frame_base64",
+          "width",
+          "height",
+          "depth_base64",
+          "depth_width",
+          "depth_height",
+          "intrinsics",
+          "camera_to_world"
+        ],
+        "title": "RoomPlanVisualFrameIn",
+        "type": "object"
+      },
+      "RoomPlanVisualLandmarksIn": {
+        "properties": {
+          "frames": {
+            "items": {
+              "$ref": "#/components/schemas/RoomPlanVisualFrameIn"
+            },
+            "maxItems": 12,
+            "minItems": 2,
+            "title": "Frames",
+            "type": "array"
+          }
+        },
+        "required": [
+          "frames"
+        ],
+        "title": "RoomPlanVisualLandmarksIn",
+        "type": "object"
+      },
       "ValidationError": {
         "properties": {
           "ctx": {
@@ -1751,7 +2006,6 @@
               "type": "string"
             },
             "maxItems": 20,
-            "minItems": 1,
             "title": "Candidate Labels",
             "type": "array"
           },
@@ -1803,8 +2057,7 @@
           "camera_id",
           "frame_base64",
           "width",
-          "height",
-          "candidate_labels"
+          "height"
         ],
         "title": "VisionIn",
         "type": "object"
@@ -2209,6 +2462,51 @@
       }
     },
     "/api/v1/homes/{home_id}/cameras/{camera_id}": {
+      "delete": {
+        "description": "Disable a camera and revoke its publisher session.\n\nCamera records stay as an audit-safe tombstone so historical maps and\nobservations do not lose their camera reference. The device is no\nlonger returned to caregivers and its bearer session cannot publish a\nnew LiveKit token.",
+        "operationId": "camera_delete_api_v1_homes__home_id__cameras__camera_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "camera_id",
+            "required": true,
+            "schema": {
+              "title": "Camera Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Camera Delete"
+      },
       "patch": {
         "operationId": "camera_update_api_v1_homes__home_id__cameras__camera_id__patch",
         "parameters": [
@@ -2262,6 +2560,63 @@
           }
         },
         "summary": "Camera Update"
+      }
+    },
+    "/api/v1/homes/{home_id}/cameras/{camera_id}/localize-roomplan": {
+      "post": {
+        "description": "Visually register a separate fixed camera inside the active RoomPlan scene.",
+        "operationId": "localize_roomplan_camera_api_v1_homes__home_id__cameras__camera_id__localize_roomplan_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "camera_id",
+            "required": true,
+            "schema": {
+              "title": "Camera Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CameraLocalizationIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Localize Roomplan Camera"
       }
     },
     "/api/v1/homes/{home_id}/cameras/{camera_id}/map-generation": {
@@ -3443,6 +3798,63 @@
         "summary": "Map Detail"
       }
     },
+    "/api/v1/homes/{home_id}/maps/{map_id}/scale": {
+      "post": {
+        "description": "Persist a scale derived from a caregiver-measured reference.\n\nRGB camera geometry remains image-space and approximate. This endpoint\nonly adds a measured conversion after a person supplies the physical\nlength of two points visible on that map; it never invents meters from\nthe camera sweep alone.",
+        "operationId": "measure_map_scale_api_v1_homes__home_id__maps__map_id__scale_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "map_id",
+            "required": true,
+            "schema": {
+              "title": "Map Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MapScaleReferenceIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Measure Map Scale"
+      }
+    },
     "/api/v1/homes/{home_id}/maps/{map_id}/usdz": {
       "get": {
         "operationId": "roomplan_usdz_download_api_v1_homes__home_id__maps__map_id__usdz_get",
@@ -3546,6 +3958,63 @@
           }
         },
         "summary": "Roomplan Usdz Upload"
+      }
+    },
+    "/api/v1/homes/{home_id}/maps/{map_id}/visual-landmarks": {
+      "post": {
+        "description": "Build a derived, local-only visual landmark index for RoomPlan relocalization.",
+        "operationId": "roomplan_visual_landmarks_api_v1_homes__home_id__maps__map_id__visual_landmarks_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "map_id",
+            "required": true,
+            "schema": {
+              "title": "Map Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoomPlanVisualLandmarksIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Roomplan Visual Landmarks"
       }
     },
     "/api/v1/homes/{home_id}/medication-check-ins": {

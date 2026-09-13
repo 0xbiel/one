@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="branding/one-logo.png" alt="ONE logo" width="128" />
+</p>
+
 # ONE local-first backend
 
 This is the runnable FastAPI foundation for ONE. It is intentionally a modular monolith for the local-LAN MVP: Docker uses PostgreSQL as the authoritative database, while SQLite remains an explicit zero-setup development/test fallback. Redis, MinIO, LiveKit, and Caddy are supplied in `docker-compose.yml` as local services.
@@ -56,7 +60,7 @@ starting the API.
 
 ## Media/vision slice
 
-`app/vision.py` defines a bounded detector contract, an OWLv2-compatible injected adapter (no model download), a deterministic no-download demo detector, temporal hit tracking, and calibrated approximate projection with an explicit zone fallback. `POST /api/v1/homes/{home_id}/vision/frames` accepts bounded base64 frame bytes, processes them in memory, and returns stable detections; it does not persist raw frames. `app/media.py` supplies a bounded ring buffer and AES-GCM encrypted local clip bytes. The clip store is an internal worker primitive: authorization must be checked by the API before retrieval, and expiry must be enforced by the retention job.
+`app/vision.py` provides bounded temporal stabilization and calibrated projection for detections returned by the same local YOLO-World worker used by camera mapping. `POST /api/v1/homes/{home_id}/vision/frames` accepts bounded base64 frame bytes, processes them in memory, and never persists the raw image. When the camera has an active RoomPlan registration, stable detections are projected into the metric `roomplan-local` frame, associated with the RoomPlan room zone, and saved as derived observations/events. Without a usable registration they remain an explicit approximate fallback rather than being presented as metric 3D evidence. `app/media.py` supplies a bounded ring buffer and AES-GCM encrypted local clip bytes. The clip store is an internal worker primitive: authorization must be checked by the API before retrieval, and expiry must be enforced by the retention job.
 
 LiveKit webhook tokens are verified with HS256 issuer/expiry checks and an optional body digest claim when API credentials are configured. The official `livekit-server-sdk` is not bundled, so pin and prefer it for a production deployment matching the server version.
 

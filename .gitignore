@@ -1,5 +1,6 @@
 .env
 .venv/
+.geometry-venv/
 *.db
 data/
 __pycache__/

@@ -72,6 +72,11 @@ def _decode_jpeg(value: str, settings: ServiceSettings) -> bytes:
     return decoded
 
 
+def decode_jpeg(value: str, settings: ServiceSettings) -> bytes:
+    """Public bounded JPEG decoder shared by service endpoints."""
+    return _decode_jpeg(value, settings)
+
+
 def decode_request_frames(payload: RoomLayoutRequest, settings: ServiceSettings) -> list[FrameSample]:
     """Decode and bound all samples without writing or logging their contents."""
 

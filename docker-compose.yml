@@ -69,7 +69,16 @@ services:
   livekit:
     image: livekit/livekit-server:latest
     # Self-hosted development server; no LiveKit Cloud subscription required.
-    command: --dev --bind 0.0.0.0
+    environment:
+      # The WebRTC media path must advertise an address reachable by the
+      # caregiver device, not the Docker bridge or an unrelated public IP.
+      ONE_LIVEKIT_NODE_IP: ${ONE_LIVEKIT_NODE_IP:-}
+    entrypoint: ["/bin/sh", "-lc"]
+    command:
+      - >-
+        if [ -n "$${ONE_LIVEKIT_NODE_IP:-}" ]; then
+        exec /livekit-server --dev --bind 0.0.0.0 --node-ip "$${ONE_LIVEKIT_NODE_IP}";
+        else exec /livekit-server --dev --bind 0.0.0.0; fi
     ports: ["7880:7880", "7881:7881", "7882:7882/udp"]
   caddy:
     image: caddy:2-alpine

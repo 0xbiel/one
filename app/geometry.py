@@ -41,6 +41,22 @@ class RoomLayoutService(Protocol):
     ) -> object:
         """Infer derived room geometry from temporary RGB frames."""
 
+    def detect(self, *, frame_base64: str, width: int, height: int, candidate_labels: Sequence[str]) -> object:
+        """Run the configured real local detector on one transient frame."""
+
+    def build_visual_landmarks(self, *, map_id: str, frames: Sequence[dict]) -> object:
+        """Build derived RoomPlan visual landmarks from transient RGB/depth samples."""
+
+    def localize_camera(
+        self,
+        *,
+        landmarks: Sequence[dict],
+        frames: Sequence[dict],
+        intrinsics: list[list[float]] | None,
+        fov_degrees: float,
+    ) -> object:
+        """Estimate a fixed camera pose in RoomPlan coordinates."""
+
 
 class HttpRoomLayoutService:
     """Call the internal ``POST /v1/room-layout`` service over HTTP.
@@ -51,20 +67,45 @@ class HttpRoomLayoutService:
     never written by this adapter.
     """
 
-    _MAX_RESPONSE_BYTES = 2_000_000
+    _MAX_RESPONSE_BYTES = 4_000_000
 
     def __init__(self, settings: Settings):
         self.settings = settings
 
-    def _endpoint(self) -> str:
+    def _endpoint(self, path: str = "room-layout") -> str:
         base = (self.settings.geometry_service_url or "").strip().rstrip("/")
         if not base:
             raise RoomLayoutServiceUnavailable("not_configured")
         if base.endswith("/v1/room-layout"):
-            return base
+            base = base.removesuffix("/room-layout")
         if base.endswith("/v1"):
-            return f"{base}/room-layout"
-        return f"{base}/v1/room-layout"
+            return f"{base}/{path}"
+        return f"{base}/v1/{path}"
+
+    def _post(self, path: str, payload: dict) -> object:
+        request = urllib.request.Request(
+            self._endpoint(path),
+            data=json.dumps(payload, separators=(",", ":")).encode("utf-8"),
+            headers={"Content-Type": "application/json", "Accept": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=self.settings.geometry_timeout_seconds) as response:
+                raw = response.read(self._MAX_RESPONSE_BYTES + 1)
+            if len(raw) > self._MAX_RESPONSE_BYTES:
+                raise RoomLayoutServiceError("response_too_large")
+            result = json.loads(raw)
+            if not isinstance(result, dict):
+                raise RoomLayoutServiceError("invalid_response")
+            return result
+        except urllib.error.HTTPError as exc:
+            if exc.code in {408, 425, 429, 503, 504}:
+                raise RoomLayoutServiceUnavailable(f"http_{exc.code}") from exc
+            raise RoomLayoutServiceError(f"http_{exc.code}") from exc
+        except (TimeoutError, urllib.error.URLError, OSError) as exc:
+            raise RoomLayoutServiceUnavailable("connection_error") from exc
+        except json.JSONDecodeError as exc:
+            raise RoomLayoutServiceError("invalid_response") from exc
 
     def infer(
         self,
@@ -100,31 +141,43 @@ class HttpRoomLayoutService:
                 for frame in frames
             ],
         }
-        request = urllib.request.Request(
-            self._endpoint(),
-            data=json.dumps(payload, separators=(",", ":")).encode("utf-8"),
-            headers={
-                "Content-Type": "application/json",
-                "Accept": "application/json",
+        return self._post("room-layout", payload)
+
+    def detect(self, *, frame_base64: str, width: int, height: int, candidate_labels: Sequence[str]) -> object:
+        return self._post(
+            "vision/detect",
+            {
+                "frame_base64": frame_base64,
+                "width": width,
+                "height": height,
+                "candidate_labels": list(candidate_labels),
             },
-            method="POST",
         )
-        try:
-            with urllib.request.urlopen(
-                request, timeout=self.settings.geometry_timeout_seconds
-            ) as response:
-                raw = response.read(self._MAX_RESPONSE_BYTES + 1)
-            if len(raw) > self._MAX_RESPONSE_BYTES:
-                raise RoomLayoutServiceError("response_too_large")
-            result = json.loads(raw)
-            if not isinstance(result, dict):
-                raise RoomLayoutServiceError("invalid_response")
-            return result
-        except urllib.error.HTTPError as exc:
-            if exc.code in {408, 425, 429, 500, 502, 503, 504}:
-                raise RoomLayoutServiceUnavailable(f"http_{exc.code}") from exc
-            raise RoomLayoutServiceError(f"http_{exc.code}") from exc
-        except (TimeoutError, urllib.error.URLError, OSError) as exc:
-            raise RoomLayoutServiceUnavailable("connection_error") from exc
-        except json.JSONDecodeError as exc:
-            raise RoomLayoutServiceError("invalid_response") from exc
+
+    def build_visual_landmarks(self, *, map_id: str, frames: Sequence[dict]) -> object:
+        return self._post(
+            "visual-landmarks",
+            {
+                "schema_version": "roomplan-visual-landmarks.v1",
+                "map_id": map_id,
+                "frames": list(frames),
+            },
+        )
+
+    def localize_camera(
+        self,
+        *,
+        landmarks: Sequence[dict],
+        frames: Sequence[dict],
+        intrinsics: list[list[float]] | None,
+        fov_degrees: float,
+    ) -> object:
+        payload: dict = {
+            "schema_version": "roomplan-camera-localization.v1",
+            "landmarks": list(landmarks),
+            "frames": list(frames),
+            "fov_degrees": fov_degrees,
+        }
+        if intrinsics is not None:
+            payload["intrinsics"] = {"values": intrinsics}
+        return self._post("camera-localization", payload)

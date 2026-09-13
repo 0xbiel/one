@@ -72,6 +72,30 @@ def _normalized_point(value: Any, field_name: str) -> dict[str, float]:
     return {"x": round(x, 6), "y": round(y, 6)}
 
 
+def _normalized_size(value: Any, field_name: str) -> dict[str, float]:
+    if isinstance(value, Mapping):
+        x_value = value.get("x", value.get("width"))
+        y_value = value.get("y", value.get("height"))
+    elif isinstance(value, Sequence) and not isinstance(value, (str, bytes)) and len(value) == 2:
+        x_value, y_value = value
+    else:
+        raise ModelOutputError(f"model output field {field_name} must be a [width, height] size")
+    x = _finite_number(x_value, f"{field_name}.x")
+    y = _finite_number(y_value, f"{field_name}.y")
+    if not 0.0 < x <= 1.0 or not 0.0 < y <= 1.0:
+        raise ModelOutputError(f"model output field {field_name} must use normalized 0..1 dimensions")
+    return {"x": round(x, 6), "y": round(y, 6)}
+
+
+def _rotation_degrees(value: Any, field_name: str) -> float:
+    if value is None:
+        return 0.0
+    number = _finite_number(value, field_name)
+    if not -180.0 <= number <= 180.0:
+        raise ModelOutputError(f"model output field {field_name} must be between -180 and 180 degrees")
+    return round(number, 4)
+
+
 def _safe_diagnostics(raw: Any, base: dict[str, Any]) -> dict[str, Any]:
     """Keep diagnostics bounded and exclude arbitrary model payloads."""
 
@@ -84,6 +108,13 @@ def _safe_diagnostics(raw: Any, base: dict[str, Any]) -> dict[str, Any]:
         "homography_inlier_ratio",
         "visible_room_fraction",
         "inference_ms",
+        "model_backend",
+        "model_version",
+        "structure_method",
+        "detected_item_count",
+        "furniture_count",
+        "opening_count",
+        "frame_count",
         "warnings",
     }
     for key in allowed:
@@ -126,6 +157,34 @@ def normalize_model_output(
         raise ModelOutputError("model output must contain at least one wall segment")
     if len(raw_walls) > 256:
         raise ModelOutputError("model output contains too many wall segments")
+    raw_furniture = geometry_payload.get("furniture", [])
+    if raw_furniture is None:
+        raw_furniture = []
+    if not isinstance(raw_furniture, list):
+        raise ModelOutputError("model output field furniture must be a list")
+    if len(raw_furniture) > 100:
+        raise ModelOutputError("model output contains too many furniture items")
+    raw_openings = geometry_payload.get("openings", [])
+    if raw_openings is None:
+        raw_openings = []
+    if not isinstance(raw_openings, list):
+        raise ModelOutputError("model output field openings must be a list")
+    if len(raw_openings) > 100:
+        raise ModelOutputError("model output contains too many openings")
+    aliased_openings: list[dict[str, Any]] = []
+    for alias, kind in (("doors", "door"), ("windows", "window")):
+        values = geometry_payload.get(alias, [])
+        if values is None:
+            values = []
+        if not isinstance(values, list):
+            raise ModelOutputError(f"model output field {alias} must be a list")
+        for value in values:
+            item = dict(_mapping(value, alias))
+            item.setdefault("kind", kind)
+            aliased_openings.append(item)
+    raw_openings = raw_openings + aliased_openings
+    if len(raw_openings) > 100:
+        raise ModelOutputError("model output contains too many openings")
     pose = _mapping(raw_pose, "camera_pose")
     metrics_payload = _mapping(raw_metrics, "metrics")
 
@@ -160,6 +219,39 @@ def normalize_model_output(
                 "start": _normalized_point(wall.get("start"), f"walls[{index}].start"),
                 "end": _normalized_point(wall.get("end"), f"walls[{index}].end"),
                 "confidence": _confidence(wall.get("confidence"), f"walls[{index}].confidence"),
+            }
+        )
+
+    furniture: list[dict[str, Any]] = []
+    for index, raw_item in enumerate(raw_furniture):
+        item = _mapping(raw_item, f"furniture[{index}]")
+        label = item.get("label") or item.get("name")
+        if not isinstance(label, str) or not label.strip():
+            raise ModelOutputError(f"furniture[{index}].label must be a non-empty string")
+        furniture.append(
+            {
+                "id": _identifier(item.get("id"), f"furniture-{index + 1}", f"furniture[{index}].id"),
+                "label": label.strip()[:120],
+                "center": _normalized_point(item.get("center", item.get("position")), f"furniture[{index}].center"),
+                "size": _normalized_size(item.get("size", item.get("dimensions")), f"furniture[{index}].size"),
+                "rotation_degrees": _rotation_degrees(item.get("rotation_degrees", item.get("rotationDegrees")), f"furniture[{index}].rotation_degrees"),
+                "confidence": _confidence(item.get("confidence"), f"furniture[{index}].confidence"),
+            }
+        )
+
+    openings: list[dict[str, Any]] = []
+    for index, raw_opening in enumerate(raw_openings):
+        opening = _mapping(raw_opening, f"openings[{index}]")
+        kind = opening.get("kind")
+        if kind not in {"door", "window"}:
+            raise ModelOutputError(f"openings[{index}].kind must be door or window")
+        openings.append(
+            {
+                "id": _identifier(opening.get("id"), f"opening-{index + 1}", f"openings[{index}].id"),
+                "kind": kind,
+                "start": _normalized_point(opening.get("start"), f"openings[{index}].start"),
+                "end": _normalized_point(opening.get("end"), f"openings[{index}].end"),
+                "confidence": _confidence(opening.get("confidence"), f"openings[{index}].confidence"),
             }
         )
 
@@ -202,6 +294,8 @@ def normalize_model_output(
                 "coordinate_frame": "camera-relative-image",
                 "polygons": polygons,
                 "walls": walls,
+                "furniture": furniture,
+                "openings": openings,
                 "camera_pose": camera_pose,
                 "intrinsics": _mapping(geometry_payload.get("intrinsics", {}), "intrinsics"),
                 "metrics": {
@@ -220,6 +314,8 @@ def normalize_model_output(
             "metric_scale_known": False,
             "room_count": len(polygons),
             "wall_count": len(walls),
+            "furniture_count": len(furniture),
+            "opening_count": len(openings),
             "confidence": confidence,
             "reprojection_error_px": reprojection_error,
             "homography_inlier_ratio": homography_inlier_ratio,

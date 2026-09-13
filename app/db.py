@@ -15,7 +15,13 @@ def now_iso() -> str:
 
 SCHEMA = """
 PRAGMA foreign_keys=ON;
-CREATE TABLE IF NOT EXISTS homes (id TEXT PRIMARY KEY, name TEXT NOT NULL, created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS homes (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    care_setting TEXT NOT NULL DEFAULT 'home',
+    support_focus TEXT NOT NULL DEFAULT 'general'
+);
 CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, display_name TEXT NOT NULL, email TEXT, created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS memberships (home_id TEXT NOT NULL, user_id TEXT NOT NULL, role TEXT NOT NULL CHECK(role IN ('resident','caregiver','admin','publisher')), PRIMARY KEY(home_id,user_id), FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS home_runtime (home_id TEXT PRIMARY KEY, paused INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE);
@@ -308,6 +314,13 @@ class Database:
                 if "usdz_artifact_key" not in room_map_columns:
                     self.conn.execute("ALTER TABLE room_maps ADD COLUMN usdz_artifact_key TEXT")
                 self._record_sqlite_migration(7)
+            if not self._sqlite_migration_applied(8):
+                home_columns = {row[1] for row in self.conn.execute("PRAGMA table_info(homes)").fetchall()}
+                if "care_setting" not in home_columns:
+                    self.conn.execute("ALTER TABLE homes ADD COLUMN care_setting TEXT NOT NULL DEFAULT 'home'")
+                if "support_focus" not in home_columns:
+                    self.conn.execute("ALTER TABLE homes ADD COLUMN support_focus TEXT NOT NULL DEFAULT 'general'")
+                self._record_sqlite_migration(8)
             # Keep the zero-setup SQLite adapter forward-compatible with a
             # database created before caregiver assignment was introduced.
             plan_columns = {row[1] for row in self.conn.execute("PRAGMA table_info(medication_plans)").fetchall()}

@@ -169,6 +169,7 @@ def roomplan_geometry(scan: RoomPlanNormalizedScan) -> dict[str, Any]:
     surfaces: list[dict[str, Any]] = []
     walls: list[dict[str, Any]] = []
     objects: list[dict[str, Any]] = []
+    floor_candidates: list[tuple[RoomPlanElement, list[dict[str, Any]]]] = []
     for kind, elements in collections:
         for element in elements:
             confidence = _CONFIDENCE_VALUES[element.confidence]
@@ -183,6 +184,8 @@ def roomplan_geometry(scan: RoomPlanNormalizedScan) -> dict[str, Any]:
                         "confidence": confidence,
                     }
                 )
+                if kind == "floor":
+                    floor_candidates.append((element, vertices))
             if kind == "wall" and len(vertices) >= 2:
                 walls.append(
                     {
@@ -202,12 +205,74 @@ def roomplan_geometry(scan: RoomPlanNormalizedScan) -> dict[str, Any]:
                         "confidence": confidence,
                     }
                 )
+
+    def convex_hull(points: list[tuple[float, float]]) -> list[tuple[float, float]]:
+        unique = sorted(set(points))
+        if len(unique) <= 2:
+            return unique
+
+        def cross(origin: tuple[float, float], a: tuple[float, float], b: tuple[float, float]) -> float:
+            return (a[0] - origin[0]) * (b[1] - origin[1]) - (a[1] - origin[1]) * (b[0] - origin[0])
+
+        lower: list[tuple[float, float]] = []
+        for point in unique:
+            while len(lower) >= 2 and cross(lower[-2], lower[-1], point) <= 0:
+                lower.pop()
+            lower.append(point)
+        upper: list[tuple[float, float]] = []
+        for point in reversed(unique):
+            while len(upper) >= 2 and cross(upper[-2], upper[-1], point) <= 0:
+                upper.pop()
+            upper.append(point)
+        return lower[:-1] + upper[:-1]
+
+    room_zones: list[dict[str, Any]] = []
+    if floor_candidates:
+        for index, (floor, vertices) in enumerate(floor_candidates):
+            polygon = [{"x": float(point["x"]), "z": float(point["z"])} for point in vertices]
+            center_x = sum(point["x"] for point in polygon) / len(polygon)
+            center_z = sum(point["z"] for point in polygon) / len(polygon)
+            nearest_section = min(
+                scan.sections,
+                key=lambda section: (section.center.x - center_x) ** 2 + (section.center.z - center_z) ** 2,
+                default=None,
+            )
+            room_zones.append(
+                {
+                    "id": nearest_section.id if nearest_section else floor.id,
+                    "label": nearest_section.label if nearest_section else f"Room {index + 1}",
+                    "polygon": polygon,
+                    "floor_y": float(floor.center.y),
+                    "story": nearest_section.story if nearest_section else 0,
+                    "confidence": _CONFIDENCE_VALUES[floor.confidence],
+                }
+            )
+    else:
+        wall_points = [
+            (round(float(point.x), 4), round(float(point.z), 4))
+            for wall in scan.walls
+            for point in wall.vertices
+        ]
+        hull = convex_hull(wall_points)
+        if len(hull) >= 3:
+            section = scan.sections[0] if scan.sections else None
+            room_zones.append(
+                {
+                    "id": section.id if section else (scan.room_id or "room-1"),
+                    "label": section.label if section else "Room",
+                    "polygon": [{"x": x, "z": z} for x, z in hull],
+                    "floor_y": min((point.y for wall in scan.walls for point in wall.vertices), default=0.0),
+                    "story": section.story if section else 0,
+                    "confidence": min((_CONFIDENCE_VALUES[wall.confidence] for wall in scan.walls), default=0.5),
+                }
+            )
     return {
         "coordinate_space": scan.coordinate_frame,
         "polygons": [],
         "walls": walls,
         "surfaces": surfaces,
         "objects": objects,
+        "room_zones": room_zones,
         "roomplan_schema_version": scan.schema_version,
     }
 

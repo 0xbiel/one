@@ -29,7 +29,7 @@ def test_projection_is_approximate_and_has_zone_fallback():
     assert fallback.world_xyz is None and fallback.zone == "top-left" and fallback.quality == "zone-fallback"
     calibration = Calibration(500, 500, 500, 500, ((1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1)), 0.2)
     projected = project_detection(detection, frame, calibration, depth_m=2)
-    assert projected.world_xyz is not None and projected.uncertainty_m > 0 and projected.quality == "calibrated-approximate"
+    assert projected.world_xyz is not None and projected.uncertainty_m > 0 and projected.quality == "calibrated-depth"
 
 
 def test_encrypted_clip_round_trip_tamper_rejected(tmp_path: Path):

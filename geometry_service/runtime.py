@@ -1,9 +1,10 @@
-"""Lazy PyTorch/MPS/CUDA runtime loading with truthful readiness state."""
+"""Lazy real-model runtime loading with truthful readiness state."""
 
 from __future__ import annotations
 
 import json
 import math
+import threading
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -19,6 +20,10 @@ class RuntimeInferenceError(RuntimeError):
     """The loaded model failed while producing an output."""
 
 
+class RuntimeNeedsRescan(RuntimeError):
+    """The model ran, but the sweep did not contain enough stable room structure."""
+
+
 def _number(value: Any, field_name: str) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise RuntimeUnavailable(f"model config {field_name} must be numeric")
@@ -31,6 +36,8 @@ def _number(value: Any, field_name: str) -> float:
 def _validate_model_config(raw: Any, settings: ServiceSettings) -> tuple[dict[str, Any], float]:
     if not isinstance(raw, dict):
         raise RuntimeUnavailable("model config must contain a JSON object")
+    if raw.get("backend") != "ultralytics-yolo-world":
+        raise RuntimeUnavailable("model config backend must be ultralytics-yolo-world")
     model_version = raw.get("model_version")
     if not isinstance(model_version, str) or not model_version.strip():
         raise RuntimeUnavailable("model config must declare model_version")
@@ -48,6 +55,18 @@ def _validate_model_config(raw: Any, settings: ServiceSettings) -> tuple[dict[st
     if not (16 <= input_width <= 2_048 and 16 <= input_height <= 2_048):
         raise RuntimeUnavailable("model config input dimensions must be between 16 and 2048")
 
+    model_name = raw.get("model_name")
+    if not isinstance(model_name, str) or not model_name.strip():
+        raise RuntimeUnavailable("model config must declare model_name")
+
+    prompts = raw.get("prompts")
+    if (
+        not isinstance(prompts, list)
+        or not 3 <= len(prompts) <= 128
+        or any(not isinstance(prompt, str) or not prompt.strip() for prompt in prompts)
+    ):
+        raise RuntimeUnavailable("model config prompts must contain 3 to 128 non-empty strings")
+
     normalization = raw.get("normalization", {})
     if not isinstance(normalization, dict):
         raise RuntimeUnavailable("model config normalization must be an object")
@@ -64,6 +83,9 @@ def _validate_model_config(raw: Any, settings: ServiceSettings) -> tuple[dict[st
     threshold = _number(configured_threshold, "minimum_confidence")
     if not 0.0 <= threshold <= 1.0:
         raise RuntimeUnavailable("model config minimum_confidence must be between 0 and 1")
+    detection_threshold = _number(raw.get("detection_confidence", 0.20), "detection_confidence")
+    if not 0.0 <= detection_threshold <= 1.0:
+        raise RuntimeUnavailable("model config detection_confidence must be between 0 and 1")
     return raw, threshold
 
 
@@ -88,7 +110,7 @@ def _select_device(torch: Any, settings: ServiceSettings) -> tuple[Any, str]:
     if preference == "cuda":
         raise RuntimeUnavailable("PyTorch CUDA is not available on this host")
     if preference == "cpu" and not settings.allow_cpu:
-        raise RuntimeUnavailable("CPU inference is disabled; set GEOMETRY_SERVICE_ALLOW_CPU=1 explicitly")
+        raise RuntimeUnavailable("CPU inference is disabled; set ONE_GEOMETRY_ALLOW_CPU=1 explicitly")
     if preference == "auto" and not settings.allow_cpu:
         raise RuntimeUnavailable(
             "no supported GPU accelerator is available; PyTorch MPS/CUDA is required in model mode"
@@ -128,16 +150,12 @@ class RoomLayoutRuntime:
         self.reason: str | None = None
         self._torch: Any = None
         self._model: Any = None
+        self._model_lock = threading.Lock()
         self._load()
 
     def _load(self) -> None:
-        if self.mode == "mock":
-            self.ready = True
-            self.device_label = "mock"
-            self.model_version = "mock-room-layout-v1"
-            return
         if self.mode != "model":
-            self.reason = "ONE_GEOMETRY_MODE must be model or mock"
+            self.reason = "only real model mode is supported; set ONE_GEOMETRY_MODE=model"
             return
         if self.settings.checkpoint_path is None or self.settings.config_path is None:
             self.reason = (
@@ -153,8 +171,9 @@ class RoomLayoutRuntime:
 
         try:
             import torch
+            from ultralytics import YOLOWorld
         except ImportError:
-            self.reason = "PyTorch is not installed"
+            self.reason = "PyTorch and Ultralytics are required for the real geometry model"
             return
         try:
             import numpy  # noqa: F401
@@ -169,10 +188,18 @@ class RoomLayoutRuntime:
             device, device_label = _select_device(torch, self.settings)
             raw_config = json.loads(self.settings.config_path.read_text(encoding="utf-8"))
             model_config, threshold = _validate_model_config(raw_config, self.settings)
-            model = torch.jit.load(str(self.settings.checkpoint_path), map_location=device)
-            model.eval()
+            model = YOLOWorld(str(self.settings.checkpoint_path), verbose=False)
+            model.set_classes(model_config["prompts"])
+            model.to(device)
+            # Ultralytics' cached CLIP wrapper keeps its own ``device`` field.
+            # ``nn.Module.to()`` moves the CLIP weights but does not update that
+            # field, so subsequent ``set_classes()`` calls would tokenize on CPU
+            # and then feed CPU tokens into MPS weights.
+            clip_model = getattr(model.model, "clip_model", None)
+            if clip_model is not None and hasattr(clip_model, "device"):
+                clip_model.device = device
         except Exception as exc:  # pragma: no cover - depends on host/runtime/checkpoint
-            self.reason = str(exc) or "the configured PyTorch model could not be loaded"
+            self.reason = str(exc) or "the configured real geometry model could not be loaded"
             return
 
         self._model = model
@@ -188,7 +215,7 @@ class RoomLayoutRuntime:
             "status": "ready" if self.ready else "unavailable",
             "mode": self.mode,
             "runtime": {
-                "framework": "pytorch" if self._torch is not None else ("fixture" if self.mode == "mock" else None),
+                "framework": "pytorch-ultralytics" if self._torch is not None else None,
                 "torch_version": self.torch_version,
                 "device": self.device_label,
                 "requested_device": self.settings.device_preference or "auto",
@@ -214,8 +241,51 @@ class RoomLayoutRuntime:
         if not self.ready or self._model is None or self._torch is None:
             raise RuntimeUnavailable(self.reason or "geometry model is unavailable")
         try:
-            with self._torch.inference_mode():
-                output = self._model(batch)
-            return _to_python(output)
+            from .real_layout import RealLayoutNeedsRescan, infer_real_room_layout
+
+            with self._model_lock:
+                return infer_real_room_layout(
+                    self._model,
+                    batch,
+                    self.model_config,
+                    self.device_label or "cpu",
+                )
         except Exception as exc:  # pragma: no cover - depends on an external checkpoint
-            raise RuntimeInferenceError("the configured geometry model failed during inference") from exc
+            if isinstance(exc, RealLayoutNeedsRescan):
+                raise RuntimeNeedsRescan(str(exc)) from exc
+            if isinstance(exc, RuntimeInferenceError):
+                raise
+            raise RuntimeInferenceError("the configured real geometry model failed during inference") from exc
+
+    def detect_jpeg(self, jpeg_bytes: bytes, width: int, height: int, candidate_labels: list[str]) -> list[dict[str, Any]]:
+        """Run the same local YOLO-World checkpoint for bounded object detection."""
+        if not self.ready or self._model is None:
+            raise RuntimeUnavailable(self.reason or "vision model is unavailable")
+        try:
+            from .real_vision import decode_jpeg, detections_from_result
+
+            image = decode_jpeg(jpeg_bytes, width, height)
+            threshold = float(self.model_config.get("detection_confidence", 0.20))
+            with self._model_lock:
+                self._model.set_classes(candidate_labels)
+                results = self._model.predict(
+                    source=image,
+                    device=self.device_label or "cpu",
+                    imgsz=(int(self.model_config["input"]["height"]), int(self.model_config["input"]["width"])),
+                    conf=threshold,
+                    max_det=100,
+                    verbose=False,
+                )
+                self._model.set_classes(self.model_config["prompts"])
+            if not results:
+                return []
+            return detections_from_result(results[0], width=width, height=height, minimum_confidence=threshold)
+        except Exception as exc:  # pragma: no cover - depends on accelerator/model runtime
+            try:
+                if self._model is not None:
+                    self._model.set_classes(self.model_config.get("prompts", []))
+            except Exception:
+                pass
+            if isinstance(exc, RuntimeUnavailable):
+                raise
+            raise RuntimeInferenceError("the configured real vision model failed during inference") from exc

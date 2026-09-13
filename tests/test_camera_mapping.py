@@ -1,4 +1,5 @@
 import base64
+import json
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -44,6 +45,20 @@ class FakeRoomLayoutService:
                     "end": {"x": 0.90, "y": 0.12},
                     "confidence": self.confidence,
                 }],
+                "furniture": [{
+                    "id": "bed-1",
+                    "label": "Bed",
+                    "center": {"x": 0.72, "y": 0.30},
+                    "size": {"x": 0.25, "y": 0.16},
+                    "confidence": self.confidence,
+                }],
+                "openings": [{
+                    "id": "window-1",
+                    "kind": "window",
+                    "start": {"x": 0.20, "y": 0.12},
+                    "end": {"x": 0.39, "y": 0.12},
+                    "confidence": self.confidence,
+                }],
                 "camera_pose": {
                     "coordinate_frame": "camera-relative",
                     "position": {"x": 0.5, "y": 0.5, "z": 0.0},
@@ -58,6 +73,36 @@ class FakeRoomLayoutService:
                 },
             },
             "diagnostics": {"raw_frames_persisted": False},
+        }
+
+    def build_visual_landmarks(self, **kwargs):
+        self.calls.append({"visual_landmarks": kwargs})
+        return {
+            "status": "ready",
+            "detector": "opencv-orb",
+            "landmarks": [
+                {"point": [float(index), 1.0, -2.0], "descriptor_base64": base64.b64encode(bytes([index]) * 32).decode(), "response": 1.0}
+                for index in range(8)
+            ],
+            "diagnostics": {"raw_frames_persisted": False},
+        }
+
+    def localize_camera(self, **kwargs):
+        self.calls.append({"camera_localization": kwargs})
+        return {
+            "status": "positioned",
+            "camera_to_world": [
+                [1.0, 0.0, 0.0, 1.25],
+                [0.0, 1.0, 0.0, 1.55],
+                [0.0, 0.0, 1.0, -0.75],
+                [0.0, 0.0, 0.0, 1.0],
+            ],
+            "confidence": 0.92,
+            "inlier_count": 19,
+            "match_count": 24,
+            "reprojection_error_px": 1.8,
+            "intrinsics_source": "estimated-fov",
+            "intrinsics": [[554.3, 0.0, 320.0], [0.0, 554.3, 240.0], [0.0, 0.0, 1.0]],
         }
 
 
@@ -134,8 +179,25 @@ def test_camera_sweep_persists_derived_geometry_and_passes_only_device_context(t
     assert current["metric_scale_known"] is False
     assert current["map_data"]["geometry"]["polygons"][0]["points"][0] == {"x": 0.1, "y": 0.12}
     assert current["map_data"]["geometry"]["walls"]
+    assert current["map_data"]["geometry"]["furniture"][0]["label"] == "Bed"
+    assert current["map_data"]["geometry"]["openings"][0]["kind"] == "window"
     assert current["map_data"]["confidence"] == 0.86
     assert not any("camera" in key and "base64" in key for key in current["map_data"])
+
+    measured = client.post(
+        f"/api/v1/homes/{home_id}/maps/{job['map_id']}/scale",
+        headers=admin_headers,
+        json={"start": {"x": 0.10, "y": 0.12}, "end": {"x": 0.90, "y": 0.12}, "length_m": 8.0, "label": "North wall"},
+    )
+    assert measured.status_code == 200
+    assert measured.json()["scale"]["status"] == "measured_reference"
+    assert measured.json()["scale"]["reference_label"] == "North wall"
+    assert measured.json()["scale"]["meters_per_normalized_unit"] == 10.0
+    assert measured.json()["map_data"]["geometry"]["scale"]["reference_length_m"] == 8.0
+
+    scene = client.get(f"/api/v1/homes/{home_id}/scene", headers=admin_headers)
+    assert scene.status_code == 200
+    assert scene.json()["scale"]["method"] == "caregiver_reference"
 
     calibration = client.get(f"/api/v1/homes/{home_id}/calibrations", headers=admin_headers).json()["data"][0]
     assert calibration["source"] == "camera-cv"
@@ -170,3 +232,51 @@ def test_camera_sweep_rejects_wrong_publisher_and_service_unavailability(tmp_pat
     assert job["status"] == "unavailable"
     assert job["error_code"] == "geometry_service_unavailable"
     assert client.get(f"/api/v1/homes/{home_id}/maps", headers=admin_headers).json()["data"] == []
+
+
+def test_roomplan_visual_landmarks_localize_separate_publisher_camera(tmp_path):
+    service = FakeRoomLayoutService()
+    client = make_client(tmp_path, service)
+    admin_headers, publisher_headers, home_id, camera_id = make_admin_and_publisher(client)
+    roomplan_payload = json.loads((Path(__file__).parent / "fixtures" / "roomplan-lidar-valid.json").read_text())
+    room_map = client.post(f"/api/v1/homes/{home_id}/maps/roomplan", headers=admin_headers, json=roomplan_payload).json()
+
+    visual_frame = {
+        "frame_base64": base64.b64encode(b"jpeg").decode(),
+        "width": 640,
+        "height": 480,
+        "depth_base64": base64.b64encode(b"depth").decode(),
+        "depth_width": 2,
+        "depth_height": 2,
+        "intrinsics": {"values": [[554.3, 0.0, 320.0], [0.0, 554.3, 240.0], [0.0, 0.0, 1.0]]},
+        "camera_to_world": [[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 1.5], [0.0, 0.0, 1.0, 0.0], [0.0, 0.0, 0.0, 1.0]],
+        "captured_at": "2026-09-13T12:00:00Z",
+    }
+    built = client.post(
+        f"/api/v1/homes/{home_id}/maps/{room_map['id']}/visual-landmarks",
+        headers=admin_headers,
+        json={"frames": [visual_frame, visual_frame]},
+    )
+    assert built.status_code == 200
+    assert built.json()["status"] == "ready" and built.json()["landmark_count"] == 8
+
+    client.post(
+        f"/api/v1/homes/{home_id}/consents",
+        headers=publisher_headers,
+        json={"purpose": "video_capture", "policy_version": "2026-09-01"},
+    )
+    localized = client.post(
+        f"/api/v1/homes/{home_id}/cameras/{camera_id}/localize-roomplan",
+        headers=publisher_headers,
+        json={"frames": [{"frame_base64": base64.b64encode(b"fixed-camera").decode(), "width": 640, "height": 480}], "fov_degrees": 60.0},
+    )
+    assert localized.status_code == 200
+    assert localized.json()["status"] == "positioned"
+    assert localized.json()["source"] == "visual-roomplan-registration"
+    assert localized.json()["inlier_count"] == 19
+
+    scene = client.get(f"/api/v1/homes/{home_id}/scene", headers=admin_headers).json()
+    assert scene["mapId"] == room_map["id"]
+    assert scene["cameraRegistrations"][0]["cameraId"] == camera_id
+    assert scene["cameraRegistrations"][0]["cameraToWorld"][0][3] == 1.25
+    assert service.calls[-1]["camera_localization"]["landmarks"]

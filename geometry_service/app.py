@@ -8,12 +8,21 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from .config import ServiceSettings
-from .contracts import RoomLayoutRequest, RoomLayoutResponse
-from .frames import FrameInputError, decode_request_frames
+from .contracts import (
+    CameraLocalizationRequest,
+    CameraLocalizationResponse,
+    RoomLayoutRequest,
+    RoomLayoutResponse,
+    VisionFrameRequest,
+    VisionFrameResponse,
+    VisualLandmarkBuildRequest,
+    VisualLandmarkBuildResponse,
+)
+from .frames import FrameInputError, decode_jpeg, decode_request_frames
 from .geometry import ConfidenceBelowThreshold, ModelOutputError, normalize_model_output
-from .mock import deterministic_room_layout
+from .localization import LocalizationInputError, build_visual_landmarks, localize_camera
 from .model_input import DependencyUnavailable, build_torch_batch
-from .runtime import RuntimeInferenceError, RuntimeUnavailable, RoomLayoutRuntime
+from .runtime import RuntimeInferenceError, RuntimeNeedsRescan, RuntimeUnavailable, RoomLayoutRuntime
 
 
 def _response_payload(
@@ -49,7 +58,7 @@ def create_app(settings: ServiceSettings | None = None) -> FastAPI:
 
     @api.middleware("http")
     async def enforce_request_bound(request: Request, call_next: Any) -> Any:
-        if request.url.path == "/v1/room-layout":
+        if request.url.path in {"/v1/room-layout", "/v1/vision/detect", "/v1/visual-landmarks", "/v1/camera-localization"}:
             content_length = request.headers.get("content-length")
             if content_length:
                 try:
@@ -124,20 +133,13 @@ def create_app(settings: ServiceSettings | None = None) -> FastAPI:
                 "raw_frames_persisted": False,
             }
 
-            if runtime.mode == "mock":
-                raw_output = deterministic_room_layout(
-                    [sample.jpeg_bytes for sample in samples],
-                    payload.room_label,
-                    payload.orientation,
-                )
-            else:
-                batch, preprocess_diagnostics = build_torch_batch(
-                    samples,
-                    runtime.model_config,
-                    runtime.device_label,
-                )
-                base_diagnostics.update(preprocess_diagnostics)
-                raw_output = runtime.predict(batch)
+            batch, preprocess_diagnostics = build_torch_batch(
+                samples,
+                runtime.model_config,
+                runtime.device_label,
+            )
+            base_diagnostics.update(preprocess_diagnostics)
+            raw_output = runtime.predict(batch)
 
             return normalize_model_output(
                 raw_output,
@@ -158,7 +160,7 @@ def create_app(settings: ServiceSettings | None = None) -> FastAPI:
             )
         except ConfidenceBelowThreshold as exc:
             return JSONResponse(
-                status_code=422,
+                status_code=200,
                 content=_response_payload(
                     runtime,
                     status="needs_rescan",
@@ -175,6 +177,20 @@ def create_app(settings: ServiceSettings | None = None) -> FastAPI:
                     status="unavailable",
                     reason=str(exc),
                     diagnostics={"device": runtime.device_label, "mode": runtime.mode},
+                ),
+            )
+        except RuntimeNeedsRescan as exc:
+            return JSONResponse(
+                status_code=200,
+                content=_response_payload(
+                    runtime,
+                    status="needs_rescan",
+                    reason="insufficient_room_structure",
+                    diagnostics={
+                        "detail": str(exc),
+                        "device": runtime.device_label,
+                        "mode": runtime.mode,
+                    },
                 ),
             )
         except ModelOutputError as exc:
@@ -201,6 +217,96 @@ def create_app(settings: ServiceSettings | None = None) -> FastAPI:
             # Explicitly drop references so request bytes cannot outlive the call.
             batch = None
             samples.clear()
+
+    @api.post("/v1/vision/detect", response_model=VisionFrameResponse)
+    async def vision_detect(payload: VisionFrameRequest) -> Any:
+        if not runtime.ready:
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "status": "unavailable",
+                    "model_version": runtime.model_version,
+                    "detections": [],
+                    "diagnostics": {"reason": runtime.reason or "vision runtime is unavailable", "raw_frames_persisted": False},
+                },
+            )
+        try:
+            jpeg = decode_jpeg(payload.frame_base64, service_settings)
+            detections = runtime.detect_jpeg(jpeg, payload.width, payload.height, payload.candidate_labels)
+            return {
+                "status": "ready",
+                "model_version": runtime.model_version,
+                "detections": detections,
+                "diagnostics": {"device": runtime.device_label, "raw_frames_persisted": False},
+            }
+        except FrameInputError as exc:
+            return JSONResponse(status_code=exc.status_code, content={"status": "failed", "model_version": runtime.model_version, "detections": [], "diagnostics": {"reason": exc.code, "raw_frames_persisted": False}})
+        except (RuntimeUnavailable, RuntimeInferenceError) as exc:
+            return JSONResponse(status_code=503, content={"status": "unavailable", "model_version": runtime.model_version, "detections": [], "diagnostics": {"reason": str(exc), "raw_frames_persisted": False}})
+
+    @api.post("/v1/visual-landmarks", response_model=VisualLandmarkBuildResponse)
+    async def visual_landmarks(payload: VisualLandmarkBuildRequest) -> Any:
+        try:
+            return build_visual_landmarks(payload)
+        except LocalizationInputError as exc:
+            return JSONResponse(
+                status_code=422,
+                content={
+                    "status": "failed",
+                    "schema_version": "roomplan-visual-landmarks.v1",
+                    "detector": "opencv-orb",
+                    "landmarks": [],
+                    "diagnostics": {"reason": str(exc), "raw_frames_persisted": False},
+                },
+            )
+        except Exception as exc:  # pragma: no cover - defensive service boundary
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "status": "failed",
+                    "schema_version": "roomplan-visual-landmarks.v1",
+                    "detector": "opencv-orb",
+                    "landmarks": [],
+                    "diagnostics": {"reason": "landmark_build_failed", "detail": str(exc)[:200], "raw_frames_persisted": False},
+                },
+            )
+
+    @api.post("/v1/camera-localization", response_model=CameraLocalizationResponse)
+    async def camera_localization(payload: CameraLocalizationRequest) -> Any:
+        try:
+            return localize_camera(payload)
+        except LocalizationInputError as exc:
+            return JSONResponse(
+                status_code=422,
+                content={
+                    "status": "failed",
+                    "coordinate_frame": "roomplan-local",
+                    "camera_to_world": None,
+                    "confidence": None,
+                    "inlier_count": 0,
+                    "match_count": 0,
+                    "reprojection_error_px": None,
+                    "intrinsics_source": "estimated-fov",
+                    "intrinsics": None,
+                    "diagnostics": {"reason": str(exc), "raw_frames_persisted": False},
+                },
+            )
+        except Exception as exc:  # pragma: no cover - defensive service boundary
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "status": "failed",
+                    "coordinate_frame": "roomplan-local",
+                    "camera_to_world": None,
+                    "confidence": None,
+                    "inlier_count": 0,
+                    "match_count": 0,
+                    "reprojection_error_px": None,
+                    "intrinsics_source": "estimated-fov",
+                    "intrinsics": None,
+                    "diagnostics": {"reason": "camera_localization_failed", "detail": str(exc)[:200], "raw_frames_persisted": False},
+                },
+            )
 
     return api
 
