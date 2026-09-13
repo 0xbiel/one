@@ -75,6 +75,7 @@ MAP_JOB_STATUSES = ("collecting", "processing", "ready", "needs_rescan", "unavai
 MAP_FRAME_MAX_BYTES = 3_000_000
 MAP_BATCH_MAX_BYTES = 18_000_000
 MAP_FRAME_MAX_COUNT = 20
+MAP_COLLECTING_STALE_AFTER = timedelta(minutes=15)
 ROOMPLAN_USDZ_MAX_BYTES = 50 * 1024 * 1024
 ROOMPLAN_USDZ_CONTENT_TYPES = {
     "model/vnd.usdz+zip",
@@ -100,6 +101,46 @@ class CameraMapFrameIn(BaseModel):
 
 class CameraMapFramesIn(BaseModel):
     frames: list[CameraMapFrameIn] = Field(min_length=3, max_length=MAP_FRAME_MAX_COUNT)
+
+
+def recover_interrupted_map_jobs(db: Database) -> None:
+    """Close jobs that cannot be resumed after an API process restart.
+
+    Walkthrough frames are deliberately transient. A processing job therefore
+    has no safe way to resume after its in-memory task disappears. Collecting
+    jobs remain reusable briefly for request retries, then expire so a changed
+    camera resolution or orientation cannot trap future walkthroughs.
+    """
+    now = datetime.now(timezone.utc)
+    for row in db.many(
+        "SELECT id,status,updated_at FROM camera_map_generation_jobs WHERE status IN ('collecting','processing')"
+    ):
+        interrupted = row["status"] == "processing"
+        if not interrupted:
+            try:
+                updated_at = datetime.fromisoformat(str(row["updated_at"]).replace("Z", "+00:00"))
+                if updated_at.tzinfo is None:
+                    updated_at = updated_at.replace(tzinfo=timezone.utc)
+                interrupted = updated_at <= now - MAP_COLLECTING_STALE_AFTER
+            except (TypeError, ValueError):
+                interrupted = True
+        if not interrupted:
+            continue
+        completed = now_iso()
+        error_code = "generation_interrupted" if row["status"] == "processing" else "walkthrough_expired"
+        db.execute(
+            """UPDATE camera_map_generation_jobs
+                  SET status='failed', error_code=?, error_message=?, updated_at=?, completed_at=?
+                WHERE id=? AND status=?""",
+            (
+                error_code,
+                "The room walkthrough was interrupted. The camera remains saved; start a new walkthrough when convenient.",
+                completed,
+                completed,
+                row["id"],
+                row["status"],
+            ),
+        )
 
 
 class EmailAuthRequest(BaseModel):
@@ -414,6 +455,7 @@ def make_app(
 ) -> FastAPI:
     settings = settings or get_settings()
     db = Database(settings)
+    recover_interrupted_map_jobs(db)
     store = LocalObjectStore(settings.object_store_path)
     clip_key = None
     if settings.clip_encryption_key_b64:

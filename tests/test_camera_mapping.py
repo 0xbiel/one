@@ -117,6 +117,16 @@ def make_client(tmp_path: Path, service: FakeRoomLayoutService) -> TestClient:
     return TestClient(make_app(settings, geometry_service=service))
 
 
+def file_settings(tmp_path: Path) -> Settings:
+    return Settings(
+        database_url=f"sqlite:///{tmp_path / 'restart.db'}",
+        object_store_path=tmp_path / "objects",
+        bootstrap_secret="test",
+        env="test",
+        lm_studio_url="http://127.0.0.1:9/v1",
+    )
+
+
 def make_admin_and_publisher(client: TestClient) -> tuple[dict, dict, str, str]:
     owner_start = client.post("/api/v1/pairing/start", json={"display_name": "Admin", "role": "admin"}).json()
     owner = client.post("/api/v1/pairing/complete", json={"code": owner_start["pairing_code"]}).json()
@@ -232,6 +242,40 @@ def test_camera_sweep_rejects_wrong_publisher_and_service_unavailability(tmp_pat
     assert job["status"] == "unavailable"
     assert job["error_code"] == "geometry_service_unavailable"
     assert client.get(f"/api/v1/homes/{home_id}/maps", headers=admin_headers).json()["data"] == []
+
+
+def test_api_restart_makes_interrupted_walkthrough_retryable_without_losing_camera(tmp_path):
+    service = FakeRoomLayoutService()
+    settings = file_settings(tmp_path)
+    client = TestClient(make_app(settings, geometry_service=service))
+    admin_headers, publisher_headers, home_id, camera_id = make_admin_and_publisher(client)
+    client.post(
+        f"/api/v1/homes/{home_id}/consents",
+        headers=publisher_headers,
+        json={"purpose": "video_capture", "policy_version": "2026-09-01"},
+    )
+    started = client.post(
+        f"/api/v1/homes/{home_id}/cameras/{camera_id}/map-generation",
+        headers=publisher_headers,
+        json={"resolution_width": 640, "resolution_height": 480},
+    ).json()
+    client.app.state.db.execute(
+        "UPDATE camera_map_generation_jobs SET status='processing' WHERE id=?",
+        (started["job_id"],),
+    )
+    client.close()
+
+    restarted = TestClient(make_app(settings, geometry_service=service))
+    job = restarted.get(
+        f"/api/v1/homes/{home_id}/cameras/{camera_id}/map-generation/{started['job_id']}",
+        headers=admin_headers,
+    ).json()
+    assert job["status"] == "failed"
+    assert job["error_code"] == "generation_interrupted"
+    assert "camera remains saved" in job["error_message"].lower()
+    cameras = restarted.get(f"/api/v1/homes/{home_id}/cameras", headers=admin_headers).json()["data"]
+    assert any(camera["id"] == camera_id for camera in cameras)
+    restarted.close()
 
 
 def test_roomplan_visual_landmarks_localize_separate_publisher_camera(tmp_path):
