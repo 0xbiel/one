@@ -12,7 +12,7 @@ from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Re
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response, StreamingResponse
-from pydantic import BaseModel, Field, ValidationError, field_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 from .config import Settings, get_settings
 from .db import Database, now_iso
@@ -332,12 +332,19 @@ class RoomPlanVisualFrameIn(BaseModel):
     frame_base64: str = Field(min_length=1, max_length=4_000_000)
     width: int = Field(gt=0, le=7680)
     height: int = Field(gt=0, le=4320)
-    depth_base64: str = Field(min_length=1, max_length=2_000_000)
-    depth_width: int = Field(gt=0, le=2048)
-    depth_height: int = Field(gt=0, le=2048)
+    depth_base64: str | None = Field(default=None, min_length=1, max_length=2_000_000)
+    depth_width: int | None = Field(default=None, gt=0, le=2048)
+    depth_height: int | None = Field(default=None, gt=0, le=2048)
     intrinsics: Matrix3x3In
     camera_to_world: list[list[float]]
     captured_at: datetime | None = None
+
+    @model_validator(mode="after")
+    def validate_optional_depth_bundle(self) -> "RoomPlanVisualFrameIn":
+        depth_values = (self.depth_base64, self.depth_width, self.depth_height)
+        if any(value is not None for value in depth_values) and not all(value is not None for value in depth_values):
+            raise ValueError("depth_base64, depth_width, and depth_height must be supplied together")
+        return self
 
     @field_validator("camera_to_world")
     @classmethod
@@ -973,9 +980,11 @@ def make_app(
             (home_id, map_row["id"]),
         )
         if not calibration:
-            has_camera = db.one("SELECT id FROM cameras WHERE home_id=? AND enabled=1 LIMIT 1", (home_id,))
             return {
-                "status": "needs_rescan" if has_camera else "unavailable",
+                # A valid RoomPlan map and an unpositioned fixed camera are
+                # independent states. No calibration row means positioning has
+                # not been attempted for this map; it is not a failed scan.
+                "status": "unavailable",
                 "cameraId": None,
                 "mapId": map_row["id"],
                 "coordinateFrame": "roomplan-local",
@@ -1167,7 +1176,7 @@ def make_app(
         source = map_source(row)
         if source != "roomplan-lidar-3d" or map_dimension(row, source) != "3d" or row.get("coordinate_frame") != "roomplan-local":
             raise HTTPException(422, "Visual landmarks require a native RoomPlan 3D map")
-        total_chars = sum(len(frame.frame_base64) + len(frame.depth_base64) for frame in body.frames)
+        total_chars = sum(len(frame.frame_base64) + len(frame.depth_base64 or "") for frame in body.frames)
         if total_chars > 24_000_000:
             raise HTTPException(413, "RoomPlan visual landmark batch exceeds the in-memory limit")
         try:

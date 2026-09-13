@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 MAX_FRAME_BASE64_CHARS = 4_000_000
@@ -237,19 +237,26 @@ class Matrix4x4(BaseModel):
 
 
 class VisualLandmarkFrame(BaseModel):
-    """RGB + LiDAR depth sample captured inside the RoomPlan coordinate frame."""
+    """RGB + ARKit pose sample, with LiDAR depth when ARKit exposes it."""
 
     model_config = ConfigDict(extra="forbid")
 
     frame_base64: str = Field(min_length=1, max_length=MAX_FRAME_BASE64_CHARS)
     width: int = Field(gt=0, le=7_680)
     height: int = Field(gt=0, le=4_320)
-    depth_base64: str = Field(min_length=1, max_length=2_000_000)
-    depth_width: int = Field(gt=0, le=2_048)
-    depth_height: int = Field(gt=0, le=2_048)
+    depth_base64: str | None = Field(default=None, min_length=1, max_length=2_000_000)
+    depth_width: int | None = Field(default=None, gt=0, le=2_048)
+    depth_height: int | None = Field(default=None, gt=0, le=2_048)
     intrinsics: Matrix3x3
     camera_to_world: Matrix4x4
     captured_at: datetime | None = None
+
+    @model_validator(mode="after")
+    def validate_optional_depth_bundle(self) -> "VisualLandmarkFrame":
+        depth_values = (self.depth_base64, self.depth_width, self.depth_height)
+        if any(value is not None for value in depth_values) and not all(value is not None for value in depth_values):
+            raise ValueError("depth_base64, depth_width, and depth_height must be supplied together")
+        return self
 
 
 class VisualLandmarkBuildRequest(BaseModel):

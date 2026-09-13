@@ -211,7 +211,7 @@ def test_roomplan_camera_registration_tracks_only_active_metric_map(tmp_path):
 
     before = c.get(f"/api/v1/homes/{home}/scene", headers=h).json()
     assert before["camera"] is None
-    assert before["cameraRegistration"]["status"] == "needs_rescan"
+    assert before["cameraRegistration"]["status"] == "unavailable"
 
     registered = c.post(
         f"/api/v1/homes/{home}/camera-registrations/roomplan",
@@ -250,7 +250,7 @@ def test_roomplan_camera_registration_tracks_only_active_metric_map(tmp_path):
     second_map = c.post(f"/api/v1/homes/{home}/maps/roomplan", headers=h, json=roomplan_payload).json()
     current = c.get(f"/api/v1/homes/{home}/scene", headers=h).json()
     assert current["mapId"] == second_map["id"]
-    assert current["cameraRegistration"]["status"] == "needs_rescan"
+    assert current["cameraRegistration"]["status"] == "unavailable"
     assert c.post(
         f"/api/v1/homes/{home}/camera-registrations/roomplan",
         headers=h,

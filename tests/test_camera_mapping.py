@@ -308,9 +308,6 @@ def test_roomplan_visual_landmarks_localize_separate_publisher_camera(tmp_path):
         "frame_base64": base64.b64encode(b"jpeg").decode(),
         "width": 640,
         "height": 480,
-        "depth_base64": base64.b64encode(b"depth").decode(),
-        "depth_width": 2,
-        "depth_height": 2,
         "intrinsics": {"values": [[554.3, 0.0, 320.0], [0.0, 554.3, 240.0], [0.0, 0.0, 1.0]]},
         "camera_to_world": [[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 1.5], [0.0, 0.0, 1.0, 0.0], [0.0, 0.0, 0.0, 1.0]],
         "captured_at": "2026-09-13T12:00:00Z",
@@ -322,6 +319,7 @@ def test_roomplan_visual_landmarks_localize_separate_publisher_camera(tmp_path):
     )
     assert built.status_code == 200
     assert built.json()["status"] == "ready" and built.json()["landmark_count"] == 8
+    assert service.calls[-1]["visual_landmarks"]["frames"][0].get("depth_base64") is None
 
     client.post(
         f"/api/v1/homes/{home_id}/consents",

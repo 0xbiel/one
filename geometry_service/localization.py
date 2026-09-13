@@ -86,10 +86,118 @@ def _world_point(u: float, v: float, depth_m: float, intrinsics: np.ndarray, cam
     return world[:3]
 
 
+def _world_to_cv(camera_to_world: np.ndarray) -> np.ndarray:
+    """Convert an ARKit camera pose into an OpenCV world-to-camera matrix."""
+    cv_from_arkit = np.diag([1.0, -1.0, -1.0, 1.0])
+    try:
+        world_to_arkit = np.linalg.inv(camera_to_world)
+    except np.linalg.LinAlgError as exc:
+        raise LocalizationInputError("camera_to_world must be invertible") from exc
+    result = cv_from_arkit @ world_to_arkit
+    if not np.isfinite(result).all():
+        raise LocalizationInputError("camera pose produced a non-finite projection")
+    return result
+
+
+def _project_point(projection: np.ndarray, point: np.ndarray) -> np.ndarray | None:
+    homogeneous = projection @ np.asarray([point[0], point[1], point[2], 1.0], dtype=np.float64)
+    if not np.isfinite(homogeneous).all() or homogeneous[2] <= 1e-6:
+        return None
+    return homogeneous[:2] / homogeneous[2]
+
+
+def _triangulated_candidates(frames: list[dict[str, Any]]) -> list[tuple[np.ndarray, bytes, float]]:
+    """Triangulate ORB features from known RoomPlan/ARKit scan poses.
+
+    RoomPlan can finish a valid LiDAR capture while ARKit omits sceneDepth from
+    some or all exposed ARFrames.  The camera poses are still metric and share
+    the RoomPlan coordinate frame, so multi-view feature triangulation provides
+    a safe fallback without persisting any raw scan frames.
+    """
+    if len(frames) < 2:
+        return []
+    matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=False)
+    candidates: list[tuple[np.ndarray, bytes, float]] = []
+    for first_index in range(len(frames) - 1):
+        first = frames[first_index]
+        first_center = first["camera_to_world"][:3, 3]
+        first_projection = first["intrinsics"] @ first["world_to_cv"][:3, :]
+        for second_index in range(first_index + 1, len(frames)):
+            second = frames[second_index]
+            second_center = second["camera_to_world"][:3, 3]
+            baseline = float(np.linalg.norm(second_center - first_center))
+            if baseline < 0.08:
+                continue
+
+            pairs = matcher.knnMatch(first["descriptors"], second["descriptors"], k=2)
+            ratio_matches = [
+                best
+                for pair in pairs
+                if len(pair) == 2
+                for best, alternate in [pair]
+                if best.distance < 0.72 * alternate.distance
+            ]
+            unique: dict[int, Any] = {}
+            for match in sorted(ratio_matches, key=lambda item: item.distance):
+                unique.setdefault(match.trainIdx, match)
+            matches = list(unique.values())[:400]
+            if len(matches) < 6:
+                continue
+
+            first_points = np.asarray([first["keypoints"][match.queryIdx].pt for match in matches], dtype=np.float64)
+            second_points = np.asarray([second["keypoints"][match.trainIdx].pt for match in matches], dtype=np.float64)
+            second_projection = second["intrinsics"] @ second["world_to_cv"][:3, :]
+            homogeneous_points = cv2.triangulatePoints(
+                first_projection,
+                second_projection,
+                first_points.T,
+                second_points.T,
+            )
+
+            for match, first_uv, second_uv, homogeneous in zip(matches, first_points, second_points, homogeneous_points.T):
+                if abs(float(homogeneous[3])) <= 1e-8:
+                    continue
+                point = np.asarray(homogeneous[:3] / homogeneous[3], dtype=np.float64)
+                if not np.isfinite(point).all():
+                    continue
+                point_h = np.asarray([point[0], point[1], point[2], 1.0], dtype=np.float64)
+                first_depth = float((first["world_to_cv"] @ point_h)[2])
+                second_depth = float((second["world_to_cv"] @ point_h)[2])
+                if not (0.20 <= first_depth <= 15.0 and 0.20 <= second_depth <= 15.0):
+                    continue
+
+                ray_first = point - first_center
+                ray_second = point - second_center
+                norm_product = float(np.linalg.norm(ray_first) * np.linalg.norm(ray_second))
+                if norm_product <= 1e-8:
+                    continue
+                cosine = float(np.clip(np.dot(ray_first, ray_second) / norm_product, -1.0, 1.0))
+                if math.degrees(math.acos(cosine)) < 0.75:
+                    continue
+
+                projected_first = _project_point(first_projection, point)
+                projected_second = _project_point(second_projection, point)
+                if projected_first is None or projected_second is None:
+                    continue
+                reprojection_error = max(
+                    float(np.linalg.norm(projected_first - first_uv)),
+                    float(np.linalg.norm(projected_second - second_uv)),
+                )
+                if reprojection_error > 3.5:
+                    continue
+
+                keypoint = first["keypoints"][match.queryIdx]
+                descriptor = first["descriptors"][match.queryIdx]
+                candidates.append((point, bytes(descriptor.tolist()), float(keypoint.response)))
+    return candidates
+
+
 def build_visual_landmarks(payload: VisualLandmarkBuildRequest) -> dict[str, Any]:
     orb = cv2.ORB_create(nfeatures=900, scaleFactor=1.2, nlevels=8, fastThreshold=12)
     candidates: list[tuple[np.ndarray, bytes, float]] = []
     frame_feature_counts: list[int] = []
+    depth_feature_counts: list[int] = []
+    feature_frames: list[dict[str, Any]] = []
     for frame in payload.frames:
         jpeg = _jpeg_bytes(frame.frame_base64)
         try:
@@ -100,19 +208,35 @@ def build_visual_landmarks(payload: VisualLandmarkBuildRequest) -> dict[str, Any
         keypoints, descriptors = orb.detectAndCompute(gray, None)
         if descriptors is None or not keypoints:
             frame_feature_counts.append(0)
+            depth_feature_counts.append(0)
             continue
-        depth = _depth_array(frame.depth_base64, frame.depth_width, frame.depth_height)
         intrinsics = _matrix(frame.intrinsics.values, (3, 3))
         camera_to_world = _matrix(frame.camera_to_world.values, (4, 4))
+        world_to_cv = _world_to_cv(camera_to_world)
+        feature_frames.append(
+            {
+                "keypoints": keypoints,
+                "descriptors": descriptors,
+                "intrinsics": intrinsics,
+                "camera_to_world": camera_to_world,
+                "world_to_cv": world_to_cv,
+            }
+        )
+        frame_feature_counts.append(len(keypoints))
         accepted = 0
-        for keypoint, descriptor in zip(keypoints, descriptors):
-            depth_m = _depth_at(depth, keypoint.pt[0], keypoint.pt[1], frame.width, frame.height)
-            if depth_m is None:
-                continue
-            point = _world_point(keypoint.pt[0], keypoint.pt[1], depth_m, intrinsics, camera_to_world)
-            candidates.append((point, bytes(descriptor.tolist()), float(keypoint.response)))
-            accepted += 1
-        frame_feature_counts.append(accepted)
+        if frame.depth_base64 is not None and frame.depth_width is not None and frame.depth_height is not None:
+            depth = _depth_array(frame.depth_base64, frame.depth_width, frame.depth_height)
+            for keypoint, descriptor in zip(keypoints, descriptors):
+                depth_m = _depth_at(depth, keypoint.pt[0], keypoint.pt[1], frame.width, frame.height)
+                if depth_m is None:
+                    continue
+                point = _world_point(keypoint.pt[0], keypoint.pt[1], depth_m, intrinsics, camera_to_world)
+                candidates.append((point, bytes(descriptor.tolist()), float(keypoint.response)))
+                accepted += 1
+        depth_feature_counts.append(accepted)
+
+    triangulated = _triangulated_candidates(feature_frames)
+    candidates.extend(triangulated)
 
     # Keep the strongest descriptor in each 3 cm voxel so repeated scan frames
     # do not create a huge near-duplicate landmark set.
@@ -130,9 +254,11 @@ def build_visual_landmarks(payload: VisualLandmarkBuildRequest) -> dict[str, Any
             "detector": "opencv-orb",
             "landmarks": [],
             "diagnostics": {
-                "reason": "insufficient_depth_features",
+                "reason": "insufficient_visual_features",
                 "landmark_count": len(selected),
                 "frame_feature_counts": frame_feature_counts,
+                "depth_feature_counts": depth_feature_counts,
+                "triangulated_feature_count": len(triangulated),
                 "raw_frames_persisted": False,
             },
         }
@@ -152,6 +278,8 @@ def build_visual_landmarks(payload: VisualLandmarkBuildRequest) -> dict[str, Any
             "landmark_count": len(selected),
             "source_frame_count": len(payload.frames),
             "frame_feature_counts": frame_feature_counts,
+            "depth_feature_counts": depth_feature_counts,
+            "triangulated_feature_count": len(triangulated),
             "raw_frames_persisted": False,
         },
     }
