@@ -1743,6 +1743,16 @@ def make_app(
         camera = stored_geometry.get("camera_pose") if view["dimension"] == "2d" and isinstance(stored_geometry.get("camera_pose"), dict) else None
         camera_registration = roomplan_camera_registration_view(home_id, row)
         camera_registrations = roomplan_camera_registration_views(home_id, row)
+        if view["dimension"] == "2d" and view["rescan_required"]:
+            # A rejected camera sweep must never keep rendering stale or
+            # misleading image-space geometry. Preserve the revision for audit
+            # and retry UX, while exposing an empty scene until a better sweep
+            # or a native RoomPlan scan replaces it.
+            polygons = []
+            walls = []
+            furniture = []
+            openings = []
+            camera = None
         geometry = stored_geometry if view["dimension"] == "3d" else {"polygons": polygons, "walls": walls, "furniture": furniture, "openings": openings, "camera_pose": camera, "zones": zones}
         canonical_geometry = map_data.get("normalized_scan") if view["dimension"] == "3d" and isinstance(map_data.get("normalized_scan"), dict) else None
         return {"sceneId": row["id"], "version": row["revision"], "dimension": view["dimension"], "source": view["source"], "provenance": view["provenance"], "approximate": view["approximate"], "metricScaleKnown": view["metric_scale_known"], "scale": view["scale"], "geometryStatus": view["geometry_status"], "rescanRequired": view["rescan_required"], "confidence": map_data.get("confidence"), "modelVersion": view["model_version"], "zones": zones, "polygons": polygons, "walls": walls, "camera": camera, "cameraRegistration": camera_registration, "cameraRegistrations": camera_registrations, "canonicalGeometry": canonical_geometry, "geometry": geometry, "mapId": row["id"], "coordinateFrame": row["coordinate_frame"], "usdz": view["usdz"]}

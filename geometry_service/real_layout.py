@@ -390,6 +390,7 @@ def infer_real_room_layout(
     input_width = int(input_config["width"])
     input_height = int(input_config["height"])
     detection_confidence = float(model_config.get("detection_confidence", 0.20))
+    minimum_confidence = float(model_config.get("minimum_confidence", detection_confidence))
     try:
         results = model.predict(
             source=batch,
@@ -403,7 +404,7 @@ def infer_real_room_layout(
         raise RealLayoutInferenceError("the real YOLO-World model failed during inference") from exc
 
     frames = _to_rgb_frames(batch, model_config)
-    detections = _all_detections(results, minimum_confidence=detection_confidence)
+    detections = _all_detections(results, minimum_confidence=minimum_confidence)
     structural = [item for item in detections if item.label in _STRUCTURAL_LABELS]
     structure = _line_estimate(frames, structural)
     furniture = _furniture_payload(_cluster_detections(detections))

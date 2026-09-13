@@ -9,8 +9,10 @@ from app.main import make_app
 
 
 class FakeRoomLayoutService:
-    def __init__(self, *, confidence: float = 0.86, unavailable: bool = False):
+    def __init__(self, *, confidence: float = 0.86, reprojection_error_px: float = 5.0, homography_inlier_ratio: float = 0.82, unavailable: bool = False):
         self.confidence = confidence
+        self.reprojection_error_px = reprojection_error_px
+        self.homography_inlier_ratio = homography_inlier_ratio
         self.unavailable = unavailable
         self.calls: list[dict] = []
 
@@ -68,8 +70,8 @@ class FakeRoomLayoutService:
                 "intrinsics": {"source": "fake"},
                 "metrics": {
                     "confidence": self.confidence,
-                    "reprojection_error_px": 5.0,
-                    "homography_inlier_ratio": 0.82,
+                    "reprojection_error_px": self.reprojection_error_px,
+                    "homography_inlier_ratio": self.homography_inlier_ratio,
                 },
             },
             "diagnostics": {"raw_frames_persisted": False},
@@ -226,6 +228,23 @@ def test_camera_sweep_confidence_failure_does_not_save_map(tmp_path):
     job = client.get(f"/api/v1/homes/{home_id}/cameras/{camera_id}/map-generation/{job_id}", headers=admin_headers).json()
     assert job["status"] == "needs_rescan"
     assert job["map_id"] is None
+    assert client.get(f"/api/v1/homes/{home_id}/maps", headers=admin_headers).json()["data"] == []
+
+
+def test_camera_sweep_rejects_live_like_unstable_geometry(tmp_path):
+    service = FakeRoomLayoutService(confidence=0.91, reprojection_error_px=27.54, homography_inlier_ratio=0.539)
+    client = make_client(tmp_path, service)
+    admin_headers, publisher_headers, home_id, camera_id = make_admin_and_publisher(client)
+    client.post(f"/api/v1/homes/{home_id}/consents", headers=publisher_headers, json={"purpose": "video_capture", "policy_version": "2026-09-01"})
+    started = client.post(f"/api/v1/homes/{home_id}/cameras/{camera_id}/map-generation", headers=publisher_headers, json={"resolution_width": 640, "resolution_height": 480}).json()
+    job_id = started["job_id"]
+    client.post(f"/api/v1/homes/{home_id}/cameras/{camera_id}/map-generation/{job_id}/frames", headers=publisher_headers, json={"frames": sweep_frames()})
+
+    job = client.get(f"/api/v1/homes/{home_id}/cameras/{camera_id}/map-generation/{job_id}", headers=admin_headers).json()
+    assert job["status"] == "needs_rescan"
+    assert job["map_id"] is None
+    assert job["metrics"]["reprojection_error_px"] == 27.54
+    assert job["metrics"]["homography_inlier_ratio"] == 0.539
     assert client.get(f"/api/v1/homes/{home_id}/maps", headers=admin_headers).json()["data"] == []
 
 
