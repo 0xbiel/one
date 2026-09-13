@@ -80,6 +80,13 @@ def usdz_fixture() -> bytes:
     return output.getvalue()
 
 
+def non_usd_zip_fixture() -> bytes:
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_STORED) as archive:
+        archive.writestr("Payload/readme.txt", b"not a USD asset")
+    return output.getvalue()
+
+
 def test_roomplan_attachment_is_persisted_downloadable_and_deleted(tmp_path):
     c = client(tmp_path)
     token, home = auth(c)
@@ -110,7 +117,14 @@ def test_roomplan_attachment_is_persisted_downloadable_and_deleted(tmp_path):
     assert scene["source"] == "roomplan-lidar-3d" and scene["dimension"] == "3d"
     assert scene["geometry"]["surfaces"]
     assert scene["geometry"]["surfaces"][0]["kind"] == "wall"
+    assert scene["canonicalGeometry"]["schema_version"] == "roomplan-normalized.v1"
+    assert scene["canonicalGeometry"]["walls"][0]["transform"][0][3] == 1
     assert scene["usdz"]["download_path"].endswith(f"/{map_id}/usdz")
+    exported = c.post(f"/api/v1/homes/{home}/privacy/export", headers=headers)
+    assert exported.status_code == 200
+    exported_maps = exported.json()["data"]["room_maps"]
+    assert exported_maps[0]["usdz_artifact_key"].endswith(f"/{map_id}.usdz")
+    assert '"sha256"' in exported_maps[0]["metadata_json"]
 
     deleted = c.post(f"/api/v1/homes/{home}/privacy/delete", headers=headers)
     assert deleted.status_code == 200
@@ -165,3 +179,38 @@ def test_roomplan_rejects_malformed_geometry_and_usdz(tmp_path):
         headers={**headers, "Content-Type": "model/vnd.usdz+zip"},
         content=b"not-a-zip",
     ).status_code == 422
+    assert c.put(
+        f"/api/v1/homes/{home}/maps/{map_id}/usdz",
+        headers={**headers, "Content-Type": "model/vnd.usdz+zip"},
+        content=non_usd_zip_fixture(),
+    ).status_code == 422
+    assert c.put(
+        f"/api/v1/homes/{home}/maps/{map_id}/usdz",
+        headers={
+            **headers,
+            "Content-Type": "model/vnd.usdz+zip",
+            "Content-Length": str(50 * 1024 * 1024 + 1),
+        },
+        content=usdz_fixture(),
+    ).status_code == 413
+
+
+def test_roomplan_attachment_requires_authenticated_native_map(tmp_path):
+    c = client(tmp_path)
+    token, home = auth(c)
+    headers = {"Authorization": f"Bearer {token}"}
+    uploaded = c.post(
+        f"/api/v1/homes/{home}/maps/roomplan",
+        headers=headers,
+        json={"normalized_scan": scan_payload(), "scan_metadata": metadata()},
+    )
+    map_id = uploaded.json()["id"]
+    path = f"/api/v1/homes/{home}/maps/{map_id}/usdz"
+    assert c.put(path, headers={"Content-Type": "model/vnd.usdz+zip"}, content=usdz_fixture()).status_code == 401
+    assert c.get(path, headers={"Authorization": "Bearer invalid"}).status_code == 401
+    assert c.get(f"/api/v1/homes/{home}/maps/{map_id}/usdz", headers=headers).status_code == 404
+    assert c.put(
+        f"/api/v1/homes/not-your-home/maps/{map_id}/usdz",
+        headers={**headers, "Content-Type": "model/vnd.usdz+zip"},
+        content=usdz_fixture(),
+    ).status_code == 403

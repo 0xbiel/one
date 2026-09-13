@@ -7,8 +7,11 @@ cannot opt into the 3D renderer.
 
 from __future__ import annotations
 
+import io
 import math
+import zipfile
 from datetime import datetime
+from pathlib import PurePosixPath
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -221,3 +224,51 @@ def roomplan_usdz_metadata(
         "content_type": content_type,
         "download_path": download_path,
     }
+
+
+def validate_roomplan_usdz(payload: bytes) -> None:
+    """Validate the package boundary without extracting untrusted content.
+
+    USDZ is a ZIP package containing at least one USD asset. The backend never
+    extracts the archive, but it still rejects encrypted entries, traversal
+    names, empty assets, and packages that only contain unrelated files. This
+    keeps the stored attachment useful to RealityKit while preserving the
+    object-store path and privacy-deletion boundaries.
+    """
+
+    if not payload or not zipfile.is_zipfile(io.BytesIO(payload)):
+        raise ValueError("USDZ upload is not a valid ZIP package")
+
+    try:
+        with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+            entries = archive.infolist()
+            usd_entries = []
+            seen_names: set[str] = set()
+            for entry in entries:
+                name = entry.filename
+                if not name or "\x00" in name:
+                    raise ValueError("USDZ contains an invalid entry name")
+                if name in seen_names:
+                    raise ValueError("USDZ contains duplicate entry names")
+                seen_names.add(name)
+                normalized = PurePosixPath(name.replace("\\", "/"))
+                if normalized.is_absolute() or ".." in normalized.parts:
+                    raise ValueError("USDZ contains an unsafe entry path")
+                if entry.flag_bits & 0x1:
+                    raise ValueError("USDZ encrypted entries are not supported")
+                if entry.is_dir():
+                    continue
+                if entry.file_size <= 0:
+                    raise ValueError("USDZ contains an empty file")
+                suffix = normalized.suffix.lower()
+                if suffix in {".usd", ".usda", ".usdc"}:
+                    usd_entries.append(entry)
+
+            if not usd_entries:
+                raise ValueError("USDZ package does not contain a USD asset")
+            # Reading one canonical asset catches truncated/corrupt ZIP members
+            # while keeping validation bounded by the 50 MiB request limit.
+            if not archive.read(usd_entries[0]):
+                raise ValueError("USDZ contains an unreadable USD asset")
+    except (OSError, RuntimeError, zipfile.BadZipFile, zipfile.LargeZipFile) as exc:
+        raise ValueError("USDZ upload is not a readable ZIP package") from exc

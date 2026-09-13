@@ -1,11 +1,9 @@
 import asyncio
 import base64
 import hashlib
-import io
 import json
 import re
 import uuid
-import zipfile
 from datetime import datetime, timedelta, timezone
 from typing import Annotated, Literal, Sequence
 
@@ -30,6 +28,7 @@ from .roomplan import (
     RoomPlanMapIn,
     roomplan_geometry,
     roomplan_usdz_metadata,
+    validate_roomplan_usdz,
 )
 from .security import expired, hash_secret, new_pairing_code, new_token, iso_after, normalize_email
 from .storage import LocalObjectStore
@@ -840,7 +839,19 @@ def make_app(settings: Settings | None = None, geometry_service: RoomLayoutServi
         }
         return create_map(home_id, body.room_id, "roomplan-local", map_data, "roomplan-lidar-3d", False, "metric-local", metadata, actor, dimension="3d")
 
-    @app.put("/api/v1/homes/{home_id}/maps/{map_id}/usdz")
+    @app.put(
+        "/api/v1/homes/{home_id}/maps/{map_id}/usdz",
+        openapi_extra={
+            "requestBody": {
+                "required": True,
+                "content": {
+                    "model/vnd.usdz+zip": {
+                        "schema": {"type": "string", "format": "binary"}
+                    }
+                },
+            }
+        },
+    )
     async def roomplan_usdz_upload(home_id: str, map_id: str, request: Request, actor: Current):
         """Attach a bounded USDZ export to an already validated 3D map."""
 
@@ -862,8 +873,10 @@ def make_app(settings: Settings | None = None, geometry_service: RoomLayoutServi
         payload = await request.body()
         if not payload or len(payload) > ROOMPLAN_USDZ_MAX_BYTES:
             raise HTTPException(413, "USDZ upload is empty or too large")
-        if not zipfile.is_zipfile(io.BytesIO(payload)):
-            raise HTTPException(422, "USDZ upload is not a valid ZIP package")
+        try:
+            validate_roomplan_usdz(payload)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
         digest = hashlib.sha256(payload).hexdigest()
         key = f"maps/{home_id}/{map_id}.usdz"
         store.put_bytes(key, payload)
@@ -878,7 +891,19 @@ def make_app(settings: Settings | None = None, geometry_service: RoomLayoutServi
         audit(actor, "map.usdz.upload", "room_map", map_id, home_id)
         return {"map_id": map_id, "source": "roomplan-lidar-3d", "dimension": "3d", "usdz": metadata["usdz"]}
 
-    @app.get("/api/v1/homes/{home_id}/maps/{map_id}/usdz")
+    @app.get(
+        "/api/v1/homes/{home_id}/maps/{map_id}/usdz",
+        response_class=Response,
+        responses={
+            200: {
+                "content": {
+                    "model/vnd.usdz+zip": {
+                        "schema": {"type": "string", "format": "binary"}
+                    }
+                }
+            }
+        },
+    )
     def roomplan_usdz_download(home_id: str, map_id: str, actor: Current):
         home_check(actor, home_id); publisher_block(actor)
         row = db.one("SELECT * FROM room_maps WHERE id=? AND home_id=?", (map_id, home_id))
@@ -896,6 +921,8 @@ def make_app(settings: Settings | None = None, geometry_service: RoomLayoutServi
         headers = {
             "Content-Disposition": f'inline; filename="roomplan-{map_id}.usdz"',
             "Cache-Control": "private, max-age=0",
+            "Content-Length": str(len(payload)),
+            "X-Content-Type-Options": "nosniff",
         }
         if isinstance(digest, str):
             headers["ETag"] = digest
@@ -1159,7 +1186,7 @@ def make_app(settings: Settings | None = None, geometry_service: RoomLayoutServi
         home_check(actor, home_id); publisher_block(actor)
         row = db.one("SELECT * FROM room_maps WHERE home_id=? ORDER BY revision DESC, created_at DESC LIMIT 1", (home_id,))
         if not row:
-            return {"sceneId": None, "version": 0, "dimension": "2d", "source": "legacy-2d", "provenance": "legacy-2d", "approximate": True, "metricScaleKnown": False, "geometryStatus": "empty", "rescanRequired": True, "zones": [], "polygons": [], "walls": [], "camera": None, "geometry": {"polygons": [], "walls": [], "zones": []}, "usdz": None}
+            return {"sceneId": None, "version": 0, "dimension": "2d", "source": "legacy-2d", "provenance": "legacy-2d", "approximate": True, "metricScaleKnown": False, "geometryStatus": "empty", "rescanRequired": True, "zones": [], "polygons": [], "walls": [], "camera": None, "canonicalGeometry": None, "geometry": {"polygons": [], "walls": [], "zones": []}, "usdz": None}
         try:
             map_data = json.loads(row["map_json"])
         except (TypeError, json.JSONDecodeError):
@@ -1172,7 +1199,8 @@ def make_app(settings: Settings | None = None, geometry_service: RoomLayoutServi
         walls = stored_geometry.get("walls", []) if isinstance(stored_geometry.get("walls", []), list) else []
         camera = stored_geometry.get("camera_pose") if isinstance(stored_geometry.get("camera_pose"), dict) else None
         geometry = stored_geometry if view["dimension"] == "3d" else {"polygons": polygons, "walls": walls, "camera_pose": camera, "zones": zones}
-        return {"sceneId": row["id"], "version": row["revision"], "dimension": view["dimension"], "source": view["source"], "provenance": view["provenance"], "approximate": view["approximate"], "metricScaleKnown": view["metric_scale_known"], "geometryStatus": view["geometry_status"], "rescanRequired": view["rescan_required"], "confidence": map_data.get("confidence"), "modelVersion": view["model_version"], "zones": zones, "polygons": polygons, "walls": walls, "camera": camera, "geometry": geometry, "mapId": row["id"], "coordinateFrame": row["coordinate_frame"], "usdz": view["usdz"]}
+        canonical_geometry = map_data.get("normalized_scan") if view["dimension"] == "3d" and isinstance(map_data.get("normalized_scan"), dict) else None
+        return {"sceneId": row["id"], "version": row["revision"], "dimension": view["dimension"], "source": view["source"], "provenance": view["provenance"], "approximate": view["approximate"], "metricScaleKnown": view["metric_scale_known"], "geometryStatus": view["geometry_status"], "rescanRequired": view["rescan_required"], "confidence": map_data.get("confidence"), "modelVersion": view["model_version"], "zones": zones, "polygons": polygons, "walls": walls, "camera": camera, "canonicalGeometry": canonical_geometry, "geometry": geometry, "mapId": row["id"], "coordinateFrame": row["coordinate_frame"], "usdz": view["usdz"]}
 
     @app.post("/api/v1/homes/{home_id}/calibrations")
     def calibration(home_id: str, body: CalibrationIn, actor: Current):

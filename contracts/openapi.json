@@ -3370,8 +3370,11 @@
         "responses": {
           "200": {
             "content": {
-              "application/json": {
-                "schema": {}
+              "model/vnd.usdz+zip": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
               }
             },
             "description": "Successful Response"
@@ -3412,6 +3415,17 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "model/vnd.usdz+zip": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {

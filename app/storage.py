@@ -10,7 +10,7 @@ class LocalObjectStore:
 
     def _path_for(self, key: str) -> Path:
         """Resolve a storage key without allowing it to escape the store root."""
-        if not key or "\\x00" in key:
+        if not key or "\x00" in key:
             raise ValueError("object key is invalid")
         candidate = Path(key)
         if candidate.is_absolute() or ".." in candidate.parts:
