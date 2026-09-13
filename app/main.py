@@ -1,22 +1,36 @@
 import asyncio
 import base64
+import hashlib
+import io
 import json
 import re
 import uuid
+import zipfile
 from datetime import datetime, timedelta, timezone
-from typing import Annotated
+from typing import Annotated, Literal, Sequence
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
+from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response, StreamingResponse
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from .config import Settings, get_settings
 from .db import Database, now_iso
 from .events import EventBus, sse
+from .geometry import (
+    HttpRoomLayoutService,
+    RoomLayoutService,
+    RoomLayoutServiceError,
+    RoomLayoutServiceUnavailable,
+)
 from .integrations import LMStudioAdapter, livekit_jwt, verify_livekit_webhook
 from .media import EncryptedLocalClipStore
+from .roomplan import (
+    RoomPlanMapIn,
+    roomplan_geometry,
+    roomplan_usdz_metadata,
+)
 from .security import expired, hash_secret, new_pairing_code, new_token, iso_after, normalize_email
 from .storage import LocalObjectStore
 from .vision import Calibration, CameraVisionPipeline, DeterministicDemoDetector, Frame
@@ -53,6 +67,37 @@ class DevicePairingStart(BaseModel):
     expires_in_seconds: int = Field(default=600, ge=60, le=900)
 
 class PairComplete(BaseModel): code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
+
+
+MAP_JOB_STATUSES = ("collecting", "processing", "ready", "needs_rescan", "unavailable", "failed")
+MAP_FRAME_MAX_BYTES = 3_000_000
+MAP_BATCH_MAX_BYTES = 18_000_000
+MAP_FRAME_MAX_COUNT = 20
+ROOMPLAN_USDZ_MAX_BYTES = 50 * 1024 * 1024
+ROOMPLAN_USDZ_CONTENT_TYPES = {
+    "model/vnd.usdz+zip",
+    "application/zip",
+    "application/octet-stream",
+}
+
+
+class CameraMapGenerationStartIn(BaseModel):
+    room_id: str | None = None
+    room_label: str | None = Field(default=None, min_length=1, max_length=120)
+    orientation: str = Field(default="portrait", min_length=1, max_length=32)
+    resolution_width: int = Field(gt=0, le=7680)
+    resolution_height: int = Field(gt=0, le=4320)
+
+
+class CameraMapFrameIn(BaseModel):
+    frame_base64: str = Field(min_length=1, max_length=4_000_000)
+    width: int = Field(gt=0, le=7680)
+    height: int = Field(gt=0, le=4320)
+    captured_at: datetime | None = None
+
+
+class CameraMapFramesIn(BaseModel):
+    frames: list[CameraMapFrameIn] = Field(min_length=3, max_length=MAP_FRAME_MAX_COUNT)
 
 
 class EmailAuthRequest(BaseModel):
@@ -101,17 +146,63 @@ class CameraUpdate(BaseModel):
     resolution_height: int | None = Field(default=None, gt=0, le=4320)
     metadata: dict = Field(default_factory=dict)
 class RoomIn(BaseModel): name: str = Field(min_length=1, max_length=120)
-class MapIn(BaseModel): room_id: str | None = None; coordinate_frame: str = Field(default="roomplan-local", max_length=80); map_data: dict
+class MapIn(BaseModel): room_id: str | None = None; coordinate_frame: str = Field(default="manual-2d", max_length=80); map_data: dict
 class ProvisionalMapIn(BaseModel):
     camera_id: str
     room_id: str | None = None
     resolution_width: int = Field(gt=0, le=7680)
     resolution_height: int = Field(gt=0, le=4320)
     zones: list[dict] = Field(default_factory=list, max_length=100)
-class RoomPlanMapIn(BaseModel):
-    room_id: str | None = None
-    normalized_scan: dict
-    scan_metadata: dict = Field(default_factory=dict)
+class ImagePoint(BaseModel):
+    x: float = Field(ge=0, le=1)
+    y: float = Field(ge=0, le=1)
+
+
+class RoomLayoutPolygon(BaseModel):
+    id: str = Field(min_length=1, max_length=120)
+    label: str = Field(min_length=1, max_length=120)
+    points: list[ImagePoint] = Field(min_length=3, max_length=128)
+    confidence: float = Field(ge=0, le=1)
+
+
+class RoomLayoutWall(BaseModel):
+    id: str = Field(min_length=1, max_length=120)
+    start: ImagePoint
+    end: ImagePoint
+    confidence: float = Field(ge=0, le=1)
+
+
+class RoomLayoutCameraPose(BaseModel):
+    coordinate_frame: Literal["camera-relative"]
+    position: dict
+    rotation_degrees: dict
+    confidence: float = Field(ge=0, le=1)
+
+
+class RoomLayoutMetrics(BaseModel):
+    confidence: float = Field(ge=0, le=1)
+    reprojection_error_px: float = Field(ge=0, le=100_000)
+    homography_inlier_ratio: float = Field(ge=0, le=1)
+
+
+class RoomLayoutGeometry(BaseModel):
+    coordinate_frame: Literal["camera-relative-image"]
+    polygons: list[RoomLayoutPolygon] = Field(min_length=1, max_length=100)
+    walls: list[RoomLayoutWall] = Field(default_factory=list, max_length=256)
+    camera_pose: RoomLayoutCameraPose
+    intrinsics: dict = Field(default_factory=dict)
+    metrics: RoomLayoutMetrics
+
+
+class RoomLayoutResult(BaseModel):
+    status: Literal["ready", "needs_rescan", "unavailable", "failed"]
+    source: Literal["camera-cv-2d"] = "camera-cv-2d"
+    dimension: Literal["2d"] = "2d"
+    geometry: RoomLayoutGeometry | None = None
+    confidence: float | None = Field(default=None, ge=0, le=1)
+    metric_scale_known: Literal[False] = False
+    model_version: str = Field(min_length=1, max_length=120)
+    diagnostics: dict = Field(default_factory=dict)
 class CalibrationIn(BaseModel):
     camera_id: str
     map_id: str
@@ -205,7 +296,7 @@ class FamilyAssistantIn(BaseModel):
     subject_user_id: str | None = None
 
 
-def make_app(settings: Settings | None = None) -> FastAPI:
+def make_app(settings: Settings | None = None, geometry_service: RoomLayoutService | None = None) -> FastAPI:
     settings = settings or get_settings()
     db = Database(settings)
     store = LocalObjectStore(settings.object_store_path)
@@ -219,6 +310,7 @@ def make_app(settings: Settings | None = None) -> FastAPI:
     bus = EventBus()
     lm = LMStudioAdapter(settings)
     vision = CameraVisionPipeline(DeterministicDemoDetector())
+    geometry = geometry_service or HttpRoomLayoutService(settings)
     app = FastAPI(title="ONE API", version="0.1.0", openapi_url="/api/v1/openapi.json")
 
     def request_id(request: Request) -> str:
@@ -286,6 +378,7 @@ def make_app(settings: Settings | None = None) -> FastAPI:
         return response
 
     app.state.db, app.state.store, app.state.clip_store, app.state.bus, app.state.settings, app.state.vision = db, store, clip_store, bus, settings, vision
+    app.state.geometry_service = geometry
     app.add_middleware(CORSMiddleware, allow_origins=settings.cors_list, allow_credentials=True, allow_methods=["GET", "POST", "PATCH", "DELETE"], allow_headers=["Authorization", "Content-Type", "X-Bootstrap-Secret"])
 
     def auth(request: Request) -> dict:
@@ -390,6 +483,8 @@ def make_app(settings: Settings | None = None) -> FastAPI:
             "database": database["backend"],
             "database_status": database["status"],
             "local_inference_model": settings.effective_llm_model,
+            "geometry_service_configured": bool(settings.geometry_service_url),
+            "geometry_service_requires_gpu": settings.geometry_require_gpu,
         }
 
     @app.get("/api/v1/me")
@@ -572,9 +667,19 @@ def make_app(settings: Settings | None = None) -> FastAPI:
 
     @app.post("/api/v1/homes/{home_id}/consents")
     def consent(home_id: str, body: ConsentIn, actor: Current):
-        home_check(actor, home_id); publisher_block(actor)
+        home_check(actor, home_id)
+        # A paired camera may record only its own camera/microphone decision.
+        # It cannot use this endpoint to change household, family, or privacy
+        # controls. This keeps the permission prompt on the camera device
+        # while still making the consent gate durable for map generation.
+        if actor["role"] == "publisher":
+            if body.purpose not in {"video_capture", "audio_capture"} or body.subject_user_id not in (None, actor["user_id"]):
+                publisher_block(actor)
+        else:
+            publisher_block(actor)
         subject_user_id = body.subject_user_id or actor["user_id"]
-        member(home_id, subject_user_id)
+        if actor["role"] != "publisher":
+            member(home_id, subject_user_id)
         if subject_user_id != actor["user_id"] and actor["role"] not in {"admin", "caregiver"}:
             raise HTTPException(403, "Only a caregiver or admin can record a represented subject decision")
         cid = str(uuid.uuid4()); timestamp = now_iso(); db.execute("INSERT INTO consents VALUES (?,?,?,?,?,?,?)", (cid, home_id, subject_user_id, body.purpose, body.policy_version, timestamp, None if body.granted else timestamp))
@@ -618,62 +723,48 @@ def make_app(settings: Settings | None = None) -> FastAPI:
     def room(home_id: str, body: RoomIn, actor: Current):
         home_check(actor, home_id); publisher_block(actor); rid = str(uuid.uuid4()); db.execute("INSERT INTO rooms VALUES (?,?,?,?)", (rid, home_id, body.name, now_iso())); return {"id": rid, **body.model_dump()}
 
-    def normalize_map_zones(zones: object) -> list[dict]:
-        """Give lightweight camera maps renderable geometry when needed."""
-        if not isinstance(zones, list):
-            return []
-        count = len(zones)
-        normalized = []
-        for index, raw_zone in enumerate(zones):
-            if not isinstance(raw_zone, dict):
-                continue
-            zone = dict(raw_zone)
-            zone_id = str(zone.get("id") or f"zone-{index + 1}")
-            fallback = (
-                {"x": 8, "y": 12, "width": 84, "height": 76}
-                if count == 1
-                else {"x": 8 + (index % 2) * 47, "y": 12 + (index // 2) * 40, "width": 40, "height": 30}
-            )
-            zone["id"] = zone_id
-            zone["name"] = str(zone.get("name") or zone_id.replace("-", " ").replace("_", " ").title())
-            for key, value in fallback.items():
-                if isinstance(zone.get(key), bool) or not isinstance(zone.get(key), (int, float)):
-                    zone[key] = value
-            normalized.append(zone)
-        return normalized
+    def json_object(value: object) -> dict:
+        """Decode persisted JSON without manufacturing geometry or metadata."""
+        if not isinstance(value, str):
+            return {}
+        try:
+            decoded = json.loads(value)
+        except (TypeError, json.JSONDecodeError):
+            return {}
+        return decoded if isinstance(decoded, dict) else {}
 
-    @app.post("/api/v1/homes/{home_id}/maps")
-    def room_map(home_id: str, body: MapIn, actor: Current):
-        home_check(actor, home_id); publisher_block(actor); row = db.one("SELECT COALESCE(MAX(revision),0)+1 revision FROM room_maps WHERE home_id=? AND room_id IS ?", (home_id, body.room_id)); mid = str(uuid.uuid4()); key = f"maps/{home_id}/{mid}.json"; store.put_json(key, body.map_data); created = now_iso(); db.execute("INSERT INTO room_maps(id,home_id,room_id,revision,coordinate_frame,artifact_key,map_json,created_at,source,approximate,localization_status,metadata_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", (mid, home_id, body.room_id, row["revision"], body.coordinate_frame, key, json.dumps(body.map_data), created, "manual", 0, "unlocalized", "{}")); db.execute("UPDATE calibrations SET status='invalidated', invalidated_at=?, invalidation_reason='map revision changed' WHERE home_id=? AND status='active' AND map_id != ?", (created, home_id, mid)); return {"id": mid, "revision": row["revision"], "coordinate_frame": body.coordinate_frame, "artifact_key": key}
+    def map_source(row: dict) -> str:
+        source = str(row.get("source") or "legacy-2d")
+        # Only the two explicit new contracts can opt into current geometry.
+        # Older manual/generic rows must remain visible, but are legacy and
+        # need a fresh automatic sweep before they can drive the map UI.
+        return source if source in {"camera-cv-2d", "roomplan-lidar-3d", "legacy-2d"} else "legacy-2d"
 
-    def create_map(home_id: str, room_id: str | None, coordinate_frame: str, map_data: dict, source: str, approximate: bool, localization_status: str, metadata: dict, actor: dict) -> dict:
-        row = db.one("SELECT COALESCE(MAX(revision),0)+1 revision FROM room_maps WHERE home_id=? AND room_id IS ?", (home_id, room_id))
-        mid = str(uuid.uuid4()); key = f"maps/{home_id}/{mid}.json"; store.put_json(key, map_data)
-        db.execute("INSERT INTO room_maps(id,home_id,room_id,revision,coordinate_frame,artifact_key,map_json,created_at,source,approximate,localization_status,metadata_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", (mid, home_id, room_id, row["revision"], coordinate_frame, key, json.dumps(map_data), now_iso(), source, int(approximate), localization_status, json.dumps(metadata)))
-        db.execute("UPDATE calibrations SET status='invalidated', invalidated_at=?, invalidation_reason='map revision changed' WHERE home_id=? AND status='active' AND map_id != ?", (now_iso(), home_id, mid))
-        audit(actor, "map.create", "room_map", mid, home_id)
-        return {"id": mid, "revision": row["revision"], "coordinate_frame": coordinate_frame, "source": source, "approximate": approximate, "localization_status": localization_status, "metadata": metadata}
-
-    @app.post("/api/v1/homes/{home_id}/maps/provisional")
-    def provisional_map(home_id: str, body: ProvisionalMapIn, actor: Current):
-        home_check(actor, home_id); publisher_block(actor)
-        camera = db.one("SELECT * FROM cameras WHERE id=? AND home_id=? AND enabled=1", (body.camera_id, home_id))
-        if not camera: raise HTTPException(404, "Camera not found or disabled")
-        return create_map(home_id, body.room_id, "camera-zone-local", {"zones": normalize_map_zones(body.zones)}, "camera-provisional", True, "zone-only", {"camera_id": body.camera_id, "resolution_width": body.resolution_width, "resolution_height": body.resolution_height}, actor)
-
-    @app.post("/api/v1/homes/{home_id}/maps/roomplan")
-    def roomplan_map(home_id: str, body: RoomPlanMapIn, actor: Current):
-        home_check(actor, home_id); publisher_block(actor)
-        return create_map(home_id, body.room_id, "roomplan-local", body.normalized_scan, "roomplan-normalized", True, "unlocalized", body.scan_metadata, actor)
+    def map_dimension(row: dict, source: str) -> str:
+        # A generic or legacy map can never opt into the 3D renderer by
+        # putting an arbitrary value in its stored JSON.
+        return "3d" if source == "roomplan-lidar-3d" and row.get("dimension") == "3d" else "2d"
 
     def map_view(row: dict) -> dict:
-        """Return a JSON-safe map read model without exposing storage internals."""
+        """Return map provenance while preserving legacy JSON verbatim."""
         try:
             map_data = json.loads(row["map_json"])
         except (TypeError, json.JSONDecodeError):
             map_data = {}
-        if isinstance(map_data, dict):
-            map_data = {**map_data, "zones": normalize_map_zones(map_data.get("zones", []))}
+        metadata = json_object(row.get("metadata_json") or "{}")
+        source = map_source(row)
+        dimension = map_dimension(row, source)
+        rescan_required = source == "legacy-2d" or row.get("localization_status") == "rescan-required"
+        if rescan_required:
+            geometry_status = "rescan-required"
+        elif source in {"camera-cv-2d", "roomplan-lidar-3d"}:
+            geometry_status = "ready"
+        else:
+            geometry_status = "legacy"
+        model_version = metadata.get("model_version")
+        usdz = metadata.get("usdz") if isinstance(metadata.get("usdz"), dict) else None
+        if not row.get("usdz_artifact_key"):
+            usdz = None
         return {
             "id": row["id"],
             "home_id": row["home_id"],
@@ -682,11 +773,363 @@ def make_app(settings: Settings | None = None) -> FastAPI:
             "coordinate_frame": row["coordinate_frame"],
             "map_data": map_data,
             "created_at": row["created_at"],
-            "source": row.get("source", "manual"),
-            "approximate": bool(row.get("approximate", 0)),
+            "source": source,
+            "provenance": source,
+            "dimension": dimension,
+            "approximate": bool(row.get("approximate", 0)) or source == "legacy-2d",
+            "metric_scale_known": dimension == "3d",
             "localization_status": row.get("localization_status", "unlocalized"),
-            "metadata": json.loads(row.get("metadata_json") or "{}"),
+            "geometry_status": geometry_status,
+            "rescan_required": rescan_required,
+            "model_version": model_version if isinstance(model_version, str) else None,
+            "metadata": metadata,
+            "usdz": usdz,
         }
+
+    def create_map(
+        home_id: str,
+        room_id: str | None,
+        coordinate_frame: str,
+        map_data: dict,
+        source: str,
+        approximate: bool,
+        localization_status: str,
+        metadata: dict,
+        actor: dict,
+        dimension: str = "2d",
+    ) -> dict:
+        row = db.one("SELECT COALESCE(MAX(revision),0)+1 revision FROM room_maps WHERE home_id=? AND room_id IS ?", (home_id, room_id))
+        if source != "roomplan-lidar-3d":
+            dimension = "2d"
+        mid = str(uuid.uuid4())
+        key = f"maps/{home_id}/{mid}.json"
+        store.put_json(key, map_data)
+        created = now_iso()
+        db.execute(
+            "INSERT INTO room_maps(id,home_id,room_id,revision,coordinate_frame,artifact_key,map_json,created_at,source,dimension,approximate,localization_status,metadata_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (mid, home_id, room_id, row["revision"], coordinate_frame, key, json.dumps(map_data), created, source, dimension, int(approximate), localization_status, json.dumps(metadata)),
+        )
+        db.execute("UPDATE calibrations SET status='invalidated', invalidated_at=?, invalidation_reason='map revision changed' WHERE home_id=? AND status='active' AND map_id != ?", (created, home_id, mid))
+        audit(actor, "map.create", "room_map", mid, home_id)
+        return {"id": mid, "revision": row["revision"], "coordinate_frame": coordinate_frame, "artifact_key": key, "source": source, "provenance": source, "dimension": dimension, "approximate": approximate, "metric_scale_known": dimension == "3d", "localization_status": localization_status, "geometry_status": "ready", "rescan_required": localization_status == "rescan-required", "metadata": metadata, "usdz": None}
+
+    @app.post("/api/v1/homes/{home_id}/maps")
+    def room_map(home_id: str, body: MapIn, actor: Current):
+        home_check(actor, home_id); publisher_block(actor)
+        return create_map(home_id, body.room_id, body.coordinate_frame, body.map_data, "legacy-2d", True, "rescan-required", {"legacy_reason": "generic map uploads are 2D-only and require a camera rescan"}, actor)
+
+    @app.post("/api/v1/homes/{home_id}/maps/provisional")
+    def provisional_map(home_id: str, body: ProvisionalMapIn, actor: Current):
+        home_check(actor, home_id); publisher_block(actor)
+        camera = db.one("SELECT * FROM cameras WHERE id=? AND home_id=? AND enabled=1", (body.camera_id, home_id))
+        if not camera: raise HTTPException(404, "Camera not found or disabled")
+        return create_map(home_id, body.room_id, "camera-zone-local", {"zones": body.zones}, "legacy-2d", True, "rescan-required", {"camera_id": body.camera_id, "resolution_width": body.resolution_width, "resolution_height": body.resolution_height, "legacy_reason": "provisional camera zones do not contain inferred geometry"}, actor)
+
+    @app.post("/api/v1/homes/{home_id}/maps/roomplan")
+    def roomplan_map(home_id: str, body: RoomPlanMapIn, actor: Current):
+        home_check(actor, home_id); publisher_block(actor)
+        normalized_scan = body.normalized_scan.model_dump(mode="json")
+        metadata = {**body.scan_metadata.model_dump(), "model_version": "native-roomplan"}
+        map_data = {
+            "schema_version": body.normalized_scan.schema_version,
+            "source": "roomplan-lidar-3d",
+            "dimension": "3d",
+            "coordinate_frame": body.normalized_scan.coordinate_frame,
+            "normalized_scan": normalized_scan,
+            "geometry": roomplan_geometry(body.normalized_scan),
+        }
+        return create_map(home_id, body.room_id, "roomplan-local", map_data, "roomplan-lidar-3d", False, "metric-local", metadata, actor, dimension="3d")
+
+    @app.put("/api/v1/homes/{home_id}/maps/{map_id}/usdz")
+    async def roomplan_usdz_upload(home_id: str, map_id: str, request: Request, actor: Current):
+        """Attach a bounded USDZ export to an already validated 3D map."""
+
+        home_check(actor, home_id); publisher_block(actor)
+        row = db.one("SELECT * FROM room_maps WHERE id=? AND home_id=?", (map_id, home_id))
+        if not row:
+            raise HTTPException(404, "Map not found")
+        if map_source(row) != "roomplan-lidar-3d" or map_dimension(row, map_source(row)) != "3d":
+            raise HTTPException(422, "USDZ attachments require a validated native RoomPlan 3D map")
+        content_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+        if content_type not in ROOMPLAN_USDZ_CONTENT_TYPES:
+            raise HTTPException(415, "USDZ upload must use a supported USDZ content type")
+        content_length = request.headers.get("content-length")
+        try:
+            if content_length is not None and int(content_length) > ROOMPLAN_USDZ_MAX_BYTES:
+                raise HTTPException(413, "USDZ upload is too large")
+        except ValueError:
+            raise HTTPException(400, "Invalid Content-Length") from None
+        payload = await request.body()
+        if not payload or len(payload) > ROOMPLAN_USDZ_MAX_BYTES:
+            raise HTTPException(413, "USDZ upload is empty or too large")
+        if not zipfile.is_zipfile(io.BytesIO(payload)):
+            raise HTTPException(422, "USDZ upload is not a valid ZIP package")
+        digest = hashlib.sha256(payload).hexdigest()
+        key = f"maps/{home_id}/{map_id}.usdz"
+        store.put_bytes(key, payload)
+        metadata = json_object(row.get("metadata_json") or "{}")
+        metadata["usdz"] = roomplan_usdz_metadata(
+            sha256=digest,
+            byte_count=len(payload),
+            content_type="model/vnd.usdz+zip",
+            download_path=f"/api/v1/homes/{home_id}/maps/{map_id}/usdz",
+        )
+        db.execute("UPDATE room_maps SET usdz_artifact_key=?, metadata_json=? WHERE id=? AND home_id=?", (key, json.dumps(metadata), map_id, home_id))
+        audit(actor, "map.usdz.upload", "room_map", map_id, home_id)
+        return {"map_id": map_id, "source": "roomplan-lidar-3d", "dimension": "3d", "usdz": metadata["usdz"]}
+
+    @app.get("/api/v1/homes/{home_id}/maps/{map_id}/usdz")
+    def roomplan_usdz_download(home_id: str, map_id: str, actor: Current):
+        home_check(actor, home_id); publisher_block(actor)
+        row = db.one("SELECT * FROM room_maps WHERE id=? AND home_id=?", (map_id, home_id))
+        if not row or map_source(row) != "roomplan-lidar-3d" or map_dimension(row, map_source(row)) != "3d":
+            raise HTTPException(404, "USDZ model not found")
+        key = row.get("usdz_artifact_key")
+        if not key:
+            raise HTTPException(404, "USDZ model not found")
+        try:
+            payload = store.get_bytes(key)
+        except (OSError, ValueError):
+            raise HTTPException(404, "USDZ model not found") from None
+        metadata = json_object(row.get("metadata_json") or "{}").get("usdz")
+        digest = metadata.get("sha256") if isinstance(metadata, dict) else None
+        headers = {
+            "Content-Disposition": f'inline; filename="roomplan-{map_id}.usdz"',
+            "Cache-Control": "private, max-age=0",
+        }
+        if isinstance(digest, str):
+            headers["ETag"] = digest
+        return Response(content=payload, media_type="model/vnd.usdz+zip", headers=headers)
+
+    def map_generation_camera(home_id: str, camera_id: str, actor: dict) -> dict:
+        home_check(actor, home_id)
+        camera = db.one("SELECT * FROM cameras WHERE id=? AND home_id=? AND enabled=1", (camera_id, home_id))
+        if not camera:
+            raise HTTPException(404, "Camera not found or disabled")
+        if actor["role"] == "publisher":
+            if actor["user_id"] != camera_id:
+                raise HTTPException(403, "Publisher can only access its paired camera")
+        elif actor["role"] not in {"admin", "caregiver"}:
+            raise HTTPException(403, "Caregiver or paired camera permission required")
+        return camera
+
+    def map_generation_view(row: dict) -> dict:
+        status_value = row["status"]
+        progress = {
+            "collecting": 10,
+            "processing": 72,
+            "ready": 100,
+            "needs_rescan": 100,
+            "unavailable": 100,
+            "failed": 100,
+        }.get(status_value, 0)
+        error_message = row["error_message"]
+        return {
+            "id": row["id"],
+            "job_id": row["id"],
+            "home_id": row["home_id"],
+            "camera_id": row["camera_id"],
+            "room_id": row["room_id"],
+            "room_label": row.get("room_label") or "Room",
+            "orientation": row.get("orientation") or "portrait",
+            "status": status_value,
+            "progress": progress,
+            "source": "camera-cv-2d",
+            "dimension": "2d",
+            "metric_scale_known": False,
+            "geometry_status": status_value,
+            "frame_count": row["frame_count"],
+            "resolution_width": row["resolution_width"],
+            "resolution_height": row["resolution_height"],
+            "map_id": row["map_id"],
+            "error_code": row["error_code"],
+            "error_message": error_message,
+            "error": error_message,
+            "metrics": json_object(row.get("metrics_json") or "{}"),
+            "model_version": row["model_version"],
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+            "completed_at": row["completed_at"],
+        }
+
+    def finish_map_generation(
+        job_id: str,
+        status_value: str,
+        *,
+        map_id: str | None = None,
+        error_code: str | None = None,
+        error_message: str | None = None,
+        metrics: dict | None = None,
+        model_version: str | None = None,
+    ) -> None:
+        completed = now_iso()
+        db.execute(
+            """UPDATE camera_map_generation_jobs
+                  SET status=?, map_id=?, error_code=?, error_message=?,
+                      metrics_json=?, model_version=?, updated_at=?, completed_at=?
+                WHERE id=?""",
+            (status_value, map_id, error_code, error_message, json.dumps(metrics or {}), model_version, completed, completed, job_id),
+        )
+
+    def process_map_generation(
+        job_id: str,
+        home_id: str,
+        camera_id: str,
+        room_id: str | None,
+        room_label: str,
+        orientation: str,
+        resolution_width: int,
+        resolution_height: int,
+        frames: list[dict],
+    ) -> None:
+        try:
+            payload = app.state.geometry_service.infer(
+                camera_id=camera_id,
+                resolution_width=resolution_width,
+                resolution_height=resolution_height,
+                room_label=room_label,
+                orientation=orientation,
+                frames=frames,
+            )
+            result = RoomLayoutResult.model_validate(payload)
+            if result.status == "unavailable":
+                finish_map_generation(job_id, "unavailable", error_code="geometry_service_unavailable", error_message="The local geometry service is unavailable.", model_version=result.model_version)
+                return
+            if result.status == "failed":
+                finish_map_generation(job_id, "failed", error_code="geometry_service_failed", error_message="The local geometry service could not process this sweep.", model_version=result.model_version)
+                return
+            if result.status == "needs_rescan":
+                finish_map_generation(job_id, "needs_rescan", error_code="geometry_not_confident", error_message="The sweep did not contain sufficiently stable room geometry.", model_version=result.model_version)
+                return
+            if result.geometry is None:
+                raise RoomLayoutServiceError("missing_geometry")
+
+            geometry = result.geometry
+            metrics = geometry.metrics.model_dump()
+            if (
+                metrics["confidence"] < settings.geometry_min_confidence
+                or metrics["reprojection_error_px"] > settings.geometry_max_reprojection_error_px
+                or metrics["homography_inlier_ratio"] < settings.geometry_min_homography_inlier_ratio
+            ):
+                finish_map_generation(job_id, "needs_rescan", error_code="geometry_not_confident", error_message="The sweep did not meet the image-space confidence thresholds.", metrics=metrics, model_version=result.model_version)
+                return
+
+            map_data = {
+                "schema_version": "camera-room-2d.v1",
+                "dimension": "2d",
+                "source": "camera-cv-2d",
+                "coordinate_frame": geometry.coordinate_frame,
+                "polygons": [item.model_dump() for item in geometry.polygons],
+                "walls": [item.model_dump() for item in geometry.walls],
+                "camera_pose": geometry.camera_pose.model_dump(),
+                "intrinsics": geometry.intrinsics,
+                "confidence": metrics["confidence"],
+                "metrics": metrics,
+                "model_version": result.model_version,
+            }
+            map_data["geometry"] = {
+                "coordinate_frame": geometry.coordinate_frame,
+                "polygons": map_data["polygons"],
+                "walls": map_data["walls"],
+                "camera_pose": map_data["camera_pose"],
+                "intrinsics": geometry.intrinsics,
+                "metrics": metrics,
+            }
+            metadata = {
+                "camera_id": camera_id,
+                "model_version": result.model_version,
+                "geometry_status": "ready",
+                "metric_scale_known": False,
+                "metrics": metrics,
+            }
+            system_actor = {"home_id": home_id, "user_id": None}
+            map_result = create_map(home_id, room_id, geometry.coordinate_frame, map_data, "camera-cv-2d", True, "image-space", metadata, system_actor, dimension="2d")
+
+            calibration_id = str(uuid.uuid4())
+            created = now_iso()
+            db.execute("UPDATE calibrations SET status='invalidated', invalidated_at=?, invalidation_reason='superseded by camera geometry map' WHERE home_id=? AND camera_id=? AND status='active'", (created, home_id, camera_id))
+            db.execute(
+                "INSERT INTO calibrations(id,home_id,camera_id,map_id,intrinsics_json,extrinsics_json,accuracy_m,created_at,resolution_width,resolution_height,camera_metadata_json,metrics_json,source,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (calibration_id, home_id, camera_id, map_result["id"], json.dumps(geometry.intrinsics), json.dumps(geometry.camera_pose.model_dump()), None, created, resolution_width, resolution_height, json.dumps({"coordinate_frame": geometry.coordinate_frame, "metric_scale_known": False, "model_version": result.model_version}), json.dumps(metrics), "camera-cv", "active"),
+            )
+            finish_map_generation(job_id, "ready", map_id=map_result["id"], metrics=metrics, model_version=result.model_version)
+            audit(system_actor, "map.generation.ready", "camera_map_generation_job", job_id, home_id)
+        except RoomLayoutServiceUnavailable:
+            finish_map_generation(job_id, "unavailable", error_code="geometry_service_unavailable", error_message="The local geometry service is unavailable.")
+        except RoomLayoutServiceError:
+            finish_map_generation(job_id, "failed", error_code="geometry_service_failed", error_message="The local geometry service returned an unusable result.")
+        except ValidationError:
+            finish_map_generation(job_id, "failed", error_code="invalid_geometry_response", error_message="The local geometry service returned an invalid geometry contract.")
+        except Exception:
+            # Do not persist exception text: it could contain service details
+            # or accidental frame data. The job remains inspectable and safe
+            # to retry with a fresh sweep.
+            finish_map_generation(job_id, "failed", error_code="generation_failed", error_message="Camera map generation failed unexpectedly.")
+
+    @app.post("/api/v1/homes/{home_id}/cameras/{camera_id}/map-generation")
+    def map_generation_start(home_id: str, camera_id: str, body: CameraMapGenerationStartIn, actor: Current):
+        camera = map_generation_camera(home_id, camera_id, actor)
+        require_video_capture(home_id)
+        active = db.one(
+            "SELECT * FROM camera_map_generation_jobs WHERE home_id=? AND camera_id=? AND status IN ('collecting','processing') ORDER BY created_at DESC LIMIT 1",
+            (home_id, camera_id),
+        )
+        if active:
+            return map_generation_view(active)
+        job_id = str(uuid.uuid4())
+        created = now_iso()
+        db.execute(
+            "INSERT INTO camera_map_generation_jobs(id,home_id,camera_id,room_id,room_label,orientation,status,frame_count,resolution_width,resolution_height,map_id,error_code,error_message,metrics_json,model_version,created_at,updated_at,completed_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (job_id, home_id, camera["id"], body.room_id, body.room_label or camera["name"], body.orientation, "collecting", 0, body.resolution_width, body.resolution_height, None, None, None, "{}", None, created, created, None),
+        )
+        audit(actor, "map.generation.start", "camera_map_generation_job", job_id, home_id)
+        return map_generation_view(db.one("SELECT * FROM camera_map_generation_jobs WHERE id=?", (job_id,)))
+
+    @app.get("/api/v1/homes/{home_id}/cameras/{camera_id}/map-generation")
+    def map_generation_status(home_id: str, camera_id: str, actor: Current):
+        map_generation_camera(home_id, camera_id, actor)
+        row = db.one("SELECT * FROM camera_map_generation_jobs WHERE home_id=? AND camera_id=? ORDER BY created_at DESC LIMIT 1", (home_id, camera_id))
+        if not row:
+            raise HTTPException(404, "No camera map generation has been started")
+        return map_generation_view(row)
+
+    @app.post("/api/v1/homes/{home_id}/cameras/{camera_id}/map-generation/{job_id}/frames", status_code=202)
+    def map_generation_frames(home_id: str, camera_id: str, job_id: str, body: CameraMapFramesIn, background_tasks: BackgroundTasks, actor: Current):
+        map_generation_camera(home_id, camera_id, actor)
+        if actor["role"] != "publisher":
+            raise HTTPException(403, "Only the paired camera can submit room sweep frames")
+        require_video_capture(home_id)
+        job = db.one("SELECT * FROM camera_map_generation_jobs WHERE id=? AND home_id=? AND camera_id=?", (job_id, home_id, camera_id))
+        if not job:
+            raise HTTPException(404, "Camera map generation job not found")
+        if job["status"] != "collecting":
+            raise HTTPException(409, "Camera map generation job is no longer collecting frames")
+        total_bytes = 0
+        for frame in body.frames:
+            if frame.width != job["resolution_width"] or frame.height != job["resolution_height"]:
+                raise HTTPException(422, "All sweep frames must match the job resolution")
+            try:
+                decoded = base64.b64decode(frame.frame_base64, validate=True)
+            except ValueError as exc:
+                raise HTTPException(422, "frame_base64 must be valid base64") from exc
+            if not decoded or len(decoded) > MAP_FRAME_MAX_BYTES:
+                raise HTTPException(413, "A sweep frame is empty or exceeds the 3 MB in-memory limit")
+            total_bytes += len(decoded)
+            del decoded
+        if total_bytes > MAP_BATCH_MAX_BYTES:
+            raise HTTPException(413, "The room sweep exceeds the bounded in-memory batch limit")
+        frames = [frame.model_dump(mode="json") for frame in body.frames]
+        db.execute("UPDATE camera_map_generation_jobs SET status='processing', frame_count=?, updated_at=? WHERE id=? AND status='collecting'", (len(frames), now_iso(), job_id))
+        background_tasks.add_task(process_map_generation, job_id, home_id, camera_id, job["room_id"], job.get("room_label") or "Room", job.get("orientation") or "portrait", job["resolution_width"], job["resolution_height"], frames)
+        return map_generation_view(db.one("SELECT * FROM camera_map_generation_jobs WHERE id=?", (job_id,)))
+
+    @app.get("/api/v1/homes/{home_id}/cameras/{camera_id}/map-generation/{job_id}")
+    def map_generation_job(home_id: str, camera_id: str, job_id: str, actor: Current):
+        map_generation_camera(home_id, camera_id, actor)
+        row = db.one("SELECT * FROM camera_map_generation_jobs WHERE id=? AND home_id=? AND camera_id=?", (job_id, home_id, camera_id))
+        if not row:
+            raise HTTPException(404, "Camera map generation job not found")
+        return map_generation_view(row)
 
     @app.get("/api/v1/homes/{home_id}/maps")
     def maps(home_id: str, actor: Current):
@@ -716,29 +1159,39 @@ def make_app(settings: Settings | None = None) -> FastAPI:
         home_check(actor, home_id); publisher_block(actor)
         row = db.one("SELECT * FROM room_maps WHERE home_id=? ORDER BY revision DESC, created_at DESC LIMIT 1", (home_id,))
         if not row:
-            return {"sceneId": None, "version": 0, "zones": []}
+            return {"sceneId": None, "version": 0, "dimension": "2d", "source": "legacy-2d", "provenance": "legacy-2d", "approximate": True, "metricScaleKnown": False, "geometryStatus": "empty", "rescanRequired": True, "zones": [], "polygons": [], "walls": [], "camera": None, "geometry": {"polygons": [], "walls": [], "zones": []}, "usdz": None}
         try:
             map_data = json.loads(row["map_json"])
         except (TypeError, json.JSONDecodeError):
             map_data = {}
-        zones = normalize_map_zones(map_data.get("zones", [])) if isinstance(map_data, dict) else []
-        return {"sceneId": row["id"], "version": row["revision"], "zones": zones, "mapId": row["id"], "coordinateFrame": row["coordinate_frame"]}
+        map_data = map_data if isinstance(map_data, dict) else {}
+        view = map_view(row)
+        stored_geometry = map_data.get("geometry") if isinstance(map_data.get("geometry"), dict) else map_data
+        zones = map_data.get("zones", []) if isinstance(map_data.get("zones"), list) else []
+        polygons = stored_geometry.get("polygons", stored_geometry.get("rooms", [])) if isinstance(stored_geometry.get("polygons", stored_geometry.get("rooms", [])), list) else []
+        walls = stored_geometry.get("walls", []) if isinstance(stored_geometry.get("walls", []), list) else []
+        camera = stored_geometry.get("camera_pose") if isinstance(stored_geometry.get("camera_pose"), dict) else None
+        geometry = stored_geometry if view["dimension"] == "3d" else {"polygons": polygons, "walls": walls, "camera_pose": camera, "zones": zones}
+        return {"sceneId": row["id"], "version": row["revision"], "dimension": view["dimension"], "source": view["source"], "provenance": view["provenance"], "approximate": view["approximate"], "metricScaleKnown": view["metric_scale_known"], "geometryStatus": view["geometry_status"], "rescanRequired": view["rescan_required"], "confidence": map_data.get("confidence"), "modelVersion": view["model_version"], "zones": zones, "polygons": polygons, "walls": walls, "camera": camera, "geometry": geometry, "mapId": row["id"], "coordinateFrame": row["coordinate_frame"], "usdz": view["usdz"]}
 
     @app.post("/api/v1/homes/{home_id}/calibrations")
     def calibration(home_id: str, body: CalibrationIn, actor: Current):
         home_check(actor, home_id); publisher_block(actor)
         if not db.one("SELECT id FROM cameras WHERE id=? AND home_id=?", (body.camera_id, home_id)): raise HTTPException(404, "Camera not found")
-        if not db.one("SELECT id FROM room_maps WHERE id=? AND home_id=?", (body.map_id, home_id)): raise HTTPException(404, "Map not found")
+        map_row = db.one("SELECT * FROM room_maps WHERE id=? AND home_id=?", (body.map_id, home_id))
+        if not map_row: raise HTTPException(404, "Map not found")
+        if map_source(map_row) == "camera-cv-2d" and body.accuracy_m is not None:
+            raise HTTPException(422, "RGB camera calibration cannot report accuracy_m")
         cid = str(uuid.uuid4()); created = now_iso()
         db.execute("UPDATE calibrations SET status='invalidated', invalidated_at=?, invalidation_reason='superseded by new calibration' WHERE home_id=? AND camera_id=? AND status='active'", (created, home_id, body.camera_id))
-        db.execute("INSERT INTO calibrations(id,home_id,camera_id,map_id,intrinsics_json,extrinsics_json,accuracy_m,created_at,resolution_width,resolution_height,camera_metadata_json,source,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)", (cid, home_id, body.camera_id, body.map_id, json.dumps(body.intrinsics), json.dumps(body.extrinsics), body.accuracy_m, created, body.resolution_width, body.resolution_height, json.dumps(body.camera_metadata), body.source, "active"))
+        db.execute("INSERT INTO calibrations(id,home_id,camera_id,map_id,intrinsics_json,extrinsics_json,accuracy_m,created_at,resolution_width,resolution_height,camera_metadata_json,metrics_json,source,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (cid, home_id, body.camera_id, body.map_id, json.dumps(body.intrinsics), json.dumps(body.extrinsics), body.accuracy_m, created, body.resolution_width, body.resolution_height, json.dumps(body.camera_metadata), "{}", body.source, "active"))
         return {"id": cid, **body.model_dump(), "status": "active", "invalidated_previous": True}
 
     @app.get("/api/v1/homes/{home_id}/calibrations")
     def calibrations(home_id: str, actor: Current):
         home_check(actor, home_id); publisher_block(actor)
         rows = db.many("SELECT * FROM calibrations WHERE home_id=? ORDER BY created_at DESC", (home_id,))
-        return {"data": [{**row, "intrinsics": json.loads(row.pop("intrinsics_json")), "extrinsics": json.loads(row.pop("extrinsics_json")), "camera_metadata": json.loads(row.pop("camera_metadata_json") or "{}")} for row in rows]}
+        return {"data": [{**row, "intrinsics": json.loads(row.pop("intrinsics_json")), "extrinsics": json.loads(row.pop("extrinsics_json")), "camera_metadata": json.loads(row.pop("camera_metadata_json") or "{}"), "metrics": json.loads(row.pop("metrics_json") or "{}")} for row in rows]}
 
     @app.post("/api/v1/homes/{home_id}/objects")
     def object_create(home_id: str, body: ObjectIn, actor: Current):
@@ -1265,15 +1718,19 @@ def make_app(settings: Settings | None = None) -> FastAPI:
         home_check(actor, home_id)
         if actor["role"] != "admin": raise HTTPException(403, "Admin permission required")
         request_id, requested_at = str(uuid.uuid4()), now_iso()
-        rows = db.many("SELECT artifact_key FROM room_maps WHERE home_id=? AND artifact_key IS NOT NULL", (home_id,))
+        rows = db.many("SELECT artifact_key, usdz_artifact_key FROM room_maps WHERE home_id=? AND (artifact_key IS NOT NULL OR usdz_artifact_key IS NOT NULL)", (home_id,))
         clips_for_home = db.many("SELECT id, object_key FROM clips WHERE home_id=?", (home_id,))
         db.execute("INSERT INTO deletion_requests VALUES (?,?,?,?,?,NULL)", (request_id, home_id, actor["user_id"], "processing", requested_at))
         cleanup_errors: list[str] = []
         for row in rows:
-            try:
-                store.delete(row["artifact_key"])
-            except (OSError, ValueError) as exc:
-                cleanup_errors.append(f"map:{row['artifact_key']}:{type(exc).__name__}")
+            for key_name in ("artifact_key", "usdz_artifact_key"):
+                key = row.get(key_name)
+                if not key:
+                    continue
+                try:
+                    store.delete(key)
+                except (OSError, ValueError) as exc:
+                    cleanup_errors.append(f"map:{key}:{type(exc).__name__}")
         for row in clips_for_home:
             try:
                 app.state.clip_store.delete(home_id, row["id"])

@@ -1,0 +1,98 @@
+"""Environment-backed configuration for the geometry service."""
+
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass
+from pathlib import Path
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _env_int(name: str, default: int) -> int:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except ValueError:
+        return default
+
+
+def _env_float(name: str, default: float) -> float:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    try:
+        return float(value)
+    except ValueError:
+        return default
+
+
+@dataclass(frozen=True)
+class ServiceSettings:
+    """Configuration with safe bounds for a single in-memory request."""
+
+    mode: str
+    checkpoint_path: Path | None
+    config_path: Path | None
+    device_preference: str
+    allow_cpu: bool
+    max_frames: int
+    max_frame_bytes: int
+    max_total_frame_bytes: int
+    max_request_bytes: int
+    minimum_confidence: float
+
+    @classmethod
+    def from_env(cls) -> "ServiceSettings":
+        mode = os.getenv("ONE_GEOMETRY_MODE", os.getenv("GEOMETRY_SERVICE_MODE", "model")).strip().lower()
+        if mode == "production":
+            mode = "model"
+
+        # ONE_* names are the public configuration contract.  The older names
+        # remain accepted for local compatibility, but are intentionally not
+        # documented as the primary interface.
+        checkpoint = os.getenv("ONE_GEOMETRY_MODEL_PATH", os.getenv("GEOMETRY_SERVICE_CHECKPOINT", "")).strip()
+        config = os.getenv("ONE_GEOMETRY_MODEL_CONFIG", os.getenv("GEOMETRY_SERVICE_CONFIG", "")).strip()
+        # The browser normally submits 16 frames. Keep the public service
+        # contract aligned with the backend's hard ceiling of 20 so an
+        # environment override cannot turn this into an unbounded batch.
+        max_frames = min(max(_env_int("GEOMETRY_MAX_FRAMES", 20), 16), 20)
+        max_frame_bytes = min(
+            max(_env_int("GEOMETRY_MAX_FRAME_BYTES", 3_000_000), 64_000),
+            3_000_000,
+        )
+        max_total_frame_bytes = min(
+            max(_env_int("GEOMETRY_MAX_TOTAL_FRAME_BYTES", 18_000_000), max_frame_bytes),
+            18_000_000,
+        )
+        max_request_bytes = min(
+            max(_env_int("GEOMETRY_MAX_REQUEST_BYTES", 26_000_000), 256_000),
+            32_000_000,
+        )
+        minimum_confidence = min(
+            max(_env_float("GEOMETRY_MIN_CONFIDENCE", 0.60), 0.0),
+            1.0,
+        )
+
+        return cls(
+            mode=mode,
+            checkpoint_path=Path(checkpoint).expanduser() if checkpoint else None,
+            config_path=Path(config).expanduser() if config else None,
+            device_preference=os.getenv("ONE_GEOMETRY_DEVICE", os.getenv("GEOMETRY_SERVICE_DEVICE", "auto")).strip().lower(),
+            allow_cpu=_env_bool(
+                "ONE_GEOMETRY_ALLOW_CPU",
+                _env_bool("GEOMETRY_SERVICE_ALLOW_CPU", False),
+            ),
+            max_frames=max_frames,
+            max_frame_bytes=max_frame_bytes,
+            max_total_frame_bytes=max_total_frame_bytes,
+            max_request_bytes=max_request_bytes,
+            minimum_confidence=minimum_confidence,
+        )

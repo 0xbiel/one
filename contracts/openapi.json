@@ -138,6 +138,118 @@
         "title": "CameraIn",
         "type": "object"
       },
+      "CameraMapFrameIn": {
+        "properties": {
+          "captured_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Captured At"
+          },
+          "frame_base64": {
+            "maxLength": 4000000,
+            "minLength": 1,
+            "title": "Frame Base64",
+            "type": "string"
+          },
+          "height": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 4320.0,
+            "title": "Height",
+            "type": "integer"
+          },
+          "width": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 7680.0,
+            "title": "Width",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "frame_base64",
+          "width",
+          "height"
+        ],
+        "title": "CameraMapFrameIn",
+        "type": "object"
+      },
+      "CameraMapFramesIn": {
+        "properties": {
+          "frames": {
+            "items": {
+              "$ref": "#/components/schemas/CameraMapFrameIn"
+            },
+            "maxItems": 20,
+            "minItems": 3,
+            "title": "Frames",
+            "type": "array"
+          }
+        },
+        "required": [
+          "frames"
+        ],
+        "title": "CameraMapFramesIn",
+        "type": "object"
+      },
+      "CameraMapGenerationStartIn": {
+        "properties": {
+          "orientation": {
+            "default": "portrait",
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Orientation",
+            "type": "string"
+          },
+          "resolution_height": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 4320.0,
+            "title": "Resolution Height",
+            "type": "integer"
+          },
+          "resolution_width": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 7680.0,
+            "title": "Resolution Width",
+            "type": "integer"
+          },
+          "room_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Room Id"
+          },
+          "room_label": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Room Label"
+          }
+        },
+        "required": [
+          "resolution_width",
+          "resolution_height"
+        ],
+        "title": "CameraMapGenerationStartIn",
+        "type": "object"
+      },
       "CameraUpdate": {
         "properties": {
           "metadata": {
@@ -635,7 +747,7 @@
       "MapIn": {
         "properties": {
           "coordinate_frame": {
-            "default": "roomplan-local",
+            "default": "manual-2d",
             "maxLength": 80,
             "title": "Coordinate Frame",
             "type": "string"
@@ -1157,12 +1269,111 @@
         "title": "RoomIn",
         "type": "object"
       },
+      "RoomPlanDimensions3D": {
+        "additionalProperties": false,
+        "properties": {
+          "x": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 100.0,
+            "title": "X",
+            "type": "number"
+          },
+          "y": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 100.0,
+            "title": "Y",
+            "type": "number"
+          },
+          "z": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 100.0,
+            "title": "Z",
+            "type": "number"
+          }
+        },
+        "required": [
+          "x",
+          "y",
+          "z"
+        ],
+        "title": "RoomPlanDimensions3D",
+        "type": "object"
+      },
+      "RoomPlanElement": {
+        "additionalProperties": false,
+        "properties": {
+          "attributes": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "title": "Attributes",
+            "type": "array"
+          },
+          "category": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Category",
+            "type": "string"
+          },
+          "center": {
+            "$ref": "#/components/schemas/RoomPlanPoint3D"
+          },
+          "confidence": {
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ],
+            "title": "Confidence",
+            "type": "string"
+          },
+          "dimensions": {
+            "$ref": "#/components/schemas/RoomPlanDimensions3D"
+          },
+          "id": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "transform": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "maxItems": 4,
+            "minItems": 4,
+            "title": "Transform",
+            "type": "array"
+          },
+          "vertices": {
+            "items": {
+              "$ref": "#/components/schemas/RoomPlanPoint3D"
+            },
+            "maxItems": 256,
+            "title": "Vertices",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "category",
+          "confidence",
+          "center",
+          "dimensions",
+          "transform"
+        ],
+        "title": "RoomPlanElement",
+        "type": "object"
+      },
       "RoomPlanMapIn": {
+        "additionalProperties": false,
         "properties": {
           "normalized_scan": {
-            "additionalProperties": true,
-            "title": "Normalized Scan",
-            "type": "object"
+            "$ref": "#/components/schemas/RoomPlanNormalizedScan"
           },
           "room_id": {
             "anyOf": [
@@ -1176,15 +1387,265 @@
             "title": "Room Id"
           },
           "scan_metadata": {
-            "additionalProperties": true,
-            "title": "Scan Metadata",
-            "type": "object"
+            "$ref": "#/components/schemas/RoomPlanScanMetadata"
           }
         },
         "required": [
-          "normalized_scan"
+          "normalized_scan",
+          "scan_metadata"
         ],
         "title": "RoomPlanMapIn",
+        "type": "object"
+      },
+      "RoomPlanNormalizedScan": {
+        "additionalProperties": false,
+        "description": "Canonical payload produced by the native iOS RoomPlan normalizer.",
+        "properties": {
+          "captured_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Captured At"
+          },
+          "coordinate_frame": {
+            "const": "roomplan-local",
+            "title": "Coordinate Frame",
+            "type": "string"
+          },
+          "doors": {
+            "items": {
+              "$ref": "#/components/schemas/RoomPlanElement"
+            },
+            "maxItems": 1000,
+            "title": "Doors",
+            "type": "array"
+          },
+          "floors": {
+            "items": {
+              "$ref": "#/components/schemas/RoomPlanElement"
+            },
+            "maxItems": 1000,
+            "title": "Floors",
+            "type": "array"
+          },
+          "framework": {
+            "const": "RoomPlan",
+            "title": "Framework",
+            "type": "string"
+          },
+          "geometry_type": {
+            "const": "3d",
+            "title": "Geometry Type",
+            "type": "string"
+          },
+          "objects": {
+            "items": {
+              "$ref": "#/components/schemas/RoomPlanElement"
+            },
+            "maxItems": 1000,
+            "title": "Objects",
+            "type": "array"
+          },
+          "openings": {
+            "items": {
+              "$ref": "#/components/schemas/RoomPlanElement"
+            },
+            "maxItems": 1000,
+            "title": "Openings",
+            "type": "array"
+          },
+          "producer": {
+            "const": "native-ios",
+            "title": "Producer",
+            "type": "string"
+          },
+          "room_id": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Room Id"
+          },
+          "schema_version": {
+            "const": "roomplan-normalized.v1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "sections": {
+            "items": {
+              "$ref": "#/components/schemas/RoomPlanSection"
+            },
+            "maxItems": 100,
+            "title": "Sections",
+            "type": "array"
+          },
+          "units": {
+            "const": "m",
+            "title": "Units",
+            "type": "string"
+          },
+          "up_axis": {
+            "const": "Y",
+            "title": "Up Axis",
+            "type": "string"
+          },
+          "walls": {
+            "items": {
+              "$ref": "#/components/schemas/RoomPlanElement"
+            },
+            "maxItems": 1000,
+            "title": "Walls",
+            "type": "array"
+          },
+          "windows": {
+            "items": {
+              "$ref": "#/components/schemas/RoomPlanElement"
+            },
+            "maxItems": 1000,
+            "title": "Windows",
+            "type": "array"
+          }
+        },
+        "required": [
+          "schema_version",
+          "producer",
+          "framework",
+          "units",
+          "up_axis",
+          "coordinate_frame",
+          "geometry_type"
+        ],
+        "title": "RoomPlanNormalizedScan",
+        "type": "object"
+      },
+      "RoomPlanPoint3D": {
+        "additionalProperties": false,
+        "properties": {
+          "x": {
+            "title": "X",
+            "type": "number"
+          },
+          "y": {
+            "title": "Y",
+            "type": "number"
+          },
+          "z": {
+            "title": "Z",
+            "type": "number"
+          }
+        },
+        "required": [
+          "x",
+          "y",
+          "z"
+        ],
+        "title": "RoomPlanPoint3D",
+        "type": "object"
+      },
+      "RoomPlanScanMetadata": {
+        "additionalProperties": false,
+        "description": "Provenance asserted by a native RoomPlan/LiDAR producer.",
+        "properties": {
+          "device_model": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Device Model",
+            "type": "string"
+          },
+          "geometry_type": {
+            "const": "3d",
+            "title": "Geometry Type",
+            "type": "string"
+          },
+          "lidar": {
+            "const": true,
+            "title": "Lidar",
+            "type": "boolean"
+          },
+          "provenance": {
+            "const": "native-roomplan",
+            "title": "Provenance",
+            "type": "string"
+          },
+          "roomplan_version": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Roomplan Version",
+            "type": "string"
+          },
+          "units": {
+            "enum": [
+              "m",
+              "meter",
+              "meters"
+            ],
+            "title": "Units",
+            "type": "string"
+          },
+          "up_axis": {
+            "enum": [
+              "Y",
+              "y"
+            ],
+            "title": "Up Axis",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provenance",
+          "device_model",
+          "lidar",
+          "roomplan_version",
+          "units",
+          "up_axis",
+          "geometry_type"
+        ],
+        "title": "RoomPlanScanMetadata",
+        "type": "object"
+      },
+      "RoomPlanSection": {
+        "additionalProperties": false,
+        "properties": {
+          "center": {
+            "$ref": "#/components/schemas/RoomPlanPoint3D"
+          },
+          "id": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          },
+          "story": {
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Story",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "center",
+          "story"
+        ],
+        "title": "RoomPlanSection",
         "type": "object"
       },
       "ValidationError": {
@@ -1702,6 +2163,226 @@
           }
         },
         "summary": "Camera Update"
+      }
+    },
+    "/api/v1/homes/{home_id}/cameras/{camera_id}/map-generation": {
+      "get": {
+        "operationId": "map_generation_status_api_v1_homes__home_id__cameras__camera_id__map_generation_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "camera_id",
+            "required": true,
+            "schema": {
+              "title": "Camera Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Map Generation Status"
+      },
+      "post": {
+        "operationId": "map_generation_start_api_v1_homes__home_id__cameras__camera_id__map_generation_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "camera_id",
+            "required": true,
+            "schema": {
+              "title": "Camera Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CameraMapGenerationStartIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Map Generation Start"
+      }
+    },
+    "/api/v1/homes/{home_id}/cameras/{camera_id}/map-generation/{job_id}": {
+      "get": {
+        "operationId": "map_generation_job_api_v1_homes__home_id__cameras__camera_id__map_generation__job_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "camera_id",
+            "required": true,
+            "schema": {
+              "title": "Camera Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Map Generation Job"
+      }
+    },
+    "/api/v1/homes/{home_id}/cameras/{camera_id}/map-generation/{job_id}/frames": {
+      "post": {
+        "operationId": "map_generation_frames_api_v1_homes__home_id__cameras__camera_id__map_generation__job_id__frames_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "camera_id",
+            "required": true,
+            "schema": {
+              "title": "Camera Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CameraMapFramesIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Map Generation Frames"
       }
     },
     "/api/v1/homes/{home_id}/caregiver-summary": {
@@ -2661,6 +3342,97 @@
           }
         },
         "summary": "Map Detail"
+      }
+    },
+    "/api/v1/homes/{home_id}/maps/{map_id}/usdz": {
+      "get": {
+        "operationId": "roomplan_usdz_download_api_v1_homes__home_id__maps__map_id__usdz_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "map_id",
+            "required": true,
+            "schema": {
+              "title": "Map Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Roomplan Usdz Download"
+      },
+      "put": {
+        "description": "Attach a bounded USDZ export to an already validated 3D map.",
+        "operationId": "roomplan_usdz_upload_api_v1_homes__home_id__maps__map_id__usdz_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "map_id",
+            "required": true,
+            "schema": {
+              "title": "Map Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Roomplan Usdz Upload"
       }
     },
     "/api/v1/homes/{home_id}/medication-check-ins": {

@@ -31,6 +31,21 @@ to skip all LLM requests and use the deterministic fallback paths.
 
 All product endpoints are versioned under `/api/v1`. Object observations are approximate and include uncertainty; video is not persisted by this API. Events are derived metadata with a 30-day expiry, and clip records are designed for seven-day expiry. The LM Studio adapter uses `qwen3.6-35b-a3b` and falls back explicitly to a deterministic, non-medical summary when the local endpoint is unavailable.
 
+## Camera-derived room geometry
+
+Camera setup can submit a short guided RGB sweep to the local room geometry
+service. The API persists only the derived relative 2D polygons, walls, camera
+pose, confidence, and model metadata; frame bytes are processed in memory and
+discarded. On Apple Silicon, run the host-side service from
+`geometry_service/` on port `8090` with Metal/MPS selected. Docker reaches it
+through `host.docker.internal` using `ONE_GEOMETRY_SERVICE_URL`.
+
+The service is required for live camera map generation. If it is unavailable or
+the model confidence is too low, the API returns a rescan/unavailable state and
+does not create a fabricated map. RGB maps are relative and never report fake
+metric accuracy. A 3D scene is accepted only through the native RoomPlan/LiDAR
+contract; Safari camera capture cannot create one.
+
 SQLite remains the zero-setup local/test backend. The API also supports PostgreSQL
 through the optional `psycopg` 3 adapter (`pip install -e '.[postgres]'`). Set
 `ONE_DATABASE_URL=postgresql://user:password@host:5432/database`; startup applies

@@ -110,9 +110,9 @@ def test_publisher_pairing_token_scopes_and_video_consent(tmp_path):
     connected = c.get(f"/api/v1/homes/{home}/pairing/{pairing_id}/status", headers=admin_headers)
     assert connected.status_code == 200 and connected.json()["status"] == "connected" and connected.json()["connected_at"]
     publisher_headers = {"Authorization": f"Bearer {publisher.json()['access_token']}"}
-    assert c.post(f"/api/v1/homes/{home}/consents", headers=publisher_headers, json={"purpose": "video_capture", "policy_version": "2026-09-01", "granted": True}).status_code == 403
     denied = c.post(f"/api/v1/homes/{home}/livekit/token", headers=publisher_headers, json={})
     assert denied.status_code == 403
+    assert c.post(f"/api/v1/homes/{home}/consents", headers=publisher_headers, json={"purpose": "video_capture", "policy_version": "2026-09-01", "granted": True}).status_code == 200
     consent = c.post(f"/api/v1/homes/{home}/consents", headers=admin_headers, json={"purpose": "video_capture", "policy_version": "2026-09-01", "granted": True})
     assert consent.status_code == 200 and consent.json()["paused"] is False
     token_response = c.post(f"/api/v1/homes/{home}/livekit/token", headers=publisher_headers, json={})
@@ -152,12 +152,23 @@ def test_camera_provisional_roomplan_revision_and_calibration_invalidation(tmp_p
     c = client(tmp_path); token, home = auth(c); h = {"Authorization": f"Bearer {token}"}
     camera = c.post(f"/api/v1/homes/{home}/cameras", headers=h, json={"name": "Hall", "resolution_width": 640, "resolution_height": 480}).json()
     provisional = c.post(f"/api/v1/homes/{home}/maps/provisional", headers=h, json={"camera_id": camera["id"], "resolution_width": 640, "resolution_height": 480, "zones": [{"id": "hall", "confidence": 0.4}]})
-    assert provisional.status_code == 200 and provisional.json()["approximate"] is True and provisional.json()["localization_status"] == "zone-only"
+    assert provisional.status_code == 200 and provisional.json()["approximate"] is True and provisional.json()["localization_status"] == "rescan-required" and provisional.json()["source"] == "legacy-2d"
     provisional_detail = c.get(f"/api/v1/homes/{home}/maps/{provisional.json()['id']}", headers=h)
     zone = provisional_detail.json()["map_data"]["zones"][0]
-    assert provisional_detail.status_code == 200 and {"x", "y", "width", "height"}.issubset(zone)
-    roomplan = c.post(f"/api/v1/homes/{home}/maps/roomplan", headers=h, json={"normalized_scan": {"rooms": [{"id": "hall"}]}, "scan_metadata": {"device": "iPhone"}})
-    assert roomplan.status_code == 200 and roomplan.json()["source"] == "roomplan-normalized"
+    assert provisional_detail.status_code == 200 and not {"x", "y", "width", "height"}.intersection(zone)
+    rejected_roomplan = c.post(f"/api/v1/homes/{home}/maps/roomplan", headers=h, json={"normalized_scan": {"rooms": [{"id": "hall"}]}, "scan_metadata": {"device": "iPhone"}})
+    assert rejected_roomplan.status_code == 422
+    roomplan_payload = json.loads((Path(__file__).parent / "fixtures" / "roomplan-lidar-valid.json").read_text())
+    roomplan = c.post(f"/api/v1/homes/{home}/maps/roomplan", headers=h, json=roomplan_payload)
+    assert roomplan.status_code == 200 and roomplan.json()["source"] == "roomplan-lidar-3d" and roomplan.json()["dimension"] == "3d"
+    assert roomplan.json()["coordinate_frame"] == "roomplan-local"
+    non_lidar_payload = json.loads(json.dumps(roomplan_payload))
+    non_lidar_payload["scan_metadata"]["lidar"] = False
+    assert c.post(f"/api/v1/homes/{home}/maps/roomplan", headers=h, json=non_lidar_payload).status_code == 422
+    scene = c.get(f"/api/v1/homes/{home}/scene", headers=h).json()
+    assert scene["source"] == "roomplan-lidar-3d" and scene["dimension"] == "3d"
+    assert scene["geometry"]["surfaces"][0]["vertices"]
+    assert scene["geometry"]["walls"][0]["start"]["z"] == 0
     calibration = c.post(f"/api/v1/homes/{home}/calibrations", headers=h, json={"camera_id": camera["id"], "map_id": roomplan.json()["id"], "intrinsics": {}, "extrinsics": {}, "resolution_width": 640, "resolution_height": 480})
     assert calibration.status_code == 200 and calibration.json()["status"] == "active"
     changed = c.patch(f"/api/v1/homes/{home}/cameras/{camera['id']}", headers=h, json={"resolution_width": 1280, "resolution_height": 720})

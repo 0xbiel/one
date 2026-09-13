@@ -29,6 +29,12 @@ class Settings(BaseSettings):
     llm_model: str | None = Field(default=None, validation_alias=AliasChoices("ONE_LLM_MODEL", "LLM_MODEL"))
     llm_api_key: str | None = Field(default=None, validation_alias=AliasChoices("ONE_LLM_API_KEY", "LLM_API_KEY"))
     llm_timeout_seconds: float = Field(default=15.0, gt=0, validation_alias=AliasChoices("ONE_LLM_TIMEOUT_SECONDS", "LLM_TIMEOUT_SECONDS"))
+    geometry_service_url: str = Field(default="http://host.docker.internal:8090", validation_alias=AliasChoices("ONE_GEOMETRY_SERVICE_URL", "GEOMETRY_SERVICE_URL"))
+    geometry_timeout_seconds: float = Field(default=45.0, gt=0, le=120, validation_alias=AliasChoices("ONE_GEOMETRY_TIMEOUT_SECONDS", "GEOMETRY_TIMEOUT_SECONDS"))
+    geometry_require_gpu: bool = Field(default=True, validation_alias=AliasChoices("ONE_GEOMETRY_REQUIRE_GPU", "GEOMETRY_REQUIRE_GPU"))
+    geometry_min_confidence: float = Field(default=0.65, ge=0, le=1, validation_alias=AliasChoices("ONE_GEOMETRY_MIN_CONFIDENCE", "GEOMETRY_MIN_CONFIDENCE"))
+    geometry_max_reprojection_error_px: float = Field(default=24.0, gt=0, le=1000, validation_alias=AliasChoices("ONE_GEOMETRY_MAX_REPROJECTION_ERROR_PX", "GEOMETRY_MAX_REPROJECTION_ERROR_PX"))
+    geometry_min_homography_inlier_ratio: float = Field(default=0.5, ge=0, le=1, validation_alias=AliasChoices("ONE_GEOMETRY_MIN_HOMOGRAPHY_INLIER_RATIO", "GEOMETRY_MIN_HOMOGRAPHY_INLIER_RATIO"))
     cors_origins: str = "http://localhost:5173,http://localhost:3000,http://localhost:4173,http://localhost:4174,http://localhost:4175,http://127.0.0.1:5173,http://127.0.0.1:4173,http://127.0.0.1:4174,http://127.0.0.1:4175"
 
     @property

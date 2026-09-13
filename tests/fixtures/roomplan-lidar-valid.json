@@ -1,0 +1,51 @@
+{
+  "room_id": null,
+  "normalized_scan": {
+    "schema_version": "roomplan-normalized.v1",
+    "producer": "native-ios",
+    "framework": "RoomPlan",
+    "units": "m",
+    "up_axis": "Y",
+    "coordinate_frame": "roomplan-local",
+    "geometry_type": "3d",
+    "captured_at": "2026-09-13T00:00:00Z",
+    "room_id": "hall",
+    "walls": [
+      {
+        "id": "wall-1",
+        "category": "wall",
+        "confidence": "high",
+        "center": { "x": 1.0, "y": 1.4, "z": 0.0 },
+        "dimensions": { "x": 2.0, "y": 2.8, "z": 0.1 },
+        "transform": [
+          [1.0, 0.0, 0.0, 1.0],
+          [0.0, 1.0, 0.0, 1.4],
+          [0.0, 0.0, 1.0, 0.0],
+          [0.0, 0.0, 0.0, 1.0]
+        ],
+        "vertices": [
+          { "x": 0.0, "y": 0.0, "z": 0.0 },
+          { "x": 2.0, "y": 0.0, "z": 0.0 },
+          { "x": 2.0, "y": 2.8, "z": 0.0 },
+          { "x": 0.0, "y": 2.8, "z": 0.0 }
+        ],
+        "attributes": ["room-boundary"]
+      }
+    ],
+    "floors": [],
+    "openings": [],
+    "doors": [],
+    "windows": [],
+    "objects": [],
+    "sections": []
+  },
+  "scan_metadata": {
+    "provenance": "native-roomplan",
+    "device_model": "iPhone15,4",
+    "lidar": true,
+    "roomplan_version": "1.0",
+    "units": "m",
+    "up_axis": "Y",
+    "geometry_type": "3d"
+  }
+}

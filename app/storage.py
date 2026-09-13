@@ -29,6 +29,15 @@ class LocalObjectStore:
         destination.write_text(json.dumps(value, separators=(",", ":")), encoding="utf-8")
         return key
 
+    def put_bytes(self, key: str, value: bytes) -> str:
+        destination = self._path_for(key)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(value)
+        return key
+
+    def get_bytes(self, key: str) -> bytes:
+        return self._path_for(key).read_bytes()
+
     def delete(self, key: str) -> None:
         path = self._path_for(key)
         if path.exists(): path.unlink()

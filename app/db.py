@@ -25,8 +25,10 @@ CREATE TABLE IF NOT EXISTS email_verifications (id TEXT PRIMARY KEY, email TEXT 
 CREATE TABLE IF NOT EXISTS consents (id TEXT PRIMARY KEY, home_id TEXT NOT NULL, subject_user_id TEXT NOT NULL, purpose TEXT NOT NULL, policy_version TEXT NOT NULL, granted_at TEXT NOT NULL, revoked_at TEXT, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS cameras (id TEXT PRIMARY KEY, home_id TEXT NOT NULL, name TEXT NOT NULL, room_id TEXT, enabled INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, resolution_width INTEGER, resolution_height INTEGER, metadata_json TEXT NOT NULL DEFAULT '{}', FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS rooms (id TEXT PRIMARY KEY, home_id TEXT NOT NULL, name TEXT NOT NULL, created_at TEXT NOT NULL, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE);
-CREATE TABLE IF NOT EXISTS room_maps (id TEXT PRIMARY KEY, home_id TEXT NOT NULL, room_id TEXT, revision INTEGER NOT NULL, coordinate_frame TEXT NOT NULL, artifact_key TEXT, map_json TEXT NOT NULL, created_at TEXT NOT NULL, source TEXT NOT NULL DEFAULT 'manual', approximate INTEGER NOT NULL DEFAULT 0, localization_status TEXT NOT NULL DEFAULT 'unlocalized', metadata_json TEXT NOT NULL DEFAULT '{}', FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE);
-CREATE TABLE IF NOT EXISTS calibrations (id TEXT PRIMARY KEY, home_id TEXT NOT NULL, camera_id TEXT NOT NULL, map_id TEXT NOT NULL, intrinsics_json TEXT NOT NULL, extrinsics_json TEXT NOT NULL, accuracy_m REAL, created_at TEXT NOT NULL, resolution_width INTEGER, resolution_height INTEGER, camera_metadata_json TEXT NOT NULL DEFAULT '{}', source TEXT NOT NULL DEFAULT 'manual', status TEXT NOT NULL DEFAULT 'active', invalidated_at TEXT, invalidation_reason TEXT, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE);
+CREATE TABLE IF NOT EXISTS room_maps (id TEXT PRIMARY KEY, home_id TEXT NOT NULL, room_id TEXT, revision INTEGER NOT NULL, coordinate_frame TEXT NOT NULL, artifact_key TEXT, map_json TEXT NOT NULL, created_at TEXT NOT NULL, source TEXT NOT NULL DEFAULT 'manual', dimension TEXT NOT NULL DEFAULT '2d', approximate INTEGER NOT NULL DEFAULT 0, localization_status TEXT NOT NULL DEFAULT 'unlocalized', metadata_json TEXT NOT NULL DEFAULT '{}', usdz_artifact_key TEXT, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE);
+CREATE TABLE IF NOT EXISTS calibrations (id TEXT PRIMARY KEY, home_id TEXT NOT NULL, camera_id TEXT NOT NULL, map_id TEXT NOT NULL, intrinsics_json TEXT NOT NULL, extrinsics_json TEXT NOT NULL, accuracy_m REAL, created_at TEXT NOT NULL, resolution_width INTEGER, resolution_height INTEGER, camera_metadata_json TEXT NOT NULL DEFAULT '{}', metrics_json TEXT NOT NULL DEFAULT '{}', source TEXT NOT NULL DEFAULT 'manual', status TEXT NOT NULL DEFAULT 'active', invalidated_at TEXT, invalidation_reason TEXT, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE);
+CREATE TABLE IF NOT EXISTS camera_map_generation_jobs (id TEXT PRIMARY KEY, home_id TEXT NOT NULL, camera_id TEXT NOT NULL, room_id TEXT, room_label TEXT NOT NULL DEFAULT 'Room', orientation TEXT NOT NULL DEFAULT 'portrait', status TEXT NOT NULL CHECK(status IN ('collecting','processing','ready','needs_rescan','unavailable','failed')), frame_count INTEGER NOT NULL DEFAULT 0, resolution_width INTEGER NOT NULL, resolution_height INTEGER NOT NULL, map_id TEXT, error_code TEXT, error_message TEXT, metrics_json TEXT NOT NULL DEFAULT '{}', model_version TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, completed_at TEXT, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE, FOREIGN KEY(camera_id) REFERENCES cameras(id) ON DELETE CASCADE, FOREIGN KEY(map_id) REFERENCES room_maps(id) ON DELETE SET NULL);
+CREATE INDEX IF NOT EXISTS camera_map_generation_jobs_camera_idx ON camera_map_generation_jobs(home_id, camera_id, updated_at);
 CREATE TABLE IF NOT EXISTS objects (id TEXT PRIMARY KEY, home_id TEXT NOT NULL, label TEXT NOT NULL, display_name TEXT, enabled INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS observations (id TEXT PRIMARY KEY, home_id TEXT NOT NULL, object_id TEXT, camera_id TEXT, map_id TEXT, x REAL, y REAL, z REAL, uncertainty_m REAL, confidence REAL, detector_version TEXT, observed_at TEXT NOT NULL, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS events (id TEXT PRIMARY KEY, home_id TEXT NOT NULL, event_type TEXT NOT NULL, status TEXT NOT NULL, explanation TEXT, confidence REAL, evidence_json TEXT NOT NULL, first_seen_at TEXT NOT NULL, last_seen_at TEXT NOT NULL, expires_at TEXT NOT NULL, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE);
@@ -154,6 +156,18 @@ def _identity_migration() -> str:
     return _migration_file("004_email_identity.sql")
 
 
+def _camera_generation_migration() -> str:
+    return _migration_file("005_camera_map_generation.sql")
+
+
+def _camera_generation_metadata_migration() -> str:
+    return _migration_file("006_camera_map_generation_metadata.sql")
+
+
+def _roomplan_usdz_migration() -> str:
+    return _migration_file("007_roomplan_usdz.sql")
+
+
 def _postgres_sql(sql: str) -> str:
     """Translate the intentionally SQLite-shaped query API to psycopg SQL."""
     # The application uses qmark placeholders everywhere so isolated SQLite
@@ -234,7 +248,7 @@ class Database:
                 additions = {
                     "cameras": [("resolution_width", "INTEGER"), ("resolution_height", "INTEGER"), ("metadata_json", "TEXT NOT NULL DEFAULT '{}'")],
                     "room_maps": [("source", "TEXT NOT NULL DEFAULT 'manual'"), ("approximate", "INTEGER NOT NULL DEFAULT 0"), ("localization_status", "TEXT NOT NULL DEFAULT 'unlocalized'"), ("metadata_json", "TEXT NOT NULL DEFAULT '{}'")],
-                    "calibrations": [("resolution_width", "INTEGER"), ("resolution_height", "INTEGER"), ("camera_metadata_json", "TEXT NOT NULL DEFAULT '{}'") , ("source", "TEXT NOT NULL DEFAULT 'manual'"), ("status", "TEXT NOT NULL DEFAULT 'active'"), ("invalidated_at", "TEXT"), ("invalidation_reason", "TEXT")],
+                    "calibrations": [("resolution_width", "INTEGER"), ("resolution_height", "INTEGER"), ("camera_metadata_json", "TEXT NOT NULL DEFAULT '{}'") , ("metrics_json", "TEXT NOT NULL DEFAULT '{}'") , ("source", "TEXT NOT NULL DEFAULT 'manual'"), ("status", "TEXT NOT NULL DEFAULT 'active'"), ("invalidated_at", "TEXT"), ("invalidation_reason", "TEXT")],
                 }
                 for table, columns in additions.items():
                     for column, definition in columns:
@@ -244,6 +258,32 @@ class Database:
             if not self._sqlite_migration_applied(4):
                 self.conn.executescript(_identity_migration())
                 self._record_sqlite_migration(4)
+            if not self._sqlite_migration_applied(5):
+                room_map_columns = {row[1] for row in self.conn.execute("PRAGMA table_info(room_maps)").fetchall()}
+                if "dimension" not in room_map_columns:
+                    self.conn.execute("ALTER TABLE room_maps ADD COLUMN dimension TEXT NOT NULL DEFAULT '2d'")
+                calibration_columns = {row[1] for row in self.conn.execute("PRAGMA table_info(calibrations)").fetchall()}
+                if "metrics_json" not in calibration_columns:
+                    self.conn.execute("ALTER TABLE calibrations ADD COLUMN metrics_json TEXT NOT NULL DEFAULT '{}'")
+                self.conn.execute(
+                    """UPDATE room_maps
+                       SET source='legacy-2d', approximate=1,
+                           localization_status='rescan-required', dimension='2d'
+                     WHERE source IN ('manual', 'camera-provisional', 'roomplan-normalized')"""
+                )
+                self._record_sqlite_migration(5)
+            if not self._sqlite_migration_applied(6):
+                job_columns = {row[1] for row in self.conn.execute("PRAGMA table_info(camera_map_generation_jobs)").fetchall()}
+                if "room_label" not in job_columns:
+                    self.conn.execute("ALTER TABLE camera_map_generation_jobs ADD COLUMN room_label TEXT NOT NULL DEFAULT 'Room'")
+                if "orientation" not in job_columns:
+                    self.conn.execute("ALTER TABLE camera_map_generation_jobs ADD COLUMN orientation TEXT NOT NULL DEFAULT 'portrait'")
+                self._record_sqlite_migration(6)
+            if not self._sqlite_migration_applied(7):
+                room_map_columns = {row[1] for row in self.conn.execute("PRAGMA table_info(room_maps)").fetchall()}
+                if "usdz_artifact_key" not in room_map_columns:
+                    self.conn.execute("ALTER TABLE room_maps ADD COLUMN usdz_artifact_key TEXT")
+                self._record_sqlite_migration(7)
             # Keep the zero-setup SQLite adapter forward-compatible with a
             # database created before caregiver assignment was introduced.
             plan_columns = {row[1] for row in self.conn.execute("PRAGMA table_info(medication_plans)").fetchall()}
@@ -302,6 +342,27 @@ class Database:
                         "INSERT INTO schema_migrations(version, applied_at) VALUES (%s, %s)",
                         (4, now_iso()),
                     )
+                if 5 not in applied:
+                    for statement in _statements(_camera_generation_migration()):
+                        self.conn.execute(statement)
+                    self.conn.execute(
+                        "INSERT INTO schema_migrations(version, applied_at) VALUES (%s, %s)",
+                        (5, now_iso()),
+                    )
+                if 6 not in applied:
+                    for statement in _statements(_camera_generation_metadata_migration()):
+                        self.conn.execute(statement)
+                    self.conn.execute(
+                        "INSERT INTO schema_migrations(version, applied_at) VALUES (%s, %s)",
+                        (6, now_iso()),
+                    )
+                if 7 not in applied:
+                    for statement in _statements(_roomplan_usdz_migration()):
+                        self.conn.execute(statement)
+                    self.conn.execute(
+                        "INSERT INTO schema_migrations(version, applied_at) VALUES (%s, %s)",
+                        (7, now_iso()),
+                    )
                 self.conn.commit()
             except Exception:
                 self.conn.rollback()
@@ -347,7 +408,7 @@ class Database:
     def export_home(self, home_id: str) -> dict:
         # Export user-visible records, including the minimal rights/audit
         # trail. Never export bearer-token hashes or one-time pairing hashes.
-        tables = ["homes", "users", "memberships", "consents", "cameras", "rooms", "room_maps", "calibrations", "objects", "observations", "events", "clips", "summaries", "family_invites", "medication_plans", "medication_check_ins", "audit_log", "deletion_requests"]
+        tables = ["homes", "users", "memberships", "consents", "cameras", "rooms", "room_maps", "calibrations", "camera_map_generation_jobs", "objects", "observations", "events", "clips", "summaries", "family_invites", "medication_plans", "medication_check_ins", "audit_log", "deletion_requests"]
         result = {}
         for table in tables:
             if table == "homes": query, params = "SELECT * FROM homes WHERE id=?", (home_id,)
