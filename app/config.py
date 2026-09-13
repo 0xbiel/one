@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     object_store_path: Path = Path("./data/objects")
     clip_encryption_key_b64: str | None = None
     bootstrap_secret: str = "change-me-in-production"
-    session_ttl_minutes: int = 60
+    session_ttl_minutes: int = 10_080
     livekit_url: str = "ws://localhost:7880"
     livekit_api_key: str | None = None
     livekit_api_secret: str | None = None
