@@ -103,6 +103,10 @@ def test_publisher_pairing_token_scopes_and_video_consent(tmp_path):
     assert "pairing_code" not in pending.json() and "code" not in pending.json()
     publisher = c.post("/api/v1/pairing/complete", json={"code": started.json()["pairing_code"]})
     assert publisher.status_code == 200
+    cameras = c.get(f"/api/v1/homes/{home}/cameras", headers=admin_headers)
+    assert cameras.status_code == 200 and cameras.json()["data"][0]["id"] == pairing_id
+    saved_camera = cameras.json()["data"][0]
+    assert saved_camera["status"] == "online"
     connected = c.get(f"/api/v1/homes/{home}/pairing/{pairing_id}/status", headers=admin_headers)
     assert connected.status_code == 200 and connected.json()["status"] == "connected" and connected.json()["connected_at"]
     publisher_headers = {"Authorization": f"Bearer {publisher.json()['access_token']}"}
@@ -149,6 +153,9 @@ def test_camera_provisional_roomplan_revision_and_calibration_invalidation(tmp_p
     camera = c.post(f"/api/v1/homes/{home}/cameras", headers=h, json={"name": "Hall", "resolution_width": 640, "resolution_height": 480}).json()
     provisional = c.post(f"/api/v1/homes/{home}/maps/provisional", headers=h, json={"camera_id": camera["id"], "resolution_width": 640, "resolution_height": 480, "zones": [{"id": "hall", "confidence": 0.4}]})
     assert provisional.status_code == 200 and provisional.json()["approximate"] is True and provisional.json()["localization_status"] == "zone-only"
+    provisional_detail = c.get(f"/api/v1/homes/{home}/maps/{provisional.json()['id']}", headers=h)
+    zone = provisional_detail.json()["map_data"]["zones"][0]
+    assert provisional_detail.status_code == 200 and {"x", "y", "width", "height"}.issubset(zone)
     roomplan = c.post(f"/api/v1/homes/{home}/maps/roomplan", headers=h, json={"normalized_scan": {"rooms": [{"id": "hall"}]}, "scan_metadata": {"device": "iPhone"}})
     assert roomplan.status_code == 200 and roomplan.json()["source"] == "roomplan-normalized"
     calibration = c.post(f"/api/v1/homes/{home}/calibrations", headers=h, json={"camera_id": camera["id"], "map_id": roomplan.json()["id"], "intrinsics": {}, "extrinsics": {}, "resolution_width": 640, "resolution_height": 480})

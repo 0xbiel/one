@@ -17,7 +17,7 @@ services:
       ONE_LM_STUDIO_URL: ${ONE_LM_STUDIO_URL:-http://host.docker.internal:1234/v1}
       ONE_LM_STUDIO_MODEL: ${ONE_LM_STUDIO_MODEL:-qwen3.6-35b-a3b}
       ONE_LM_STUDIO_API_KEY: ${ONE_LM_STUDIO_API_KEY:-}
-      ONE_CORS_ORIGINS: ${ONE_CORS_ORIGINS:-http://localhost:4173,http://localhost:4174,http://127.0.0.1:4173,http://127.0.0.1:4174}
+      ONE_CORS_ORIGINS: ${ONE_CORS_ORIGINS:-http://localhost:4173,http://localhost:4174,http://localhost:4175,http://127.0.0.1:4173,http://127.0.0.1:4174,http://127.0.0.1:4175}
     depends_on:
       postgres:
         condition: service_healthy
@@ -39,7 +39,7 @@ services:
     # Keep the default private to this Mac. Set ONE_FRONTEND_BIND=0.0.0.0
     # only for a controlled LAN test; Tailscale Serve can proxy the loopback
     # default without exposing the container on the whole LAN.
-    ports: ["${ONE_FRONTEND_BIND:-127.0.0.1}:${ONE_FRONTEND_PORT:-4173}:80"]
+    ports: ["${ONE_FRONTEND_BIND:-127.0.0.1}:${ONE_FRONTEND_PORT:-4175}:80"]
   postgres:
     image: postgres:16-alpine
     environment:

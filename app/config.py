@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     llm_model: str | None = Field(default=None, validation_alias=AliasChoices("ONE_LLM_MODEL", "LLM_MODEL"))
     llm_api_key: str | None = Field(default=None, validation_alias=AliasChoices("ONE_LLM_API_KEY", "LLM_API_KEY"))
     llm_timeout_seconds: float = Field(default=15.0, gt=0, validation_alias=AliasChoices("ONE_LLM_TIMEOUT_SECONDS", "LLM_TIMEOUT_SECONDS"))
-    cors_origins: str = "http://localhost:5173,http://localhost:3000,http://localhost:4173,http://localhost:4174,http://127.0.0.1:5173,http://127.0.0.1:4173,http://127.0.0.1:4174"
+    cors_origins: str = "http://localhost:5173,http://localhost:3000,http://localhost:4173,http://localhost:4174,http://localhost:4175,http://127.0.0.1:5173,http://127.0.0.1:4173,http://127.0.0.1:4174,http://127.0.0.1:4175"
 
     @property
     def cors_list(self) -> list[str]:

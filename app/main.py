@@ -486,6 +486,15 @@ def make_app(settings: Settings | None = None) -> FastAPI:
             conn.execute("INSERT INTO audit_log VALUES (?,?,?,?,?,?,?,?)", (str(uuid.uuid4()), verification["home_id"], user["id"], "email.auth.verify", "user", user["id"], "{}", now))
         return {"access_token": token, "token_type": "bearer", "expires_in": settings.session_ttl_minutes * 60, "home_id": verification["home_id"], "user_id": user["id"], "role": membership["role"], "email": email}
 
+    def ensure_publisher_camera(home_id: str, user_id: str, name: str, created_at: str | None = None):
+        """Backfill the camera read model for a completed publisher pairing."""
+        db.execute(
+            """INSERT INTO cameras(id,home_id,name,room_id,enabled,created_at,resolution_width,resolution_height,metadata_json)
+               VALUES (?,?,?,NULL,1,?,NULL,NULL,'{}')
+               ON CONFLICT(id) DO NOTHING""",
+            (user_id, home_id, name, created_at or now_iso()),
+        )
+
     @app.post("/api/v1/homes/{home_id}/pairing/start")
     def device_pairing_start(home_id: str, body: DevicePairingStart, actor: Current):
         home_check(actor, home_id)
@@ -520,6 +529,8 @@ def make_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(404, "Pairing session not found")
         is_connected = row["used_at"] is not None
         is_expired = not is_connected and expired(row["expires_at"])
+        if is_connected:
+            ensure_publisher_camera(home_id, row["user_id"], row["display_name"], row["used_at"])
         return {
             "pairing_id": pairing_id,
             "home_id": home_id,
@@ -533,8 +544,15 @@ def make_app(settings: Settings | None = None) -> FastAPI:
     def pairing_complete(body: PairComplete):
         row = db.one("SELECT * FROM pairing_codes WHERE code_hash=? AND used_at IS NULL", (hash_secret(body.code),))
         if not row or expired(row["expires_at"]): raise HTTPException(400, "Invalid or expired pairing code")
-        token = new_token(); db.execute("UPDATE pairing_codes SET used_at=? WHERE code_hash=?", (now_iso(), row["code_hash"]))
-        db.execute("INSERT INTO sessions VALUES (?,?,?,?,?)", (hash_secret(token), row["user_id"], row["home_id"], iso_after(settings.session_ttl_minutes), now_iso()))
+        token = new_token(); timestamp = now_iso()
+        db.execute("UPDATE pairing_codes SET used_at=? WHERE code_hash=?", (timestamp, row["code_hash"]))
+        db.execute("INSERT INTO sessions VALUES (?,?,?,?,?)", (hash_secret(token), row["user_id"], row["home_id"], iso_after(settings.session_ttl_minutes), timestamp))
+        if row["role"] == "publisher":
+            user = db.one("SELECT display_name FROM users WHERE id=?", (row["user_id"],))
+            # Keep the camera id equal to the publisher identity so the
+            # caregiver status response and metadata endpoint always refer to
+            # one device.
+            ensure_publisher_camera(row["home_id"], row["user_id"], user["display_name"] if user else "Paired camera", timestamp)
         audit({"user_id": row["user_id"], "home_id": row["home_id"]}, "pairing.complete", "user", row["user_id"])
         return {"access_token": token, "token_type": "bearer", "expires_in": settings.session_ttl_minutes * 60, "home_id": row["home_id"], "user_id": row["user_id"]}
 
@@ -590,6 +608,30 @@ def make_app(settings: Settings | None = None) -> FastAPI:
     def room(home_id: str, body: RoomIn, actor: Current):
         home_check(actor, home_id); publisher_block(actor); rid = str(uuid.uuid4()); db.execute("INSERT INTO rooms VALUES (?,?,?,?)", (rid, home_id, body.name, now_iso())); return {"id": rid, **body.model_dump()}
 
+    def normalize_map_zones(zones: object) -> list[dict]:
+        """Give lightweight camera maps renderable geometry when needed."""
+        if not isinstance(zones, list):
+            return []
+        count = len(zones)
+        normalized = []
+        for index, raw_zone in enumerate(zones):
+            if not isinstance(raw_zone, dict):
+                continue
+            zone = dict(raw_zone)
+            zone_id = str(zone.get("id") or f"zone-{index + 1}")
+            fallback = (
+                {"x": 8, "y": 12, "width": 84, "height": 76}
+                if count == 1
+                else {"x": 8 + (index % 2) * 47, "y": 12 + (index // 2) * 40, "width": 40, "height": 30}
+            )
+            zone["id"] = zone_id
+            zone["name"] = str(zone.get("name") or zone_id.replace("-", " ").replace("_", " ").title())
+            for key, value in fallback.items():
+                if isinstance(zone.get(key), bool) or not isinstance(zone.get(key), (int, float)):
+                    zone[key] = value
+            normalized.append(zone)
+        return normalized
+
     @app.post("/api/v1/homes/{home_id}/maps")
     def room_map(home_id: str, body: MapIn, actor: Current):
         home_check(actor, home_id); publisher_block(actor); row = db.one("SELECT COALESCE(MAX(revision),0)+1 revision FROM room_maps WHERE home_id=? AND room_id IS ?", (home_id, body.room_id)); mid = str(uuid.uuid4()); key = f"maps/{home_id}/{mid}.json"; store.put_json(key, body.map_data); created = now_iso(); db.execute("INSERT INTO room_maps(id,home_id,room_id,revision,coordinate_frame,artifact_key,map_json,created_at,source,approximate,localization_status,metadata_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", (mid, home_id, body.room_id, row["revision"], body.coordinate_frame, key, json.dumps(body.map_data), created, "manual", 0, "unlocalized", "{}")); db.execute("UPDATE calibrations SET status='invalidated', invalidated_at=?, invalidation_reason='map revision changed' WHERE home_id=? AND status='active' AND map_id != ?", (created, home_id, mid)); return {"id": mid, "revision": row["revision"], "coordinate_frame": body.coordinate_frame, "artifact_key": key}
@@ -607,7 +649,7 @@ def make_app(settings: Settings | None = None) -> FastAPI:
         home_check(actor, home_id); publisher_block(actor)
         camera = db.one("SELECT * FROM cameras WHERE id=? AND home_id=? AND enabled=1", (body.camera_id, home_id))
         if not camera: raise HTTPException(404, "Camera not found or disabled")
-        return create_map(home_id, body.room_id, "camera-zone-local", {"zones": body.zones}, "camera-provisional", True, "zone-only", {"camera_id": body.camera_id, "resolution_width": body.resolution_width, "resolution_height": body.resolution_height}, actor)
+        return create_map(home_id, body.room_id, "camera-zone-local", {"zones": normalize_map_zones(body.zones)}, "camera-provisional", True, "zone-only", {"camera_id": body.camera_id, "resolution_width": body.resolution_width, "resolution_height": body.resolution_height}, actor)
 
     @app.post("/api/v1/homes/{home_id}/maps/roomplan")
     def roomplan_map(home_id: str, body: RoomPlanMapIn, actor: Current):
@@ -620,6 +662,8 @@ def make_app(settings: Settings | None = None) -> FastAPI:
             map_data = json.loads(row["map_json"])
         except (TypeError, json.JSONDecodeError):
             map_data = {}
+        if isinstance(map_data, dict):
+            map_data = {**map_data, "zones": normalize_map_zones(map_data.get("zones", []))}
         return {
             "id": row["id"],
             "home_id": row["home_id"],
@@ -667,7 +711,7 @@ def make_app(settings: Settings | None = None) -> FastAPI:
             map_data = json.loads(row["map_json"])
         except (TypeError, json.JSONDecodeError):
             map_data = {}
-        zones = map_data.get("zones", []) if isinstance(map_data, dict) else []
+        zones = normalize_map_zones(map_data.get("zones", [])) if isinstance(map_data, dict) else []
         return {"sceneId": row["id"], "version": row["revision"], "zones": zones, "mapId": row["id"], "coordinateFrame": row["coordinate_frame"]}
 
     @app.post("/api/v1/homes/{home_id}/calibrations")

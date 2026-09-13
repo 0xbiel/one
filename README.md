@@ -82,7 +82,7 @@ process, notices, retention, and rights workflows in `docs/privacy/`.
 `docker compose up --build` starts the API plus PostgreSQL, Redis, MinIO, a self-hosted LiveKit development server, and Caddy. Compose applies the numbered migrations and waits for PostgreSQL health before the API starts. The Compose defaults use LiveKit's local `devkey`/`secret` placeholders, so no LiveKit Cloud subscription is involved. Replace every example password/secret before sharing the LAN, set `ONE_LIVEKIT_URL` to a host-reachable `ws://` or trusted `wss://` endpoint for phones, add a real `.env`, and provision the local Caddy CA on client devices before using this on a LAN.
 
 The frontend binds to `127.0.0.1` by default. For a private phone browser, keep
-that setting and run `tailscale serve --bg http://127.0.0.1:${ONE_FRONTEND_PORT:-4173}`;
+that setting and run `tailscale serve --bg http://127.0.0.1:${ONE_FRONTEND_PORT:-4175}`;
 open the HTTPS URL shown by `tailscale serve status`. For a trusted same-Wi-Fi
 test only, set `ONE_FRONTEND_BIND=0.0.0.0` and open
 `http://<this-Mac-LAN-IP>:<ONE_FRONTEND_PORT>`; browser camera permissions still
