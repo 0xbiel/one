@@ -26,6 +26,11 @@ def _postgres_url() -> str | None:
     return value or None
 
 
+def _migration_versions() -> list[int]:
+    migration_dir = Path(__file__).parents[1] / "migrations"
+    return [int(path.name.split("_", 1)[0]) for path in sorted(migration_dir.glob("*.sql"))]
+
+
 @pytest.fixture
 def postgres_client(tmp_path: Path):
     dsn = _postgres_url()
@@ -125,16 +130,21 @@ def test_postgres_health_pairing_transaction_and_cascade(postgres_client: TestCl
         "family_invites",
         "medication_plans",
         "medication_check_ins",
+        "email_verifications",
+        "camera_map_generation_jobs",
     } <= actual_tables
-    assert [row["version"] for row in db.many("SELECT version FROM schema_migrations ORDER BY version")] == [1, 2]
+    expected_versions = _migration_versions()
+    assert [row["version"] for row in db.many("SELECT version FROM schema_migrations ORDER BY version")] == expected_versions
     assert db.one("SELECT '100%' AS label")["label"] == "100%"
+    assert db.conn.info.transaction_status.name == "IDLE"
 
     # A second application process must see the same migration set.  This
     # catches non-idempotent or multi-statement initialization before serving
     # requests, rather than only proving that the first connection booted.
     second_app = make_app(postgres_client.app.state.settings)
     assert second_app.state.db.health() == {"status": "ok", "backend": "postgresql"}
-    assert [row["version"] for row in second_app.state.db.many("SELECT version FROM schema_migrations ORDER BY version")] == [1, 2]
+    assert [row["version"] for row in second_app.state.db.many("SELECT version FROM schema_migrations ORDER BY version")] == expected_versions
+    assert second_app.state.db.conn.info.transaction_status.name == "IDLE"
 
     rollback_home = str(uuid4())
     with pytest.raises(RuntimeError, match="fixture rollback"):
@@ -192,6 +202,8 @@ def test_migration_files_are_ordered_and_cover_schema_when_postgres_enabled():
         "family_invites",
         "medication_plans",
         "medication_check_ins",
+        "email_verifications",
+        "camera_map_generation_jobs",
     }
     missing = [
         table

@@ -168,6 +168,26 @@ def _roomplan_usdz_migration() -> str:
     return _migration_file("007_roomplan_usdz.sql")
 
 
+def _postgres_migrations() -> list[tuple[int, str]]:
+    migration_dir = Path(__file__).resolve().parent.parent / "migrations"
+    paths = sorted(migration_dir.glob("*.sql"))
+    if not paths:
+        raise RuntimeError("PostgreSQL requires the numbered SQL files in migrations/")
+
+    migrations: list[tuple[int, str]] = []
+    seen: set[int] = set()
+    for path in paths:
+        prefix = path.name.split("_", 1)[0]
+        if not prefix.isdigit():
+            raise RuntimeError(f"Invalid PostgreSQL migration filename: {path.name}")
+        version = int(prefix)
+        if version in seen:
+            raise RuntimeError(f"Duplicate PostgreSQL migration version: {version}")
+        seen.add(version)
+        migrations.append((version, path.read_text(encoding="utf-8")))
+    return migrations
+
+
 def _postgres_sql(sql: str) -> str:
     """Translate the intentionally SQLite-shaped query API to psycopg SQL."""
     # The application uses qmark placeholders everywhere so isolated SQLite
@@ -227,6 +247,10 @@ class Database:
                     f"({type(exc).__name__}); verify the database is reachable and credentials are valid"
                 ) from exc
             self._initialize_postgresql()
+            # Keep ordinary reads outside a transaction. Explicit multi-step
+            # writes use ``transaction()`` below and still commit/rollback as
+            # one unit.
+            self.conn.autocommit = True
         else:
             raise RuntimeError(
                 "Unsupported ONE_DATABASE_URL scheme; use sqlite:///... or postgresql://..."
@@ -314,54 +338,14 @@ class Database:
                     row["version"]
                     for row in self.conn.execute("SELECT version FROM schema_migrations").fetchall()
                 }
-                if 1 not in applied:
-                    for statement in _statements(_core_migration()):
+                for version, script in _postgres_migrations():
+                    if version in applied:
+                        continue
+                    for statement in _statements(script):
                         self.conn.execute(statement)
                     self.conn.execute(
                         "INSERT INTO schema_migrations(version, applied_at) VALUES (%s, %s)",
-                        (1, now_iso()),
-                    )
-                if 2 not in applied:
-                    for statement in _statements(_family_migration()):
-                        self.conn.execute(statement)
-                    self.conn.execute(
-                        "INSERT INTO schema_migrations(version, applied_at) VALUES (%s, %s)",
-                        (2, now_iso()),
-                    )
-                if 3 not in applied:
-                    for statement in _statements(_mapping_migration()):
-                        self.conn.execute(statement)
-                    self.conn.execute(
-                        "INSERT INTO schema_migrations(version, applied_at) VALUES (%s, %s)",
-                        (3, now_iso()),
-                    )
-                if 4 not in applied:
-                    for statement in _statements(_identity_migration()):
-                        self.conn.execute(statement)
-                    self.conn.execute(
-                        "INSERT INTO schema_migrations(version, applied_at) VALUES (%s, %s)",
-                        (4, now_iso()),
-                    )
-                if 5 not in applied:
-                    for statement in _statements(_camera_generation_migration()):
-                        self.conn.execute(statement)
-                    self.conn.execute(
-                        "INSERT INTO schema_migrations(version, applied_at) VALUES (%s, %s)",
-                        (5, now_iso()),
-                    )
-                if 6 not in applied:
-                    for statement in _statements(_camera_generation_metadata_migration()):
-                        self.conn.execute(statement)
-                    self.conn.execute(
-                        "INSERT INTO schema_migrations(version, applied_at) VALUES (%s, %s)",
-                        (6, now_iso()),
-                    )
-                if 7 not in applied:
-                    for statement in _statements(_roomplan_usdz_migration()):
-                        self.conn.execute(statement)
-                    self.conn.execute(
-                        "INSERT INTO schema_migrations(version, applied_at) VALUES (%s, %s)",
-                        (7, now_iso()),
+                        (version, now_iso()),
                     )
                 self.conn.commit()
             except Exception:
@@ -371,6 +355,10 @@ class Database:
     @contextmanager
     def transaction(self):
         with self._lock:
+            if self.backend == "postgresql":
+                with self.conn.transaction():
+                    yield _TransactionConnection(self)
+                return
             try:
                 yield _TransactionConnection(self)
                 self.conn.commit()
@@ -384,7 +372,8 @@ class Database:
     def execute(self, sql: str, params: tuple = ()):
         with self._lock:
             cur = self.conn.execute(self._sql(sql), params)
-            self.conn.commit()
+            if self.backend == "sqlite":
+                self.conn.commit()
             return cur
 
     def one(self, sql: str, params: tuple = ()) -> dict | None:
