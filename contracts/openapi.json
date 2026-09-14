@@ -1,6 +1,217 @@
 {
   "components": {
     "schemas": {
+      "ARVideoCaptureDiagnostics": {
+        "additionalProperties": false,
+        "properties": {
+          "frame_sample_count": {
+            "maximum": 1000.0,
+            "minimum": 0.0,
+            "title": "Frame Sample Count",
+            "type": "integer"
+          },
+          "normal_tracking_samples": {
+            "maximum": 1000.0,
+            "minimum": 0.0,
+            "title": "Normal Tracking Samples",
+            "type": "integer"
+          },
+          "plane_count": {
+            "maximum": 1000.0,
+            "minimum": 0.0,
+            "title": "Plane Count",
+            "type": "integer"
+          },
+          "tracking_state": {
+            "enum": [
+              "normal",
+              "limited",
+              "unavailable"
+            ],
+            "title": "Tracking State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "frame_sample_count",
+          "normal_tracking_samples",
+          "plane_count",
+          "tracking_state"
+        ],
+        "title": "ARVideoCaptureDiagnostics",
+        "type": "object"
+      },
+      "ARVideoMapIn": {
+        "additionalProperties": false,
+        "description": "Metric but approximate structural room capture from non-LiDAR iOS ARKit.",
+        "properties": {
+          "captured_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Captured At"
+          },
+          "coordinate_frame": {
+            "const": "arkit-world",
+            "default": "arkit-world",
+            "title": "Coordinate Frame",
+            "type": "string"
+          },
+          "diagnostics": {
+            "$ref": "#/components/schemas/ARVideoCaptureDiagnostics"
+          },
+          "framework": {
+            "const": "ARKit",
+            "default": "ARKit",
+            "title": "Framework",
+            "type": "string"
+          },
+          "geometry_type": {
+            "const": "3d",
+            "default": "3d",
+            "title": "Geometry Type",
+            "type": "string"
+          },
+          "lidar": {
+            "const": false,
+            "default": false,
+            "title": "Lidar",
+            "type": "boolean"
+          },
+          "producer": {
+            "const": "native-ios",
+            "default": "native-ios",
+            "title": "Producer",
+            "type": "string"
+          },
+          "room_id": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Room Id"
+          },
+          "schema_version": {
+            "const": "arkit-video-room.v1",
+            "default": "arkit-video-room.v1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "surfaces": {
+            "items": {
+              "$ref": "#/components/schemas/ARVideoSurface"
+            },
+            "maxItems": 256,
+            "minItems": 3,
+            "title": "Surfaces",
+            "type": "array"
+          },
+          "units": {
+            "const": "m",
+            "default": "m",
+            "title": "Units",
+            "type": "string"
+          },
+          "up_axis": {
+            "const": "Y",
+            "default": "Y",
+            "title": "Up Axis",
+            "type": "string"
+          }
+        },
+        "required": [
+          "surfaces",
+          "diagnostics"
+        ],
+        "title": "ARVideoMapIn",
+        "type": "object"
+      },
+      "ARVideoPoint3D": {
+        "additionalProperties": false,
+        "properties": {
+          "x": {
+            "title": "X",
+            "type": "number"
+          },
+          "y": {
+            "title": "Y",
+            "type": "number"
+          },
+          "z": {
+            "title": "Z",
+            "type": "number"
+          }
+        },
+        "required": [
+          "x",
+          "y",
+          "z"
+        ],
+        "title": "ARVideoPoint3D",
+        "type": "object"
+      },
+      "ARVideoSurface": {
+        "additionalProperties": false,
+        "properties": {
+          "alignment": {
+            "enum": [
+              "horizontal",
+              "vertical"
+            ],
+            "title": "Alignment",
+            "type": "string"
+          },
+          "confidence": {
+            "default": 0.7,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "id": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "floor",
+              "wall"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "vertices": {
+            "items": {
+              "$ref": "#/components/schemas/ARVideoPoint3D"
+            },
+            "maxItems": 256,
+            "minItems": 3,
+            "title": "Vertices",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "alignment",
+          "vertices"
+        ],
+        "title": "ARVideoSurface",
+        "type": "object"
+      },
       "CalibrationIn": {
         "properties": {
           "accuracy_m": {
@@ -312,6 +523,28 @@
           "resolution_height"
         ],
         "title": "CameraMapGenerationStartIn",
+        "type": "object"
+      },
+      "CameraReconnectIn": {
+        "properties": {
+          "camera_id": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Camera Id",
+            "type": "string"
+          },
+          "reconnect_token": {
+            "maxLength": 512,
+            "minLength": 24,
+            "title": "Reconnect Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "camera_id",
+          "reconnect_token"
+        ],
+        "title": "CameraReconnectIn",
         "type": "object"
       },
       "CameraUpdate": {
@@ -1993,6 +2226,100 @@
             ],
             "title": "Up Axis",
             "type": "string"
+          },
+          "visual_depth_sample_count": {
+            "anyOf": [
+              {
+                "maximum": 12.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visual Depth Sample Count"
+          },
+          "visual_image_encoding_failure_count": {
+            "anyOf": [
+              {
+                "maximum": 10000.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visual Image Encoding Failure Count"
+          },
+          "visual_invalid_matrix_count": {
+            "anyOf": [
+              {
+                "maximum": 10000.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visual Invalid Matrix Count"
+          },
+          "visual_last_tracking_state": {
+            "anyOf": [
+              {
+                "enum": [
+                  "normal",
+                  "limited",
+                  "unavailable"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visual Last Tracking State"
+          },
+          "visual_missing_frame_count": {
+            "anyOf": [
+              {
+                "maximum": 10000.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visual Missing Frame Count"
+          },
+          "visual_sample_count": {
+            "anyOf": [
+              {
+                "maximum": 12.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visual Sample Count"
+          },
+          "visual_sampling_attempts": {
+            "anyOf": [
+              {
+                "maximum": 10000.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visual Sampling Attempts"
           }
         },
         "required": [
@@ -2143,7 +2470,7 @@
               "$ref": "#/components/schemas/RoomPlanVisualFrameIn"
             },
             "maxItems": 12,
-            "minItems": 2,
+            "minItems": 1,
             "title": "Frames",
             "type": "array"
           }
@@ -2445,6 +2772,58 @@
           }
         },
         "summary": "Email Auth Verify"
+      }
+    },
+    "/api/v1/camera/reconnect": {
+      "post": {
+        "operationId": "camera_reconnect_api_v1_camera_reconnect_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CameraReconnectIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Camera Reconnect"
+      }
+    },
+    "/api/v1/camera/reconnect-link": {
+      "post": {
+        "operationId": "camera_reconnect_link_api_v1_camera_reconnect_link_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Camera Reconnect Link"
       }
     },
     "/api/v1/clips/{clip_id}/content": {
@@ -3123,6 +3502,53 @@
           }
         },
         "summary": "Map Generation Frames"
+      }
+    },
+    "/api/v1/homes/{home_id}/cameras/{camera_id}/roomplan-readiness": {
+      "get": {
+        "description": "Expose only the RoomPlan state a camera needs for automatic localization.",
+        "operationId": "camera_roomplan_readiness_api_v1_homes__home_id__cameras__camera_id__roomplan_readiness_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "camera_id",
+            "required": true,
+            "schema": {
+              "title": "Camera Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Camera Roomplan Readiness"
       }
     },
     "/api/v1/homes/{home_id}/care-recipients": {
@@ -4095,6 +4521,54 @@
           }
         },
         "summary": "Room Map"
+      }
+    },
+    "/api/v1/homes/{home_id}/maps/arkit-video": {
+      "post": {
+        "description": "Create an approximate metric 3D room from a native non-LiDAR ARKit sweep.",
+        "operationId": "arkit_video_map_api_v1_homes__home_id__maps_arkit_video_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ARVideoMapIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Arkit Video Map"
       }
     },
     "/api/v1/homes/{home_id}/maps/current": {

@@ -83,12 +83,14 @@ services:
   caddy:
     image: caddy:2-alpine
     depends_on: [api, frontend]
-    # Keep the local reverse proxy off the host's public interfaces. Use
-    # Tailscale Serve for phone access, or override these bindings explicitly
-    # when a controlled LAN ingress is required.
+    # Bind the local HTTPS proxy to the LAN for trusted same-Wi-Fi devices.
+    # Caddy's internal CA certificate must be installed and trusted on those
+    # devices before browser camera/microphone APIs will treat it as secure.
     ports:
-      - "127.0.0.1:${ONE_CADDY_HTTPS_PORT:-8443}:443"
-      - "127.0.0.1:${ONE_CADDY_HTTP_PORT:-8080}:80"
+      - "${ONE_CADDY_BIND:-127.0.0.1}:${ONE_CADDY_HTTPS_PORT:-8080}:443"
+      - "[::]:${ONE_CADDY_HTTPS_PORT:-8080}:443"
+      - "${ONE_CADDY_BIND:-127.0.0.1}:${ONE_CADDY_HTTP_PORT:-8081}:80"
+      - "[::]:${ONE_CADDY_HTTP_PORT:-8081}:80"
     volumes: ["./Caddyfile:/etc/caddy/Caddyfile:ro", "caddy_data:/data", "caddy_config:/config"]
 volumes:
   one_objects:

@@ -1,12 +1,14 @@
 import asyncio
 import base64
 import hashlib
+import ipaddress
 import json
 import math
 import re
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Annotated, Literal, Sequence
+from urllib.parse import urlparse
 
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
@@ -26,7 +28,10 @@ from .geometry import (
 from .integrations import LMStudioAdapter, livekit_jwt, verify_livekit_webhook
 from .media import EncryptedLocalClipStore
 from .roomplan import (
+    ARVideoMapIn,
     RoomPlanMapIn,
+    arkit_video_geometry,
+    build_arkit_video_usdz,
     roomplan_geometry,
     roomplan_usdz_metadata,
     validate_roomplan_usdz,
@@ -69,6 +74,11 @@ class DevicePairingStart(BaseModel):
     expires_in_seconds: int = Field(default=600, ge=60, le=900)
 
 class PairComplete(BaseModel): code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
+
+
+class CameraReconnectIn(BaseModel):
+    camera_id: str = Field(min_length=1, max_length=120)
+    reconnect_token: str = Field(min_length=24, max_length=512)
 
 
 MAP_JOB_STATUSES = ("collecting", "processing", "ready", "needs_rescan", "unavailable", "failed")
@@ -365,7 +375,7 @@ class RoomPlanVisualFrameIn(BaseModel):
 
 
 class RoomPlanVisualLandmarksIn(BaseModel):
-    frames: list[RoomPlanVisualFrameIn] = Field(min_length=2, max_length=12)
+    frames: list[RoomPlanVisualFrameIn] = Field(min_length=1, max_length=12)
 
 
 class CameraLocalizationFrameIn(BaseModel):
@@ -698,13 +708,18 @@ def make_app(
 
     def camera_view(row: dict) -> dict:
         metadata = json.loads(row.get("metadata_json") or "{}")
+        latest_session = db.one(
+            "SELECT created_at, expires_at FROM sessions WHERE home_id=? AND user_id=? ORDER BY created_at DESC LIMIT 1",
+            (row["home_id"], row["id"]),
+        )
+        connected = bool(row["enabled"] and latest_session and not expired(latest_session["expires_at"]))
         view = {
             **row,
             "metadata": metadata,
             "label": row["name"],
             "platform": "browser",
-            "status": "paused" if is_paused(row["home_id"]) else ("online" if row["enabled"] else "offline"),
-            "lastSeenAt": row["created_at"],
+            "status": "paused" if connected and is_paused(row["home_id"]) else ("online" if connected else "offline"),
+            "lastSeenAt": latest_session["created_at"] if latest_session else row["created_at"],
         }
         view.pop("metadata_json", None)
         return view
@@ -910,6 +925,19 @@ def make_app(
             (user_id, home_id, name, created_at or now_iso()),
         )
 
+    def issue_camera_reconnect(home_id: str, camera_id: str, timestamp: str | None = None) -> str:
+        issued_at = timestamp or now_iso()
+        reconnect_token = new_token()
+        db.execute(
+            "UPDATE camera_reconnect_tokens SET revoked_at=? WHERE home_id=? AND camera_id=? AND revoked_at IS NULL",
+            (issued_at, home_id, camera_id),
+        )
+        db.execute(
+            "INSERT INTO camera_reconnect_tokens(token_hash,home_id,camera_id,created_at,last_used_at,revoked_at) VALUES (?,?,?,?,NULL,NULL)",
+            (hash_secret(reconnect_token), home_id, camera_id, issued_at),
+        )
+        return reconnect_token
+
     @app.post("/api/v1/homes/{home_id}/pairing/start")
     def device_pairing_start(home_id: str, body: DevicePairingStart, actor: Current):
         home_check(actor, home_id)
@@ -968,8 +996,53 @@ def make_app(
             # caregiver status response and metadata endpoint always refer to
             # one device.
             ensure_publisher_camera(row["home_id"], row["user_id"], user["display_name"] if user else "Paired camera", timestamp)
+            reconnect_token = issue_camera_reconnect(row["home_id"], row["user_id"], timestamp)
+        else:
+            reconnect_token = None
         audit({"user_id": row["user_id"], "home_id": row["home_id"]}, "pairing.complete", "user", row["user_id"])
-        return {"access_token": token, "token_type": "bearer", "expires_in": settings.session_ttl_minutes * 60, "home_id": row["home_id"], "user_id": row["user_id"]}
+        return {"access_token": token, "token_type": "bearer", "expires_in": settings.session_ttl_minutes * 60, "home_id": row["home_id"], "user_id": row["user_id"], "reconnect_token": reconnect_token}
+
+    @app.post("/api/v1/camera/reconnect")
+    def camera_reconnect(body: CameraReconnectIn):
+        token_hash = hash_secret(body.reconnect_token)
+        row = db.one(
+            """SELECT crt.home_id, crt.camera_id, c.enabled
+                 FROM camera_reconnect_tokens crt
+                 JOIN cameras c ON c.id=crt.camera_id AND c.home_id=crt.home_id
+                WHERE crt.token_hash=? AND crt.camera_id=? AND crt.revoked_at IS NULL""",
+            (token_hash, body.camera_id),
+        )
+        if not row or not row["enabled"]:
+            raise HTTPException(401, "Camera reconnect link is invalid or revoked")
+        membership = db.one(
+            "SELECT role FROM memberships WHERE home_id=? AND user_id=?",
+            (row["home_id"], row["camera_id"]),
+        )
+        if not membership or membership["role"] != "publisher":
+            raise HTTPException(401, "Camera publisher is unavailable")
+        timestamp = now_iso()
+        access_token = new_token()
+        db.execute(
+            "INSERT INTO sessions VALUES (?,?,?,?,?)",
+            (hash_secret(access_token), row["camera_id"], row["home_id"], iso_after(settings.session_ttl_minutes), timestamp),
+        )
+        db.execute("UPDATE camera_reconnect_tokens SET last_used_at=? WHERE token_hash=?", (timestamp, token_hash))
+        audit({"user_id": row["camera_id"], "home_id": row["home_id"]}, "camera.reconnect", "camera", row["camera_id"], row["home_id"])
+        return {"access_token": access_token, "token_type": "bearer", "expires_in": settings.session_ttl_minutes * 60, "home_id": row["home_id"], "user_id": row["camera_id"]}
+
+    @app.post("/api/v1/camera/reconnect-link")
+    def camera_reconnect_link(actor: Current):
+        if actor["role"] != "publisher":
+            raise HTTPException(403, "Only a paired camera can create its reconnect link")
+        camera = db.one(
+            "SELECT id, enabled FROM cameras WHERE id=? AND home_id=?",
+            (actor["user_id"], actor["home_id"]),
+        )
+        if not camera or not camera["enabled"]:
+            raise HTTPException(404, "Camera is unavailable")
+        reconnect_token = issue_camera_reconnect(actor["home_id"], actor["user_id"])
+        audit(actor, "camera.reconnect_link.create", "camera", actor["user_id"], actor["home_id"])
+        return {"camera_id": actor["user_id"], "reconnect_token": reconnect_token}
 
     @app.delete("/api/v1/sessions/current")
     def logout(request: Request, actor: Current):
@@ -1038,6 +1111,7 @@ def make_app(
             db.execute("UPDATE cameras SET enabled=0 WHERE id=? AND home_id=?", (camera_id, home_id))
             db.execute("UPDATE calibrations SET status='invalidated', invalidated_at=?, invalidation_reason='camera removed' WHERE home_id=? AND camera_id=? AND status='active'", (timestamp, home_id, camera_id))
             revoked_sessions = db.execute("DELETE FROM sessions WHERE home_id=? AND user_id=?", (home_id, camera_id)).rowcount
+            db.execute("UPDATE camera_reconnect_tokens SET revoked_at=? WHERE home_id=? AND camera_id=? AND revoked_at IS NULL", (timestamp, home_id, camera_id))
             db.execute("DELETE FROM pairing_codes WHERE home_id=? AND user_id=? AND used_at IS NULL", (home_id, camera_id))
             audit(actor, "camera.delete", "camera", camera_id, home_id)
         else:
@@ -1070,15 +1144,15 @@ def make_app(
 
     def map_source(row: dict) -> str:
         source = str(row.get("source") or "legacy-2d")
-        # Only the two explicit new contracts can opt into current geometry.
+        # Only explicit validated producer contracts can opt into current geometry.
         # Older manual/generic rows must remain visible, but are legacy and
         # need a fresh automatic sweep before they can drive the map UI.
-        return source if source in {"camera-cv-2d", "roomplan-lidar-3d", "legacy-2d"} else "legacy-2d"
+        return source if source in {"camera-cv-2d", "roomplan-lidar-3d", "arkit-video-3d", "legacy-2d"} else "legacy-2d"
 
     def map_dimension(row: dict, source: str) -> str:
         # A generic or legacy map can never opt into the 3D renderer by
         # putting an arbitrary value in its stored JSON.
-        return "3d" if source == "roomplan-lidar-3d" and row.get("dimension") == "3d" else "2d"
+        return "3d" if source in {"roomplan-lidar-3d", "arkit-video-3d"} and row.get("dimension") == "3d" else "2d"
 
     def map_uses_real_geometry_model(row: dict) -> bool:
         """Keep historical fixture revisions out of the active map surface."""
@@ -1115,6 +1189,17 @@ def make_app(
         )
         if roomplan is not None:
             return roomplan
+        arkit_video = next(
+            (
+                row
+                for row in rows
+                if map_source(row) == "arkit-video-3d"
+                and map_dimension(row, "arkit-video-3d") == "3d"
+            ),
+            None,
+        )
+        if arkit_video is not None:
+            return arkit_video
         return next((row for row in rows if map_uses_real_geometry_model(row)), None)
 
     def roomplan_camera_registration_view(home_id: str, map_row: dict) -> dict | None:
@@ -1213,7 +1298,7 @@ def make_app(
         )
         if rescan_required:
             geometry_status = "rescan-required"
-        elif source in {"camera-cv-2d", "roomplan-lidar-3d"}:
+        elif source in {"camera-cv-2d", "roomplan-lidar-3d", "arkit-video-3d"}:
             geometry_status = "ready"
         else:
             geometry_status = "legacy"
@@ -1259,7 +1344,7 @@ def make_app(
         dimension: str = "2d",
     ) -> dict:
         row = db.one("SELECT COALESCE(MAX(revision),0)+1 revision FROM room_maps WHERE home_id=? AND room_id IS ?", (home_id, room_id))
-        if source != "roomplan-lidar-3d":
+        if source not in {"roomplan-lidar-3d", "arkit-video-3d"}:
             dimension = "2d"
         mid = str(uuid.uuid4())
         key = f"maps/{home_id}/{mid}.json"
@@ -1309,6 +1394,59 @@ def make_app(
         }
         return create_map(home_id, body.room_id, "roomplan-local", map_data, "roomplan-lidar-3d", False, "metric-local", metadata, actor, dimension="3d")
 
+    @app.post("/api/v1/homes/{home_id}/maps/arkit-video")
+    def arkit_video_map(home_id: str, body: ARVideoMapIn, actor: Current):
+        """Create an approximate metric 3D room from a native non-LiDAR ARKit sweep."""
+        home_check(actor, home_id); publisher_block(actor)
+        geometry = arkit_video_geometry(body)
+        try:
+            usdz_payload = build_arkit_video_usdz(body)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        metadata = {
+            "provenance": "native-arkit-video",
+            "model_version": "native-arkit-video-structural-v1",
+            "device_framework": "ARKit",
+            "lidar": False,
+            "units": "m",
+            "up_axis": "Y",
+            "diagnostics": body.diagnostics.model_dump(mode="json"),
+        }
+        map_data = {
+            "schema_version": body.schema_version,
+            "source": "arkit-video-3d",
+            "dimension": "3d",
+            "coordinate_frame": body.coordinate_frame,
+            "geometry": geometry,
+        }
+        created = create_map(
+            home_id,
+            body.room_id,
+            body.coordinate_frame,
+            map_data,
+            "arkit-video-3d",
+            True,
+            "metric-approximate",
+            metadata,
+            actor,
+            dimension="3d",
+        )
+        map_id = created["id"]
+        key = f"maps/{home_id}/{map_id}.usdz"
+        store.put_bytes(key, usdz_payload)
+        metadata["usdz"] = roomplan_usdz_metadata(
+            sha256=hashlib.sha256(usdz_payload).hexdigest(),
+            byte_count=len(usdz_payload),
+            content_type="model/vnd.usdz+zip",
+            download_path=f"/api/v1/homes/{home_id}/maps/{map_id}/usdz",
+        )
+        db.execute(
+            "UPDATE room_maps SET usdz_artifact_key=?, metadata_json=? WHERE id=? AND home_id=?",
+            (key, json.dumps(metadata), map_id, home_id),
+        )
+        audit(actor, "map.usdz.generate", "room_map", map_id, home_id)
+        return map_view(db.one("SELECT * FROM room_maps WHERE id=? AND home_id=?", (map_id, home_id)))
+
     @app.post("/api/v1/homes/{home_id}/maps/{map_id}/visual-landmarks")
     def roomplan_visual_landmarks(home_id: str, map_id: str, body: RoomPlanVisualLandmarksIn, actor: Current):
         """Build a derived, local-only visual landmark index for RoomPlan relocalization."""
@@ -1330,8 +1468,9 @@ def make_app(
                 map_id=map_id,
                 frames=[
                     {
-                        **frame.model_dump(mode="json", exclude={"intrinsics"}),
+                        **frame.model_dump(mode="json", exclude={"intrinsics", "camera_to_world"}),
                         "intrinsics": {"values": frame.intrinsics.values},
+                        "camera_to_world": {"values": frame.camera_to_world},
                     }
                     for frame in body.frames
                 ],
@@ -1346,10 +1485,81 @@ def make_app(
         metadata = json_object(row.get("metadata_json") or "{}")
         previous = metadata.get("visual_landmarks") if isinstance(metadata.get("visual_landmarks"), dict) else {}
         previous_key = previous.get("artifact_key") if isinstance(previous, dict) else None
+        previous_payload: dict = {}
+        previous_landmarks: list[dict] = []
         if isinstance(previous_key, str) and previous_key:
-            store.delete(previous_key)
+            try:
+                loaded = json.loads(store.get_bytes(previous_key))
+                if isinstance(loaded, dict):
+                    previous_payload = loaded
+                    if isinstance(loaded.get("landmarks"), list):
+                        previous_landmarks = [item for item in loaded["landmarks"] if isinstance(item, dict)]
+            except (OSError, ValueError, json.JSONDecodeError):
+                previous_payload = {}
+                previous_landmarks = []
+
+        result_diagnostics = result.get("diagnostics") if isinstance(result.get("diagnostics"), dict) else {}
+        previous_diagnostics = previous_payload.get("diagnostics") if isinstance(previous_payload.get("diagnostics"), dict) else {}
+        next_batch_count = int(previous_diagnostics.get("incremental_batch_count") or (1 if previous_landmarks else 0)) + 1
+        view_id = f"scan-view-{next_batch_count}"
+        landmarks = [{**landmark, "view_id": view_id} for landmark in landmarks if isinstance(landmark, dict)]
+
+        # Preserve a descriptor for each scan viewpoint. ORB descriptors change
+        # with viewing angle, so collapsing all frames into one point-only voxel
+        # removes the coherent 2D-to-3D set that PnP needs. The index stays
+        # bounded and raw camera frames are still never persisted.
+        merged_landmarks = previous_landmarks
+        if landmarks:
+            voxels: dict[tuple[str, int, int, int], dict] = {}
+            for landmark in [*previous_landmarks, *landmarks]:
+                point = landmark.get("point")
+                if not isinstance(point, list) or len(point) != 3:
+                    continue
+                try:
+                    landmark_view = str(landmark.get("view_id") or "legacy")
+                    voxel = tuple(int(round(float(value) / 0.03)) for value in point)
+                    key = (landmark_view, *voxel)
+                    response = float(landmark.get("response") or 0.0)
+                except (TypeError, ValueError):
+                    continue
+                current = voxels.get(key)
+                if current is None or response > float(current.get("response") or 0.0):
+                    voxels[key] = landmark
+            by_view: dict[str, list[dict]] = {}
+            for landmark in voxels.values():
+                by_view.setdefault(str(landmark.get("view_id") or "legacy"), []).append(landmark)
+            for group in by_view.values():
+                group.sort(key=lambda item: float(item.get("response") or 0.0), reverse=True)
+            merged_landmarks = []
+            offset = 0
+            ordered_views = sorted(by_view)
+            while len(merged_landmarks) < 5_000:
+                added = False
+                for current_view in ordered_views:
+                    group = by_view[current_view]
+                    if offset < len(group):
+                        merged_landmarks.append(group[offset])
+                        added = True
+                        if len(merged_landmarks) == 5_000:
+                            break
+                if not added:
+                    break
+                offset += 1
+
+        source_frame_count = int(previous_diagnostics.get("source_frame_count") or 0) + int(
+            result_diagnostics.get("source_frame_count") or len(body.frames)
+        )
+        aggregate_diagnostics = {
+            **result_diagnostics,
+            "landmark_count": len(merged_landmarks),
+            "source_frame_count": source_frame_count,
+            "incremental_batch_count": next_batch_count,
+            "view_count": len({str(landmark.get("view_id") or "legacy") for landmark in merged_landmarks}),
+            "raw_frames_persisted": False,
+        }
+        aggregate_status = "ready" if merged_landmarks and (result.get("status") == "ready" or previous_landmarks) else result.get("status")
         artifact_key = None
-        if result.get("status") == "ready" and landmarks:
+        if aggregate_status == "ready" and merged_landmarks:
             artifact_key = f"maps/{home_id}/{map_id}.visual-landmarks.json"
             store.put_json(
                 artifact_key,
@@ -1357,14 +1567,14 @@ def make_app(
                     "schema_version": "roomplan-visual-landmarks.v1",
                     "map_id": map_id,
                     "detector": result.get("detector", "opencv-orb"),
-                    "landmarks": landmarks,
-                    "diagnostics": result.get("diagnostics", {}),
+                    "landmarks": merged_landmarks,
+                    "diagnostics": aggregate_diagnostics,
                 },
             )
         metadata["visual_landmarks"] = {
-            "status": result.get("status"),
+            "status": aggregate_status,
             "artifact_key": artifact_key,
-            "landmark_count": len(landmarks),
+            "landmark_count": len(merged_landmarks),
             "detector": result.get("detector", "opencv-orb"),
             "updated_at": now_iso(),
             "raw_frames_persisted": False,
@@ -1373,10 +1583,10 @@ def make_app(
         audit(actor, "map.visual_landmarks.build", "room_map", map_id, home_id)
         return {
             "map_id": map_id,
-            "status": result.get("status"),
-            "landmark_count": len(landmarks),
+            "status": aggregate_status,
+            "landmark_count": len(merged_landmarks),
             "detector": result.get("detector", "opencv-orb"),
-            "diagnostics": result.get("diagnostics", {}),
+            "diagnostics": aggregate_diagnostics,
             "raw_frames_persisted": False,
         }
 
@@ -1429,6 +1639,7 @@ def make_app(
             "match_count": result.get("match_count", 0),
             "reprojection_error_px": result.get("reprojection_error_px"),
             "intrinsics_source": result.get("intrinsics_source"),
+            "diagnostics": result.get("diagnostics") if isinstance(result.get("diagnostics"), dict) else {},
         }
         intrinsics = result.get("intrinsics") if isinstance(result.get("intrinsics"), list) else (body.intrinsics.values if body.intrinsics else None)
         intrinsics_json = {
@@ -1474,6 +1685,39 @@ def make_app(
             "match_count": result.get("match_count", 0),
             "reprojection_error_px": result.get("reprojection_error_px"),
             "intrinsics_source": result.get("intrinsics_source"),
+            "diagnostics": result.get("diagnostics") if isinstance(result.get("diagnostics"), dict) else {},
+        }
+
+    @app.get("/api/v1/homes/{home_id}/cameras/{camera_id}/roomplan-readiness")
+    def camera_roomplan_readiness(home_id: str, camera_id: str, actor: Current):
+        """Expose only the RoomPlan state a camera needs for automatic localization."""
+        home_check(actor, home_id)
+        if actor.get("role") == "publisher" and actor.get("user_id") != camera_id:
+            raise HTTPException(403, "A publisher can inspect only its own camera")
+        camera = db.one("SELECT id FROM cameras WHERE id=? AND home_id=? AND enabled=1", (camera_id, home_id))
+        if not camera:
+            raise HTTPException(404, "Camera not found or disabled")
+        row = active_map_row(home_id)
+        if not row or map_source(row) != "roomplan-lidar-3d" or map_dimension(row, "roomplan-lidar-3d") != "3d":
+            return {
+                "camera_id": camera_id,
+                "map_id": None,
+                "source": None,
+                "dimension": None,
+                "visual_landmarks_ready": False,
+                "ready": False,
+            }
+        metadata = json_object(row.get("metadata_json") or "{}")
+        landmark_meta = metadata.get("visual_landmarks") if isinstance(metadata.get("visual_landmarks"), dict) else {}
+        artifact_key = landmark_meta.get("artifact_key") if isinstance(landmark_meta, dict) else None
+        landmarks_ready = landmark_meta.get("status") == "ready" and isinstance(artifact_key, str) and bool(artifact_key)
+        return {
+            "camera_id": camera_id,
+            "map_id": row["id"],
+            "source": "roomplan-lidar-3d",
+            "dimension": "3d",
+            "visual_landmarks_ready": landmarks_ready,
+            "ready": landmarks_ready,
         }
 
     @app.put(
@@ -1544,7 +1788,7 @@ def make_app(
     def roomplan_usdz_download(home_id: str, map_id: str, actor: Current):
         home_check(actor, home_id); publisher_block(actor)
         row = db.one("SELECT * FROM room_maps WHERE id=? AND home_id=?", (map_id, home_id))
-        if not row or map_source(row) != "roomplan-lidar-3d" or map_dimension(row, map_source(row)) != "3d":
+        if not row or map_source(row) not in {"roomplan-lidar-3d", "arkit-video-3d"} or map_dimension(row, map_source(row)) != "3d":
             raise HTTPException(404, "USDZ model not found")
         key = row.get("usdz_artifact_key")
         if not key:
@@ -1556,7 +1800,7 @@ def make_app(
         metadata = json_object(row.get("metadata_json") or "{}").get("usdz")
         digest = metadata.get("sha256") if isinstance(metadata, dict) else None
         headers = {
-            "Content-Disposition": f'inline; filename="roomplan-{map_id}.usdz"',
+            "Content-Disposition": f'inline; filename="one-room-{map_id}.usdz"',
             "Cache-Control": "private, max-age=0",
             "Content-Length": str(len(payload)),
             "X-Content-Type-Options": "nosniff",
@@ -2045,6 +2289,9 @@ def make_app(
             "status": "seen" if observed_at else "unknown",
             "lastSeenAt": observed_at,
             "point": {"x": x, "y": y} if x is not None and y is not None else None,
+            "worldPoint": {"x": x, "y": y, "z": z} if x is not None and y is not None and z is not None else None,
+            "mapId": row.get("map_id"),
+            "cameraId": row.get("camera_id"),
             "confidenceRadiusM": row.get("uncertainty_m") if row.get("uncertainty_m") is not None else 0.0,
             "confidence": row.get("confidence") if row.get("confidence") is not None else 0.0,
             "zone": ({"id": zone.get("id"), "name": zone.get("label") or zone.get("id"), "confidence": zone.get("confidence", 1.0)} if zone else None),
@@ -2072,8 +2319,9 @@ def make_app(
         labels = [item.strip().lower() for item in requested if item.strip()]
         if not labels:
             labels = [str(row["label"]).strip().lower() for row in db.many("SELECT label FROM objects WHERE home_id=? AND enabled=1 ORDER BY created_at LIMIT 20", (home_id,))]
-        if not labels:
-            labels = ["keys", "glasses", "mobile phone", "remote control", "cup", "bottle", "book", "medication box", "cane", "walker"]
+            labels = ["person", *labels]
+        if len(labels) == 1 and labels[0] == "person":
+            labels.extend(["keys", "glasses", "mobile phone", "remote control", "cup", "bottle", "book", "medication box", "cane", "walker"])
         return list(dict.fromkeys(labels))[:20]
 
     def vision_calibration(home_id: str, camera_id: str, width: int, height: int) -> tuple[Calibration | None, str | None]:
@@ -2663,8 +2911,45 @@ def make_app(
             async for payload in bus.subscribe(home_id): yield sse("one.event.v1", payload)
         return StreamingResponse(generate(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
+    def livekit_url_for_request(request: Request) -> str:
+        """Use the LAN LiveKit endpoint for same-Wi-Fi clients when configured."""
+        if not settings.livekit_lan_url:
+            return settings.livekit_url
+
+        host_header = request.headers.get("x-forwarded-host") or request.headers.get("host", "")
+        host = host_header.split(",", 1)[0].strip()
+        if host.startswith("["):
+            host = host[1:].split("]", 1)[0]
+        elif host.count(":") == 1:
+            host = host.rsplit(":", 1)[0]
+
+        lan_host = urlparse(settings.livekit_lan_url).hostname
+        if lan_host and host.casefold() == lan_host.casefold():
+            return settings.livekit_lan_url
+        # sslip.io hostnames encode the same private LAN address while allowing
+        # separate virtual hosts (for example `one.<ip>.sslip.io` and
+        # `livekit.<ip>.sslip.io`). Treat siblings under the configured LAN
+        # suffix as the same trusted local deployment.
+        if lan_host and ".sslip.io" in lan_host.casefold():
+            lan_suffix = lan_host.casefold().split(".", 1)[1]
+            if host.casefold().endswith(f".{lan_suffix}"):
+                return settings.livekit_lan_url
+        if host.casefold().endswith(".local"):
+            return settings.livekit_lan_url
+        try:
+            address = ipaddress.ip_address(host)
+        except ValueError:
+            sslip_match = re.search(r"(?:^|\.)(\d{1,3})-(\d{1,3})-(\d{1,3})-(\d{1,3})\.sslip\.io$", host.casefold())
+            if not sslip_match:
+                return settings.livekit_url
+            try:
+                address = ipaddress.ip_address(".".join(sslip_match.groups()))
+            except ValueError:
+                return settings.livekit_url
+        return settings.livekit_lan_url if address.is_private or address.is_link_local else settings.livekit_url
+
     @app.post("/api/v1/homes/{home_id}/livekit/token")
-    def livekit_token(home_id: str, actor: Current, body: LiveKitTokenIn | None = None):
+    def livekit_token(home_id: str, request: Request, actor: Current, body: LiveKitTokenIn | None = None):
         home_check(actor, home_id)
         if not settings.livekit_api_key or not settings.livekit_api_secret: raise HTTPException(503, "LiveKit credentials are not configured")
         mode = body.mode if body else "auto"
@@ -2675,7 +2960,7 @@ def make_app(
         else:
             if mode == "publish": raise HTTPException(403, "Caregiver tokens cannot publish")
             can_publish, can_subscribe = False, True
-        return {"url": settings.livekit_url, "token": livekit_jwt(settings.livekit_api_key, settings.livekit_api_secret, actor["user_id"], f"one-{home_id}", can_publish, can_subscribe), "expires_in": 600, "mode": "publish" if can_publish else "subscribe"}
+        return {"url": livekit_url_for_request(request), "token": livekit_jwt(settings.livekit_api_key, settings.livekit_api_secret, actor["user_id"], f"one-{home_id}", can_publish, can_subscribe), "expires_in": 600, "mode": "publish" if can_publish else "subscribe"}
 
     @app.post("/api/v1/livekit/webhook")
     async def livekit_webhook(request: Request):

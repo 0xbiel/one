@@ -304,6 +304,33 @@ def test_roomplan_visual_landmarks_localize_separate_publisher_camera(tmp_path):
     roomplan_payload = json.loads((Path(__file__).parent / "fixtures" / "roomplan-lidar-valid.json").read_text())
     room_map = client.post(f"/api/v1/homes/{home_id}/maps/roomplan", headers=admin_headers, json=roomplan_payload).json()
 
+    assert client.get(f"/api/v1/homes/{home_id}/maps/current", headers=publisher_headers).status_code == 403
+    readiness = client.get(
+        f"/api/v1/homes/{home_id}/cameras/{camera_id}/roomplan-readiness",
+        headers=publisher_headers,
+    )
+    assert readiness.status_code == 200
+    assert readiness.json() == {
+        "camera_id": camera_id,
+        "map_id": room_map["id"],
+        "source": "roomplan-lidar-3d",
+        "dimension": "3d",
+        "visual_landmarks_ready": False,
+        "ready": False,
+    }
+
+    other_start = client.post(
+        f"/api/v1/homes/{home_id}/pairing/start",
+        headers=admin_headers,
+        json={"label": "Other camera"},
+    ).json()
+    other_publisher = client.post("/api/v1/pairing/complete", json={"code": other_start["pairing_code"]}).json()
+    other_headers = {"Authorization": f"Bearer {other_publisher['access_token']}"}
+    assert client.get(
+        f"/api/v1/homes/{home_id}/cameras/{camera_id}/roomplan-readiness",
+        headers=other_headers,
+    ).status_code == 403
+
     visual_frame = {
         "frame_base64": base64.b64encode(b"jpeg").decode(),
         "width": 640,
@@ -315,11 +342,22 @@ def test_roomplan_visual_landmarks_localize_separate_publisher_camera(tmp_path):
     built = client.post(
         f"/api/v1/homes/{home_id}/maps/{room_map['id']}/visual-landmarks",
         headers=admin_headers,
-        json={"frames": [visual_frame, visual_frame]},
+        json={"frames": [visual_frame]},
     )
     assert built.status_code == 200
     assert built.json()["status"] == "ready" and built.json()["landmark_count"] == 8
+    assert len(service.calls[-1]["visual_landmarks"]["frames"]) == 1
     assert service.calls[-1]["visual_landmarks"]["frames"][0].get("depth_base64") is None
+    assert service.calls[-1]["visual_landmarks"]["frames"][0]["camera_to_world"] == {
+        "values": visual_frame["camera_to_world"]
+    }
+    readiness = client.get(
+        f"/api/v1/homes/{home_id}/cameras/{camera_id}/roomplan-readiness",
+        headers=publisher_headers,
+    ).json()
+    assert readiness["ready"] is True
+    assert readiness["visual_landmarks_ready"] is True
+    assert "map_data" not in readiness
 
     client.post(
         f"/api/v1/homes/{home_id}/consents",
@@ -341,3 +379,54 @@ def test_roomplan_visual_landmarks_localize_separate_publisher_camera(tmp_path):
     assert scene["cameraRegistrations"][0]["cameraId"] == camera_id
     assert scene["cameraRegistrations"][0]["cameraToWorld"][0][3] == 1.25
     assert service.calls[-1]["camera_localization"]["landmarks"]
+
+
+def test_roomplan_visual_landmarks_accumulate_across_incremental_scan_frames(tmp_path):
+    class IncrementalVisualService(FakeRoomLayoutService):
+        def build_visual_landmarks(self, **kwargs):
+            batch = sum(1 for call in self.calls if "visual_landmarks" in call)
+            self.calls.append({"visual_landmarks": kwargs})
+            return {
+                "status": "ready",
+                "detector": "opencv-orb",
+                "landmarks": [
+                    {
+                        "point": [float(index), 1.0, -2.0],
+                        "descriptor_base64": base64.b64encode(bytes([index + batch + 1]) * 32).decode(),
+                        "response": 1.0,
+                    }
+                    for index in range(8)
+                ],
+                "diagnostics": {"source_frame_count": len(kwargs["frames"]), "raw_frames_persisted": False},
+            }
+
+    service = IncrementalVisualService()
+    client = make_client(tmp_path, service)
+    admin_headers, _, home_id, _ = make_admin_and_publisher(client)
+    roomplan_payload = json.loads((Path(__file__).parent / "fixtures" / "roomplan-lidar-valid.json").read_text())
+    room_map = client.post(f"/api/v1/homes/{home_id}/maps/roomplan", headers=admin_headers, json=roomplan_payload).json()
+    visual_frame = {
+        "frame_base64": base64.b64encode(b"jpeg").decode(),
+        "width": 640,
+        "height": 480,
+        "intrinsics": {"values": [[554.3, 0.0, 320.0], [0.0, 554.3, 240.0], [0.0, 0.0, 1.0]]},
+        "camera_to_world": [[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 1.5], [0.0, 0.0, 1.0, 0.0], [0.0, 0.0, 0.0, 1.0]],
+        "captured_at": "2026-09-14T11:00:00Z",
+    }
+
+    first = client.post(
+        f"/api/v1/homes/{home_id}/maps/{room_map['id']}/visual-landmarks",
+        headers=admin_headers,
+        json={"frames": [visual_frame]},
+    )
+    second = client.post(
+        f"/api/v1/homes/{home_id}/maps/{room_map['id']}/visual-landmarks",
+        headers=admin_headers,
+        json={"frames": [{**visual_frame, "captured_at": "2026-09-14T11:00:01Z"}]},
+    )
+
+    assert first.status_code == 200 and first.json()["landmark_count"] == 8
+    assert second.status_code == 200 and second.json()["landmark_count"] == 16
+    assert second.json()["diagnostics"]["source_frame_count"] == 2
+    assert second.json()["diagnostics"]["incremental_batch_count"] == 2
+    assert second.json()["diagnostics"]["view_count"] == 2

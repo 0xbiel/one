@@ -29,6 +29,8 @@ CREATE INDEX IF NOT EXISTS care_recipients_home_idx ON care_recipients(home_id, 
 CREATE TABLE IF NOT EXISTS home_runtime (home_id TEXT PRIMARY KEY, paused INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, home_id TEXT NOT NULL, expires_at TEXT NOT NULL, created_at TEXT NOT NULL, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS pairing_codes (code_hash TEXT PRIMARY KEY, home_id TEXT NOT NULL, user_id TEXT NOT NULL, role TEXT NOT NULL, expires_at TEXT NOT NULL, used_at TEXT, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE);
+CREATE TABLE IF NOT EXISTS camera_reconnect_tokens (token_hash TEXT PRIMARY KEY, home_id TEXT NOT NULL, camera_id TEXT NOT NULL, created_at TEXT NOT NULL, last_used_at TEXT, revoked_at TEXT, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE, FOREIGN KEY(camera_id) REFERENCES cameras(id) ON DELETE CASCADE);
+CREATE INDEX IF NOT EXISTS camera_reconnect_tokens_camera_idx ON camera_reconnect_tokens(home_id, camera_id, revoked_at);
 CREATE TABLE IF NOT EXISTS email_verifications (id TEXT PRIMARY KEY, email TEXT NOT NULL, user_id TEXT NOT NULL, home_id TEXT NOT NULL, purpose TEXT NOT NULL CHECK(purpose IN ('create','login')), code_hash TEXT NOT NULL UNIQUE, expires_at TEXT NOT NULL, used_at TEXT, created_at TEXT NOT NULL, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS consents (id TEXT PRIMARY KEY, home_id TEXT NOT NULL, subject_user_id TEXT NOT NULL, purpose TEXT NOT NULL, policy_version TEXT NOT NULL, granted_at TEXT NOT NULL, revoked_at TEXT, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS cameras (id TEXT PRIMARY KEY, home_id TEXT NOT NULL, name TEXT NOT NULL, room_id TEXT, enabled INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, resolution_width INTEGER, resolution_height INTEGER, metadata_json TEXT NOT NULL DEFAULT '{}', FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE);
@@ -323,6 +325,24 @@ class Database:
                 if "support_focus" not in home_columns:
                     self.conn.execute("ALTER TABLE homes ADD COLUMN support_focus TEXT NOT NULL DEFAULT 'general'")
                 self._record_sqlite_migration(8)
+            if not self._sqlite_migration_applied(9):
+                self.conn.executescript(
+                    """
+                    CREATE TABLE IF NOT EXISTS camera_reconnect_tokens (
+                        token_hash TEXT PRIMARY KEY,
+                        home_id TEXT NOT NULL,
+                        camera_id TEXT NOT NULL,
+                        created_at TEXT NOT NULL,
+                        last_used_at TEXT,
+                        revoked_at TEXT,
+                        FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE,
+                        FOREIGN KEY(camera_id) REFERENCES cameras(id) ON DELETE CASCADE
+                    );
+                    CREATE INDEX IF NOT EXISTS camera_reconnect_tokens_camera_idx
+                        ON camera_reconnect_tokens(home_id, camera_id, revoked_at);
+                    """
+                )
+                self._record_sqlite_migration(9)
             if not self._sqlite_migration_applied(10):
                 self.conn.executescript(_migration_file("010_care_recipients.sql"))
                 self._record_sqlite_migration(10)

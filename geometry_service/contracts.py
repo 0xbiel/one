@@ -264,13 +264,14 @@ class VisualLandmarkBuildRequest(BaseModel):
 
     schema_version: Literal["roomplan-visual-landmarks.v1"] = "roomplan-visual-landmarks.v1"
     map_id: str = Field(min_length=1, max_length=120)
-    frames: list[VisualLandmarkFrame] = Field(min_length=2, max_length=12)
+    frames: list[VisualLandmarkFrame] = Field(min_length=1, max_length=12)
 
 
 class VisualLandmark(BaseModel):
     point: list[float] = Field(min_length=3, max_length=3)
     descriptor_base64: str = Field(min_length=1, max_length=256)
     response: float = 0.0
+    view_id: str | None = Field(default=None, min_length=1, max_length=64)
 
 
 class VisualLandmarkBuildResponse(BaseModel):

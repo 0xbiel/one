@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import io
 import math
+import struct
 import zipfile
 from datetime import datetime
 from pathlib import PurePosixPath
@@ -131,6 +132,13 @@ class RoomPlanScanMetadata(BaseModel):
     units: Literal["m", "meter", "meters"]
     up_axis: Literal["Y", "y"]
     geometry_type: Literal["3d"]
+    visual_sampling_attempts: int | None = Field(default=None, ge=0, le=10_000)
+    visual_missing_frame_count: int | None = Field(default=None, ge=0, le=10_000)
+    visual_image_encoding_failure_count: int | None = Field(default=None, ge=0, le=10_000)
+    visual_invalid_matrix_count: int | None = Field(default=None, ge=0, le=10_000)
+    visual_sample_count: int | None = Field(default=None, ge=0, le=12)
+    visual_depth_sample_count: int | None = Field(default=None, ge=0, le=12)
+    visual_last_tracking_state: Literal["normal", "limited", "unavailable"] | None = None
 
 
 class RoomPlanMapIn(BaseModel):
@@ -147,6 +155,225 @@ class RoomPlanMapIn(BaseModel):
         if self.scan_metadata.up_axis.upper() != self.normalized_scan.up_axis:
             raise ValueError("RoomPlan metadata up_axis must match the normalized scan")
         return self
+
+
+class ARVideoPoint3D(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    x: float
+    y: float
+    z: float
+
+    @field_validator("x", "y", "z")
+    @classmethod
+    def finite_coordinate(cls, value: float) -> float:
+        if not math.isfinite(value):
+            raise ValueError("ARKit coordinates must be finite")
+        if abs(value) > 100:
+            raise ValueError("ARKit coordinates exceed the supported room bound")
+        return value
+
+
+class ARVideoSurface(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(min_length=1, max_length=120)
+    kind: Literal["floor", "wall"]
+    alignment: Literal["horizontal", "vertical"]
+    vertices: list[ARVideoPoint3D] = Field(min_length=3, max_length=256)
+    confidence: float = Field(default=0.7, ge=0.0, le=1.0)
+
+    @model_validator(mode="after")
+    def alignment_matches_kind(self) -> "ARVideoSurface":
+        if self.kind == "floor" and self.alignment != "horizontal":
+            raise ValueError("ARKit floor surfaces must be horizontal")
+        if self.kind == "wall" and self.alignment != "vertical":
+            raise ValueError("ARKit wall surfaces must be vertical")
+        return self
+
+
+class ARVideoCaptureDiagnostics(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    frame_sample_count: int = Field(ge=0, le=1_000)
+    normal_tracking_samples: int = Field(ge=0, le=1_000)
+    plane_count: int = Field(ge=0, le=1_000)
+    tracking_state: Literal["normal", "limited", "unavailable"]
+
+
+class ARVideoMapIn(BaseModel):
+    """Metric but approximate structural room capture from non-LiDAR iOS ARKit."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: Literal["arkit-video-room.v1"] = "arkit-video-room.v1"
+    producer: Literal["native-ios"] = "native-ios"
+    framework: Literal["ARKit"] = "ARKit"
+    units: Literal["m"] = "m"
+    up_axis: Literal["Y"] = "Y"
+    coordinate_frame: Literal["arkit-world"] = "arkit-world"
+    geometry_type: Literal["3d"] = "3d"
+    lidar: Literal[False] = False
+    captured_at: datetime | None = None
+    room_id: str | None = Field(default=None, max_length=120)
+    surfaces: list[ARVideoSurface] = Field(min_length=3, max_length=256)
+    diagnostics: ARVideoCaptureDiagnostics
+
+    @model_validator(mode="after")
+    def require_structural_coverage(self) -> "ARVideoMapIn":
+        floors = sum(surface.kind == "floor" for surface in self.surfaces)
+        walls = sum(surface.kind == "wall" for surface in self.surfaces)
+        if floors < 1 or walls < 2:
+            raise ValueError("ARKit video capture requires at least one floor and two wall surfaces")
+        if self.diagnostics.tracking_state != "normal" or self.diagnostics.normal_tracking_samples < 6:
+            raise ValueError("ARKit video capture requires stable normal tracking")
+        return self
+
+
+def arkit_video_geometry(scan: ARVideoMapIn) -> dict[str, Any]:
+    surfaces: list[dict[str, Any]] = []
+    walls: list[dict[str, Any]] = []
+    room_zones: list[dict[str, Any]] = []
+
+    def farthest_pair(points: list[ARVideoPoint3D]) -> tuple[ARVideoPoint3D, ARVideoPoint3D]:
+        best = (points[0], points[1])
+        best_distance = -1.0
+        for index, first in enumerate(points[:-1]):
+            for second in points[index + 1:]:
+                distance = (first.x - second.x) ** 2 + (first.y - second.y) ** 2 + (first.z - second.z) ** 2
+                if distance > best_distance:
+                    best = (first, second)
+                    best_distance = distance
+        return best
+
+    floor_index = 0
+    for surface in scan.surfaces:
+        vertices = [point.model_dump(mode="json") for point in surface.vertices]
+        surfaces.append(
+            {
+                "id": surface.id,
+                "kind": surface.kind,
+                "vertices": vertices,
+                "faces": [list(range(len(vertices)))],
+                "confidence": surface.confidence,
+            }
+        )
+        if surface.kind == "wall":
+            start, end = farthest_pair(surface.vertices)
+            walls.append(
+                {
+                    "id": surface.id,
+                    "start": start.model_dump(mode="json"),
+                    "end": end.model_dump(mode="json"),
+                    "confidence": surface.confidence,
+                }
+            )
+        elif surface.kind == "floor":
+            floor_index += 1
+            polygon = [{"x": point.x, "z": point.z} for point in surface.vertices]
+            room_zones.append(
+                {
+                    "id": surface.id,
+                    "label": "Room" if floor_index == 1 else f"Room {floor_index}",
+                    "polygon": polygon,
+                    "floor_y": sum(point.y for point in surface.vertices) / len(surface.vertices),
+                    "story": 0,
+                    "confidence": surface.confidence,
+                }
+            )
+    return {
+        "coordinate_space": scan.coordinate_frame,
+        "polygons": [],
+        "walls": walls,
+        "surfaces": surfaces,
+        "objects": [],
+        "room_zones": room_zones,
+        "arkit_video_schema_version": scan.schema_version,
+    }
+
+
+def _usda_number(value: float) -> str:
+    if abs(value) < 1e-8:
+        return "0"
+    return f"{value:.6f}".rstrip("0").rstrip(".")
+
+
+def _arkit_surface_usda(surface: ARVideoSurface) -> bytes:
+    points = ", ".join(
+        f"({_usda_number(point.x)}, {_usda_number(point.y)}, {_usda_number(point.z)})"
+        for point in surface.vertices
+    )
+    indices = ", ".join(str(index) for index in range(len(surface.vertices)))
+    color = "(0.86, 0.9, 0.93)" if surface.kind == "floor" else "(0.94, 0.95, 0.96)"
+    return (
+        "#usda 1.0\n"
+        "(\n    defaultPrim = \"Mesh\"\n    metersPerUnit = 1\n    upAxis = \"Y\"\n)\n\n"
+        "def Mesh \"Mesh\"\n{\n"
+        f"    point3f[] points = [{points}]\n"
+        f"    int[] faceVertexCounts = [{len(surface.vertices)}]\n"
+        f"    int[] faceVertexIndices = [{indices}]\n"
+        "    uniform token subdivisionScheme = \"none\"\n"
+        f"    color3f[] primvars:displayColor = [{color}]\n"
+        "}\n"
+    ).encode("utf-8")
+
+
+def _write_usdz_member(archive: zipfile.ZipFile, buffer: io.BytesIO, name: str, payload: bytes) -> None:
+    # USDZ members must begin on a 64-byte boundary. A valid private ZIP extra
+    # field supplies only padding; the archive itself stays uncompressed.
+    base_offset = buffer.tell() + 30 + len(name.encode("utf-8"))
+    padding = (-base_offset) % 64
+    extra = b""
+    if padding:
+        if padding < 4:
+            padding += 64
+        extra = struct.pack("<HH", 0xFFFF, padding - 4) + (b"\0" * (padding - 4))
+    info = zipfile.ZipInfo(name)
+    info.compress_type = zipfile.ZIP_STORED
+    info.external_attr = 0o644 << 16
+    info.extra = extra
+    archive.writestr(info, payload)
+
+
+def build_arkit_video_usdz(scan: ARVideoMapIn) -> bytes:
+    refs: list[tuple[str, str]] = []
+    for index, surface in enumerate(scan.surfaces):
+        folder = "Floors" if surface.kind == "floor" else "Walls"
+        prim = f"{'Floor' if surface.kind == 'floor' else 'Wall'}{index}"
+        refs.append((prim, f"assets/Model/{folder}/{prim}.usda"))
+
+    root_lines = [
+        "#usda 1.0",
+        "(",
+        "    defaultPrim = \"Room\"",
+        "    metersPerUnit = 1",
+        "    upAxis = \"Y\"",
+        ")",
+        "",
+        "def Xform \"Room\"",
+        "{",
+    ]
+    for prim, path in refs:
+        root_lines.extend(
+            [
+                f"    def Xform \"{prim}\" (",
+                f"        prepend references = @./{path}@",
+                "    )",
+                "    {",
+                "    }",
+            ]
+        )
+    root_lines.append("}")
+    root_payload = ("\n".join(root_lines) + "\n").encode("utf-8")
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_STORED, allowZip64=False) as archive:
+        _write_usdz_member(archive, buffer, "room.usda", root_payload)
+        for surface, (_, path) in zip(scan.surfaces, refs):
+            _write_usdz_member(archive, buffer, path, _arkit_surface_usda(surface))
+    payload = buffer.getvalue()
+    validate_roomplan_usdz(payload)
+    return payload
 
 
 def roomplan_geometry(scan: RoomPlanNormalizedScan) -> dict[str, Any]:

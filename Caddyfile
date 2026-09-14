@@ -1,8 +1,17 @@
 {
   auto_https disable_redirects
+  # IP-literal HTTPS clients (notably Safari/curl when connecting directly to
+  # the LAN address) may omit SNI. Present the LAN certificate in that case.
+  default_sni 192.168.1.128
 }
-:443 {
+https://192.168.1.128, https://Biels-MacBook-Pro.local, https://one.192-168-1-128.sslip.io {
   tls internal
+  # LiveKit's browser SDK opens its signalling WebSocket under /rtc. Proxy it
+  # on the same trusted LAN origin so the phone needs no second hostname/port.
+  @livekit path /rtc*
+  handle @livekit {
+    reverse_proxy livekit:7880
+  }
   @api path /api/*
   handle @api {
     reverse_proxy api:8000
@@ -16,4 +25,16 @@
     X-Frame-Options DENY
     Content-Security-Policy "default-src 'self'; connect-src 'self' wss: https:"
   }
+}
+
+http://192.168.1.128, http://Biels-MacBook-Pro.local, http://one.192-168-1-128.sslip.io {
+  @rootCA path /caddy-root.crt
+  handle @rootCA {
+    root * /data/caddy/pki/authorities/local
+    rewrite * /root.crt
+    header Content-Type application/x-x509-ca-cert
+    header Content-Disposition "attachment; filename=caddy-local-root.crt"
+    file_server
+  }
+  respond "ONE LAN HTTPS setup: open /caddy-root.crt to install the local CA certificate." 200
 }

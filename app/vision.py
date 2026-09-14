@@ -142,7 +142,7 @@ def _iou(a, b) -> float:
 
 
 class TemporalStabilityTracker:
-    def __init__(self, min_hits: int = 3, window_seconds: float = 2.0, iou_threshold: float = 0.2):
+    def __init__(self, min_hits: int = 3, window_seconds: float = 4.0, iou_threshold: float = 0.2):
         self.min_hits, self.window_seconds, self.iou_threshold = min_hits, window_seconds, iou_threshold
         self._tracks: list[_Track] = []
 

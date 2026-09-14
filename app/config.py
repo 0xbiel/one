@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     bootstrap_secret: str = "change-me-in-production"
     session_ttl_minutes: int = 10_080
     livekit_url: str = "ws://localhost:7880"
+    livekit_lan_url: str | None = None
     livekit_api_key: str | None = None
     livekit_api_secret: str | None = None
     lm_studio_url: str = "http://127.0.0.1:1234/v1"

@@ -1,5 +1,7 @@
 import base64
+import io
 import json
+import zipfile
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -34,6 +36,72 @@ def test_health_and_pairing(tmp_path):
     me = c.get("/api/v1/me", headers={"Authorization": f"Bearer {token}"})
     assert me.status_code == 200 and me.json()["actor"]["role"] == "caregiver" and me.json()["home"]["id"] == home
     assert c.get("/api/v1/homes/invalid/cameras", headers={"Authorization": f"Bearer {token}"}).status_code == 403
+
+
+def test_native_arkit_video_scan_creates_metric_approximate_3d_usdz(tmp_path):
+    c = client(tmp_path)
+    token, home = auth(c)
+    headers = {"Authorization": f"Bearer {token}"}
+    payload = {
+        "surfaces": [
+            {
+                "id": "floor-1", "kind": "floor", "alignment": "horizontal", "confidence": 0.9,
+                "vertices": [
+                    {"x": -2, "y": 0, "z": -2}, {"x": 2, "y": 0, "z": -2},
+                    {"x": 2, "y": 0, "z": 2}, {"x": -2, "y": 0, "z": 2},
+                ],
+            },
+            {
+                "id": "wall-1", "kind": "wall", "alignment": "vertical", "confidence": 0.8,
+                "vertices": [
+                    {"x": -2, "y": 0, "z": -2}, {"x": 2, "y": 0, "z": -2},
+                    {"x": 2, "y": 2.5, "z": -2}, {"x": -2, "y": 2.5, "z": -2},
+                ],
+            },
+            {
+                "id": "wall-2", "kind": "wall", "alignment": "vertical", "confidence": 0.8,
+                "vertices": [
+                    {"x": 2, "y": 0, "z": -2}, {"x": 2, "y": 0, "z": 2},
+                    {"x": 2, "y": 2.5, "z": 2}, {"x": 2, "y": 2.5, "z": -2},
+                ],
+            },
+        ],
+        "diagnostics": {
+            "frame_sample_count": 9,
+            "normal_tracking_samples": 9,
+            "plane_count": 3,
+            "tracking_state": "normal",
+        },
+    }
+
+    created = c.post(f"/api/v1/homes/{home}/maps/arkit-video", headers=headers, json=payload)
+    assert created.status_code == 200, created.text
+    result = created.json()
+    assert result["source"] == "arkit-video-3d"
+    assert result["dimension"] == "3d"
+    assert result["coordinate_frame"] == "arkit-world"
+    assert result["approximate"] is True
+    assert result["metric_scale_known"] is True
+    assert result["usdz"]["available"] is True
+
+    scene = c.get(f"/api/v1/homes/{home}/scene", headers=headers).json()
+    assert scene["source"] == "arkit-video-3d"
+    assert scene["dimension"] == "3d"
+    assert scene["approximate"] is True
+    assert len(scene["geometry"]["surfaces"]) == 3
+    assert scene["cameraRegistration"] is None
+
+    model = c.get(f"/api/v1/homes/{home}/maps/{result['id']}/usdz", headers=headers)
+    assert model.status_code == 200
+    assert model.headers["content-type"].startswith("model/vnd.usdz+zip")
+    with zipfile.ZipFile(io.BytesIO(model.content)) as archive:
+        assert "room.usda" in archive.namelist()
+        assert any(name.startswith("assets/Model/Floors/") for name in archive.namelist())
+        assert any(name.startswith("assets/Model/Walls/") for name in archive.namelist())
+
+    unstable = json.loads(json.dumps(payload))
+    unstable["diagnostics"]["tracking_state"] = "limited"
+    assert c.post(f"/api/v1/homes/{home}/maps/arkit-video", headers=headers, json=unstable).status_code == 422
 
 
 def test_email_identity_survives_device_change_and_verifies_once(tmp_path):
@@ -198,6 +266,8 @@ def test_publisher_pairing_token_scopes_and_video_consent(tmp_path):
     c = client(tmp_path); admin_token, home = auth(c); admin_headers = {"Authorization": f"Bearer {admin_token}"}
     settings = c.app.state.settings
     settings.livekit_api_key, settings.livekit_api_secret = "lk-key", "lk-secret"
+    settings.livekit_url = "wss://one-test.ts.net:8444"
+    settings.livekit_lan_url = "wss://192.168.1.128:8080"
     started = c.post(f"/api/v1/homes/{home}/pairing/start", headers=admin_headers, json={"label": "Hall iPhone"})
     assert started.status_code == 200 and started.json()["home_id"] == home
     pairing_id = started.json()["pairing_id"]
@@ -206,6 +276,8 @@ def test_publisher_pairing_token_scopes_and_video_consent(tmp_path):
     assert "pairing_code" not in pending.json() and "code" not in pending.json()
     publisher = c.post("/api/v1/pairing/complete", json={"code": started.json()["pairing_code"]})
     assert publisher.status_code == 200
+    reconnect_token = publisher.json()["reconnect_token"]
+    assert reconnect_token
     cameras = c.get(f"/api/v1/homes/{home}/cameras", headers=admin_headers)
     assert cameras.status_code == 200 and cameras.json()["data"][0]["id"] == pairing_id
     saved_camera = cameras.json()["data"][0]
@@ -220,9 +292,33 @@ def test_publisher_pairing_token_scopes_and_video_consent(tmp_path):
     assert consent.status_code == 200 and consent.json()["paused"] is False
     token_response = c.post(f"/api/v1/homes/{home}/livekit/token", headers=publisher_headers, json={})
     assert token_response.status_code == 200 and token_response.json()["mode"] == "publish"
+    assert token_response.json()["url"] == "wss://one-test.ts.net:8444"
     claims = json.loads(base64.urlsafe_b64decode(token_response.json()["token"].split(".")[1] + "=="))
     assert claims["video"]["canPublish"] is True and claims["video"]["canSubscribe"] is False
+    lan_token = c.post(
+        f"/api/v1/homes/{home}/livekit/token",
+        headers={**publisher_headers, "host": "192.168.1.128:8443"},
+        json={},
+    )
+    assert lan_token.status_code == 200
+    assert lan_token.json()["url"] == "wss://192.168.1.128:8080"
+    sslip_lan_token = c.post(
+        f"/api/v1/homes/{home}/livekit/token",
+        headers={**publisher_headers, "host": "one.192-168-1-128.sslip.io"},
+        json={},
+    )
+    assert sslip_lan_token.status_code == 200
+    assert sslip_lan_token.json()["url"] == "wss://192.168.1.128:8080"
     assert c.post(f"/api/v1/homes/{home}/livekit/token", headers=publisher_headers, json={"mode": "subscribe"}).status_code == 403
+    resumed = c.post("/api/v1/camera/reconnect", json={"camera_id": pairing_id, "reconnect_token": reconnect_token})
+    assert resumed.status_code == 200
+    assert resumed.json()["user_id"] == pairing_id and resumed.json()["home_id"] == home
+    resumed_headers = {"Authorization": f"Bearer {resumed.json()['access_token']}"}
+    assert c.get("/api/v1/me", headers=resumed_headers).json()["actor"]["role"] == "publisher"
+    refreshed_link = c.post("/api/v1/camera/reconnect-link", headers=resumed_headers)
+    assert refreshed_link.status_code == 200 and refreshed_link.json()["camera_id"] == pairing_id
+    assert c.post("/api/v1/camera/reconnect", json={"camera_id": pairing_id, "reconnect_token": reconnect_token}).status_code == 401
+    assert c.post("/api/v1/camera/reconnect", json={"camera_id": pairing_id, "reconnect_token": refreshed_link.json()["reconnect_token"]}).status_code == 200
     paused = c.post(f"/api/v1/homes/{home}/consents", headers=admin_headers, json={"purpose": "video_capture", "policy_version": "2026-09-01", "granted": False})
     assert paused.status_code == 200 and paused.json()["paused"] is True
     assert c.post(f"/api/v1/homes/{home}/livekit/token", headers=publisher_headers, json={}).status_code == 403
@@ -269,6 +365,20 @@ def test_caregiver_can_remove_camera_without_erasing_history(tmp_path):
 
     # DELETE remains idempotent for a camera that is already disabled.
     assert c.delete(f"/api/v1/homes/{home}/cameras/{camera['id']}", headers=headers).status_code == 200
+
+
+def test_deleted_paired_camera_revokes_reconnect_link(tmp_path):
+    c = client(tmp_path)
+    admin_token, home = auth(c)
+    admin_headers = {"Authorization": f"Bearer {admin_token}"}
+    started = c.post(f"/api/v1/homes/{home}/pairing/start", headers=admin_headers, json={"label": "Kitchen tablet"})
+    pairing_id = started.json()["pairing_id"]
+    publisher = c.post("/api/v1/pairing/complete", json={"code": started.json()["pairing_code"]})
+    reconnect_token = publisher.json()["reconnect_token"]
+
+    assert c.post("/api/v1/camera/reconnect", json={"camera_id": pairing_id, "reconnect_token": reconnect_token}).status_code == 200
+    assert c.delete(f"/api/v1/homes/{home}/cameras/{pairing_id}", headers=admin_headers).status_code == 200
+    assert c.post("/api/v1/camera/reconnect", json={"camera_id": pairing_id, "reconnect_token": reconnect_token}).status_code == 401
 
 
 def test_camera_provisional_roomplan_revision_and_calibration_invalidation(tmp_path):
@@ -485,6 +595,24 @@ def test_registered_roomplan_vision_projects_to_zone_and_persists(tmp_path):
     detected = next(item for item in objects if item["label"] == "Keys")
     assert detected["observation"]["map_id"] == room_map["id"]
     assert detected["zone"]["name"] == "Living room"
+    assert detected["worldPoint"] == {
+        "x": detected["observation"]["x"],
+        "y": detected["observation"]["y"],
+        "z": detected["observation"]["z"],
+    }
+
+    # Publisher frames leave candidate_labels empty. Person detection must be
+    # part of that default set so calibrated presence can appear on the map.
+    person_payload = {"camera_id": camera["id"], "frame_base64": frame, "width": 640, "height": 480}
+    c.post(f"/api/v1/homes/{home}/vision/frames", headers=h, json=person_payload)
+    c.post(f"/api/v1/homes/{home}/vision/frames", headers=h, json=person_payload)
+    person_stable = c.post(f"/api/v1/homes/{home}/vision/frames", headers=h, json=person_payload)
+    assert person_stable.status_code == 200
+    assert person_stable.json()["data"][0]["label"] == "person"
+    people = c.get(f"/api/v1/homes/{home}/objects/last-seen", headers=h).json()["data"]
+    person = next(item for item in people if item["label"] == "Person")
+    assert person["mapId"] == room_map["id"]
+    assert person["worldPoint"] is not None
 
 
 def test_clip_content_is_encrypted_at_rest_and_requires_home_authorization(tmp_path):
