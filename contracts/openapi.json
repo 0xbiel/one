@@ -375,6 +375,187 @@
         "title": "CameraUpdate",
         "type": "object"
       },
+      "CareRecipientCreateIn": {
+        "properties": {
+          "display_name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Display Name",
+            "type": "string"
+          },
+          "relationship": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Relationship"
+          },
+          "room_label": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Room Label"
+          }
+        },
+        "required": [
+          "display_name"
+        ],
+        "title": "CareRecipientCreateIn",
+        "type": "object"
+      },
+      "CareRecipientListResponse": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/CareRecipientOut"
+            },
+            "title": "Data",
+            "type": "array"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "CareRecipientListResponse",
+        "type": "object"
+      },
+      "CareRecipientMutationResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/CareRecipientOut"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "CareRecipientMutationResponse",
+        "type": "object"
+      },
+      "CareRecipientOut": {
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "relationship": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Relationship"
+          },
+          "room_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Room Label"
+          }
+        },
+        "required": [
+          "id",
+          "display_name",
+          "created_at"
+        ],
+        "title": "CareRecipientOut",
+        "type": "object"
+      },
+      "CareRecipientUpdateIn": {
+        "properties": {
+          "display_name": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "relationship": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Relationship"
+          },
+          "room_label": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Room Label"
+          }
+        },
+        "title": "CareRecipientUpdateIn",
+        "type": "object"
+      },
+      "CareSpaceCreateIn": {
+        "properties": {
+          "care_setting": {
+            "default": "home",
+            "pattern": "^(home|residence)$",
+            "title": "Care Setting",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "support_focus": {
+            "default": "general",
+            "pattern": "^(general|mci)$",
+            "title": "Support Focus",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "CareSpaceCreateIn",
+        "type": "object"
+      },
       "CheckInIn": {
         "properties": {
           "subject_user_id": {
@@ -1885,22 +2066,43 @@
             "title": "Captured At"
           },
           "depth_base64": {
-            "maxLength": 2000000,
-            "minLength": 1,
-            "title": "Depth Base64",
-            "type": "string"
+            "anyOf": [
+              {
+                "maxLength": 2000000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Depth Base64"
           },
           "depth_height": {
-            "exclusiveMinimum": 0.0,
-            "maximum": 2048.0,
-            "title": "Depth Height",
-            "type": "integer"
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 2048.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Depth Height"
           },
           "depth_width": {
-            "exclusiveMinimum": 0.0,
-            "maximum": 2048.0,
-            "title": "Depth Width",
-            "type": "integer"
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 2048.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Depth Width"
           },
           "frame_base64": {
             "maxLength": 4000000,
@@ -1928,9 +2130,6 @@
           "frame_base64",
           "width",
           "height",
-          "depth_base64",
-          "depth_width",
-          "depth_height",
           "intrinsics",
           "camera_to_world"
         ],
@@ -2070,6 +2269,93 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/account/homes": {
+      "get": {
+        "operationId": "account_homes_api_v1_account_homes_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Account Homes"
+      },
+      "post": {
+        "operationId": "account_home_create_api_v1_account_homes_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CareSpaceCreateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Account Home Create"
+      }
+    },
+    "/api/v1/account/homes/{home_id}/activate": {
+      "post": {
+        "operationId": "account_home_activate_api_v1_account_homes__home_id__activate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Account Home Activate"
+      }
+    },
     "/api/v1/admin/retention/run": {
       "post": {
         "operationId": "retention_run_api_v1_admin_retention_run_post",
@@ -2837,6 +3123,196 @@
           }
         },
         "summary": "Map Generation Frames"
+      }
+    },
+    "/api/v1/homes/{home_id}/care-recipients": {
+      "get": {
+        "operationId": "care_recipients_api_v1_homes__home_id__care_recipients_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CareRecipientListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Care Recipients"
+      },
+      "post": {
+        "operationId": "care_recipient_create_api_v1_homes__home_id__care_recipients_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CareRecipientCreateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CareRecipientMutationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Care Recipient Create"
+      }
+    },
+    "/api/v1/homes/{home_id}/care-recipients/{recipient_id}": {
+      "delete": {
+        "operationId": "care_recipient_delete_api_v1_homes__home_id__care_recipients__recipient_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "recipient_id",
+            "required": true,
+            "schema": {
+              "title": "Recipient Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CareRecipientMutationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Care Recipient Delete"
+      },
+      "patch": {
+        "operationId": "care_recipient_update_api_v1_homes__home_id__care_recipients__recipient_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "recipient_id",
+            "required": true,
+            "schema": {
+              "title": "Recipient Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CareRecipientUpdateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CareRecipientMutationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Care Recipient Update"
       }
     },
     "/api/v1/homes/{home_id}/caregiver-summary": {

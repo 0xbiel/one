@@ -64,6 +64,108 @@ def test_email_identity_survives_device_change_and_verifies_once(tmp_path):
     assert c.post("/api/v1/auth/email/verify", json={"email": "caregiver@example.com", "code": login.json()["dev_code"]}).status_code == 200
 
 
+def test_account_can_create_list_and_switch_care_spaces(tmp_path):
+    c = client(tmp_path)
+    created = c.post("/api/v1/auth/email/request", json={
+        "purpose": "create",
+        "email": "multi-home@example.com",
+        "display_name": "Caregiver",
+        "home_name": "Family Home",
+    }).json()
+    first_session = c.post(
+        "/api/v1/auth/email/verify",
+        json={"email": "multi-home@example.com", "code": created["dev_code"]},
+    ).json()
+    first_home = first_session["home_id"]
+    first_headers = {"Authorization": f"Bearer {first_session['access_token']}"}
+
+    initial = c.get("/api/v1/account/homes", headers=first_headers)
+    assert initial.status_code == 200
+    assert [(item["name"], item["active"]) for item in initial.json()["data"]] == [("Family Home", True)]
+
+    second_session = c.post(
+        "/api/v1/account/homes",
+        headers=first_headers,
+        json={"name": "Grandparents Residence", "care_setting": "residence", "support_focus": "mci"},
+    )
+    assert second_session.status_code == 200
+    second_headers = {"Authorization": f"Bearer {second_session.json()['access_token']}"}
+    second_home = second_session.json()["home_id"]
+    assert second_home != first_home
+    assert c.get("/api/v1/me", headers=second_headers).json()["home"]["name"] == "Grandparents Residence"
+
+    spaces = c.get("/api/v1/account/homes", headers=second_headers).json()["data"]
+    assert {item["name"] for item in spaces} == {"Family Home", "Grandparents Residence"}
+    assert next(item for item in spaces if item["id"] == second_home)["active"] is True
+
+    switched = c.post(f"/api/v1/account/homes/{first_home}/activate", headers=second_headers)
+    assert switched.status_code == 200
+    switched_headers = {"Authorization": f"Bearer {switched.json()['access_token']}"}
+    assert c.get("/api/v1/me", headers=switched_headers).json()["home"]["name"] == "Family Home"
+    assert c.post("/api/v1/account/homes/missing/activate", headers=switched_headers).status_code == 404
+
+
+def test_care_recipient_crud_is_separate_from_home_membership(tmp_path):
+    c = client(tmp_path)
+    token, home = auth(c)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    empty = c.get(f"/api/v1/homes/{home}/care-recipients", headers=headers)
+    assert empty.status_code == 200 and empty.json() == {"data": []}
+
+    created = c.post(
+        f"/api/v1/homes/{home}/care-recipients",
+        headers=headers,
+        json={"display_name": "  María García  ", "relationship": "  Partner  ", "room_label": "  Room 12  "},
+    )
+    assert created.status_code == 201
+    recipient = created.json()["data"]
+    assert recipient["display_name"] == "María García"
+    assert recipient["relationship"] == "Partner"
+    assert recipient["room_label"] == "Room 12"
+    assert recipient["id"] and recipient["created_at"]
+    assert c.app.state.db.one("SELECT 1 FROM memberships WHERE user_id=?", (recipient["id"],)) is None
+
+    second = c.post(
+        f"/api/v1/homes/{home}/care-recipients",
+        headers=headers,
+        json={"display_name": "Joan", "relationship": "Resident"},
+    )
+    assert second.status_code == 201
+    listed = c.get(f"/api/v1/homes/{home}/care-recipients", headers=headers).json()["data"]
+    assert {item["display_name"] for item in listed} == {"María García", "Joan"}
+
+    updated = c.patch(
+        f"/api/v1/homes/{home}/care-recipients/{recipient['id']}",
+        headers=headers,
+        json={"display_name": "Maria", "relationship": None, "room_label": "Suite A"},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["data"] | {"created_at": recipient["created_at"]} == {
+        "id": recipient["id"], "display_name": "Maria", "relationship": None,
+        "room_label": "Suite A", "created_at": recipient["created_at"],
+    }
+    assert c.patch(f"/api/v1/homes/{home}/care-recipients/{recipient['id']}", headers=headers, json={}).status_code == 422
+    assert c.post(f"/api/v1/homes/{home}/care-recipients", headers=headers, json={"display_name": "   "}).status_code == 422
+
+    removed = c.delete(f"/api/v1/homes/{home}/care-recipients/{recipient['id']}", headers=headers)
+    assert removed.status_code == 200
+    assert removed.json()["data"]["id"] == recipient["id"]
+    assert removed.json()["data"]["display_name"] == "Maria"
+    assert c.get(f"/api/v1/homes/{home}/care-recipients", headers=headers).json()["data"][0]["display_name"] == "Joan"
+    assert c.get("/api/v1/homes/not-this-home/care-recipients", headers=headers).status_code == 403
+
+
+def test_resident_account_can_view_but_not_manage_care_recipients(tmp_path):
+    c = client(tmp_path)
+    started = c.post("/api/v1/pairing/start", json={"display_name": "Resident account", "home_name": "Shared Home", "role": "resident"}).json()
+    session = c.post("/api/v1/pairing/complete", json={"code": started["pairing_code"]}).json()
+    headers = {"Authorization": f"Bearer {session['access_token']}"}
+    home = session["home_id"]
+    assert c.get(f"/api/v1/homes/{home}/care-recipients", headers=headers).status_code == 200
+    assert c.post(f"/api/v1/homes/{home}/care-recipients", headers=headers, json={"display_name": "Partner"}).status_code == 403
+
+
 def test_email_invitation_requires_matching_existing_identity(tmp_path):
     c = client(tmp_path)
     owner = c.post("/api/v1/auth/email/request", json={"purpose": "create", "email": "owner@example.com", "display_name": "Owner"}).json()

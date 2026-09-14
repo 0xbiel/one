@@ -170,6 +170,14 @@ class EmailAuthRequestResponse(BaseModel):
     home_id: str
     user_id: str
     role: str
+
+
+class CareSpaceCreateIn(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    care_setting: str = Field(default="home", pattern="^(home|residence)$")
+    support_focus: str = Field(default="general", pattern="^(general|mci)$")
+
+
 class ConsentIn(BaseModel):
     purpose: str = Field(min_length=1, max_length=120)
     policy_version: str = Field(min_length=1, max_length=40)
@@ -424,6 +432,68 @@ class FamilyMemberMutationResponse(BaseModel):
     invalidated_sessions: int = 0
 
 
+class CareRecipientCreateIn(BaseModel):
+    display_name: str = Field(min_length=1, max_length=120)
+    relationship: str | None = Field(default=None, max_length=120)
+    room_label: str | None = Field(default=None, max_length=120)
+
+    @field_validator("display_name", mode="before")
+    @classmethod
+    def trim_display_name(cls, value):
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError("display_name is required")
+        return value.strip()
+
+    @field_validator("relationship", "room_label", mode="before")
+    @classmethod
+    def trim_optional_text(cls, value):
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            return value
+        return value.strip() or None
+
+
+class CareRecipientUpdateIn(BaseModel):
+    display_name: str | None = Field(default=None, max_length=120)
+    relationship: str | None = Field(default=None, max_length=120)
+    room_label: str | None = Field(default=None, max_length=120)
+
+    @field_validator("display_name", mode="before")
+    @classmethod
+    def trim_optional_display_name(cls, value):
+        if value is None:
+            return None
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError("display_name cannot be empty")
+        return value.strip()
+
+    @field_validator("relationship", "room_label", mode="before")
+    @classmethod
+    def trim_optional_text(cls, value):
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            return value
+        return value.strip() or None
+
+
+class CareRecipientOut(BaseModel):
+    id: str
+    display_name: str
+    relationship: str | None = None
+    room_label: str | None = None
+    created_at: str
+
+
+class CareRecipientMutationResponse(BaseModel):
+    data: CareRecipientOut
+
+
+class CareRecipientListResponse(BaseModel):
+    data: list[CareRecipientOut]
+
+
 class MedicationPlanIn(BaseModel):
     subject_user_id: str
     name: str = Field(min_length=1, max_length=160)
@@ -654,9 +724,85 @@ def make_app(
     @app.get("/api/v1/me")
     def me(actor: Current):
         home = db.one("SELECT id, name, care_setting, support_focus FROM homes WHERE id=?", (actor["home_id"],))
-        resident = db.one("SELECT u.display_name FROM users u JOIN memberships m ON m.user_id=u.id WHERE m.home_id=? AND m.role='resident' ORDER BY u.created_at LIMIT 1", (actor["home_id"],))
+        resident = db.one("SELECT display_name FROM care_recipients WHERE home_id=? ORDER BY created_at LIMIT 1", (actor["home_id"],)) or db.one("SELECT u.display_name FROM users u JOIN memberships m ON m.user_id=u.id WHERE m.home_id=? AND m.role='resident' ORDER BY u.created_at LIMIT 1", (actor["home_id"],))
         device = db.one("SELECT id, home_id, name, room_id, enabled, created_at FROM cameras WHERE home_id=? AND enabled=1 ORDER BY created_at DESC LIMIT 1", (actor["home_id"],))
         return {"actor": {"id": actor["user_id"], "role": actor["role"], "name": actor["display_name"]}, "home": {"id": home["id"], "name": home["name"], "residentName": resident["display_name"] if resident else "Resident", "careSetting": home.get("care_setting") or "home", "supportFocus": home.get("support_focus") or "general"}, "device": camera_view(device) if device else None, "paused": is_paused(actor["home_id"])}
+
+    def care_space_view(home: dict, role: str, active_home_id: str) -> dict:
+        recipients = db.many("SELECT display_name FROM care_recipients WHERE home_id=? ORDER BY created_at, display_name", (home["id"],))
+        resident = (recipients[0] if recipients else None) or db.one(
+            "SELECT u.display_name FROM users u JOIN memberships m ON m.user_id=u.id WHERE m.home_id=? AND m.role='resident' ORDER BY u.created_at LIMIT 1",
+            (home["id"],),
+        )
+        return {
+            "id": home["id"],
+            "name": home["name"],
+            "careSetting": home.get("care_setting") or "home",
+            "supportFocus": home.get("support_focus") or "general",
+            "residentName": resident["display_name"] if resident else "Resident",
+            "recipientNames": [recipient["display_name"] for recipient in recipients],
+            "recipientCount": len(recipients),
+            "role": role,
+            "active": home["id"] == active_home_id,
+        }
+
+    def issue_care_space_session(user_id: str, home_id: str) -> dict:
+        membership = db.one(
+            "SELECT role FROM memberships WHERE home_id=? AND user_id=? AND role != 'publisher'",
+            (home_id, user_id),
+        )
+        if not membership:
+            raise HTTPException(404, "Care space membership not found")
+        token = new_token()
+        db.execute(
+            "INSERT INTO sessions VALUES (?,?,?,?,?)",
+            (hash_secret(token), user_id, home_id, iso_after(settings.session_ttl_minutes), now_iso()),
+        )
+        return {
+            "access_token": token,
+            "token_type": "bearer",
+            "expires_in": settings.session_ttl_minutes * 60,
+            "home_id": home_id,
+            "user_id": user_id,
+            "role": membership["role"],
+        }
+
+    @app.get("/api/v1/account/homes")
+    def account_homes(actor: Current):
+        publisher_block(actor)
+        rows = db.many(
+            """SELECT h.id, h.name, h.care_setting, h.support_focus, m.role
+                 FROM memberships m
+                 JOIN homes h ON h.id=m.home_id
+                WHERE m.user_id=? AND m.role != 'publisher'
+                ORDER BY h.created_at, h.name""",
+            (actor["user_id"],),
+        )
+        return {"data": [care_space_view(row, row["role"], actor["home_id"]) for row in rows]}
+
+    @app.post("/api/v1/account/homes")
+    def account_home_create(body: CareSpaceCreateIn, actor: Current):
+        publisher_block(actor)
+        name = body.name.strip()
+        if not name:
+            raise HTTPException(422, "Care space name is required")
+        home_id, created = str(uuid.uuid4()), now_iso()
+        with db.transaction() as conn:
+            conn.execute(
+                "INSERT INTO homes(id,name,created_at,care_setting,support_focus) VALUES (?,?,?,?,?)",
+                (home_id, name, created, body.care_setting, body.support_focus),
+            )
+            conn.execute("INSERT INTO memberships VALUES (?,?,?)", (home_id, actor["user_id"], "admin"))
+            conn.execute("INSERT INTO home_runtime VALUES (?,?,?)", (home_id, 0, created))
+        audit(actor, "home.create", "home", home_id, home_id)
+        return issue_care_space_session(actor["user_id"], home_id)
+
+    @app.post("/api/v1/account/homes/{home_id}/activate")
+    def account_home_activate(home_id: str, actor: Current):
+        publisher_block(actor)
+        result = issue_care_space_session(actor["user_id"], home_id)
+        audit(actor, "session.home.switch", "home", home_id, home_id)
+        return result
 
     @app.post("/api/v1/pairing/start", response_model=PairStartResponse)
     def pairing_start(body: PairStart, x_bootstrap_secret: str | None = Header(default=None)):
@@ -2095,6 +2241,69 @@ def make_app(
     @app.get("/api/v1/homes/{home_id}/clips")
     def clips(home_id: str, actor: Current):
         home_check(actor, home_id); publisher_block(actor); return {"data": db.many("SELECT * FROM clips WHERE home_id=? AND expires_at>? ORDER BY starts_at DESC", (home_id, now_iso()))}
+
+    # Care recipients are people receiving care in this home/residence. They
+    # intentionally do not create a login, membership, session, or permission.
+    def care_recipient_view(row: dict) -> dict:
+        return {
+            "id": row["id"],
+            "display_name": row["display_name"],
+            "relationship": row.get("relationship"),
+            "room_label": row.get("room_label"),
+            "created_at": row["created_at"],
+        }
+
+    def care_recipient_row(home_id: str, recipient_id: str) -> dict:
+        row = db.one("SELECT * FROM care_recipients WHERE id=? AND home_id=?", (recipient_id, home_id))
+        if not row:
+            raise HTTPException(404, "Care recipient not found")
+        return row
+
+    @app.get("/api/v1/homes/{home_id}/care-recipients", response_model=CareRecipientListResponse)
+    def care_recipients(home_id: str, actor: Current):
+        home_check(actor, home_id); publisher_block(actor)
+        rows = db.many("SELECT * FROM care_recipients WHERE home_id=? ORDER BY created_at, display_name", (home_id,))
+        return {"data": [care_recipient_view(row) for row in rows]}
+
+    @app.post("/api/v1/homes/{home_id}/care-recipients", response_model=CareRecipientMutationResponse, status_code=status.HTTP_201_CREATED)
+    def care_recipient_create(home_id: str, body: CareRecipientCreateIn, actor: Current):
+        home_check(actor, home_id); family_actor(actor)
+        recipient_id, created = str(uuid.uuid4()), now_iso()
+        db.execute(
+            "INSERT INTO care_recipients(id,home_id,display_name,relationship,room_label,created_at) VALUES (?,?,?,?,?,?)",
+            (recipient_id, home_id, body.display_name, body.relationship, body.room_label, created),
+        )
+        audit(actor, "care_recipient.create", "care_recipient", recipient_id, home_id)
+        return {"data": care_recipient_view(care_recipient_row(home_id, recipient_id))}
+
+    @app.patch("/api/v1/homes/{home_id}/care-recipients/{recipient_id}", response_model=CareRecipientMutationResponse)
+    def care_recipient_update(home_id: str, recipient_id: str, body: CareRecipientUpdateIn, actor: Current):
+        home_check(actor, home_id); family_actor(actor)
+        current = care_recipient_row(home_id, recipient_id)
+        changes = body.model_dump(exclude_unset=True)
+        if not changes:
+            raise HTTPException(422, "At least one care-recipient field is required")
+        if "display_name" in changes and changes["display_name"] is None:
+            raise HTTPException(422, "display_name cannot be null")
+        updated = {
+            "display_name": changes.get("display_name", current["display_name"]),
+            "relationship": changes.get("relationship", current.get("relationship")),
+            "room_label": changes.get("room_label", current.get("room_label")),
+        }
+        db.execute(
+            "UPDATE care_recipients SET display_name=?, relationship=?, room_label=? WHERE id=? AND home_id=?",
+            (updated["display_name"], updated["relationship"], updated["room_label"], recipient_id, home_id),
+        )
+        audit(actor, "care_recipient.update", "care_recipient", recipient_id, home_id)
+        return {"data": care_recipient_view(care_recipient_row(home_id, recipient_id))}
+
+    @app.delete("/api/v1/homes/{home_id}/care-recipients/{recipient_id}", response_model=CareRecipientMutationResponse)
+    def care_recipient_delete(home_id: str, recipient_id: str, actor: Current):
+        home_check(actor, home_id); family_actor(actor)
+        deleted = care_recipient_view(care_recipient_row(home_id, recipient_id))
+        db.execute("DELETE FROM care_recipients WHERE id=? AND home_id=?", (recipient_id, home_id))
+        audit(actor, "care_recipient.delete", "care_recipient", recipient_id, home_id)
+        return {"data": deleted}
 
     # Family mode is deliberately a bounded, consent-gated slice. It exposes
     # household membership and medication adherence records, not a resident's

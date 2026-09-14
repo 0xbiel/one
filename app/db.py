@@ -24,6 +24,8 @@ CREATE TABLE IF NOT EXISTS homes (
 );
 CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, display_name TEXT NOT NULL, email TEXT, created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS memberships (home_id TEXT NOT NULL, user_id TEXT NOT NULL, role TEXT NOT NULL CHECK(role IN ('resident','caregiver','admin','publisher')), PRIMARY KEY(home_id,user_id), FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE);
+CREATE TABLE IF NOT EXISTS care_recipients (id TEXT PRIMARY KEY, home_id TEXT NOT NULL, display_name TEXT NOT NULL, relationship TEXT, room_label TEXT, created_at TEXT NOT NULL, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE);
+CREATE INDEX IF NOT EXISTS care_recipients_home_idx ON care_recipients(home_id, created_at);
 CREATE TABLE IF NOT EXISTS home_runtime (home_id TEXT PRIMARY KEY, paused INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, home_id TEXT NOT NULL, expires_at TEXT NOT NULL, created_at TEXT NOT NULL, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS pairing_codes (code_hash TEXT PRIMARY KEY, home_id TEXT NOT NULL, user_id TEXT NOT NULL, role TEXT NOT NULL, expires_at TEXT NOT NULL, used_at TEXT, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE);
@@ -321,6 +323,9 @@ class Database:
                 if "support_focus" not in home_columns:
                     self.conn.execute("ALTER TABLE homes ADD COLUMN support_focus TEXT NOT NULL DEFAULT 'general'")
                 self._record_sqlite_migration(8)
+            if not self._sqlite_migration_applied(10):
+                self.conn.executescript(_migration_file("010_care_recipients.sql"))
+                self._record_sqlite_migration(10)
             # Keep the zero-setup SQLite adapter forward-compatible with a
             # database created before caregiver assignment was introduced.
             plan_columns = {row[1] for row in self.conn.execute("PRAGMA table_info(medication_plans)").fetchall()}
