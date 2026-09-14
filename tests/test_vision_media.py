@@ -21,6 +21,23 @@ def test_temporal_tracker_requires_stable_hits_and_demo_is_deterministic():
     assert tracker.update([Detection(first.label, first.confidence, first.bbox, at + timedelta(milliseconds=600))])
 
 
+def test_temporal_tracker_keeps_concurrent_people_on_distinct_tracks():
+    at = datetime.now(timezone.utc)
+    tracker = TemporalStabilityTracker(min_hits=2, iou_threshold=0.1)
+    first_frame = [
+        Detection("person", 0.91, (80, 80, 220, 420), at),
+        Detection("person", 0.89, (240, 70, 390, 425), at),
+    ]
+    assert tracker.update(first_frame) == []
+    second_frame = [
+        Detection("person", 0.92, (86, 82, 226, 422), at + timedelta(milliseconds=300)),
+        Detection("person", 0.90, (246, 72, 396, 427), at + timedelta(milliseconds=300)),
+    ]
+    stable = tracker.update(second_frame)
+    assert len(stable) == 2
+    assert len({item.track_id for item in stable}) == 2
+
+
 def test_projection_is_approximate_and_has_zone_fallback():
     at = datetime.now(timezone.utc)
     frame = Frame("cam", b"x", 1000, 1000, at)

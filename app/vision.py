@@ -29,6 +29,7 @@ class Detection:
     confidence: float
     bbox: tuple[float, float, float, float]
     frame_at: datetime
+    track_id: int | None = None
 
     @property
     def center(self) -> tuple[float, float]:
@@ -125,6 +126,7 @@ class LocalServiceDetector:
 
 @dataclass
 class _Track:
+    track_id: int
     label: str
     bbox: tuple[float, float, float, float]
     hits: int
@@ -145,18 +147,30 @@ class TemporalStabilityTracker:
     def __init__(self, min_hits: int = 3, window_seconds: float = 4.0, iou_threshold: float = 0.2):
         self.min_hits, self.window_seconds, self.iou_threshold = min_hits, window_seconds, iou_threshold
         self._tracks: list[_Track] = []
+        self._next_track_id = 1
 
     def update(self, detections: Sequence[Detection]) -> list[Detection]:
         stable: list[Detection] = []
+        used_track_ids: set[int] = set()
         for detection in detections:
-            match = next((track for track in self._tracks if track.label == detection.label and _iou(track.bbox, detection.bbox) >= self.iou_threshold and (detection.frame_at - track.last_at).total_seconds() <= self.window_seconds), None)
+            matches = [
+                track
+                for track in self._tracks
+                if track.track_id not in used_track_ids
+                and track.label == detection.label
+                and _iou(track.bbox, detection.bbox) >= self.iou_threshold
+                and (detection.frame_at - track.last_at).total_seconds() <= self.window_seconds
+            ]
+            match = max(matches, key=lambda track: _iou(track.bbox, detection.bbox), default=None)
             if match:
                 match.bbox, match.last_at, match.hits = detection.bbox, detection.frame_at, match.hits + 1
             else:
-                match = _Track(detection.label, detection.bbox, 1, detection.frame_at, detection.frame_at)
+                match = _Track(self._next_track_id, detection.label, detection.bbox, 1, detection.frame_at, detection.frame_at)
+                self._next_track_id += 1
                 self._tracks.append(match)
+            used_track_ids.add(match.track_id)
             if match.hits >= self.min_hits:
-                stable.append(detection)
+                stable.append(Detection(detection.label, detection.confidence, detection.bbox, detection.frame_at, match.track_id))
         self._tracks = [track for track in self._tracks if (datetime.now(timezone.utc) - track.last_at).total_seconds() <= self.window_seconds]
         return stable
 
@@ -252,4 +266,4 @@ class CameraVisionPipeline:
                 tracker = TemporalStabilityTracker()
             self._trackers[frame.camera_id] = tracker
         stable = tracker.update(detections)
-        return [{"label": item.label, "confidence": item.confidence, "bbox": item.bbox, "projection": project_detection(item, frame, calibration, depth_m).__dict__} for item in stable]
+        return [{"label": item.label, "confidence": item.confidence, "bbox": item.bbox, "track_id": item.track_id, "projection": project_detection(item, frame, calibration, depth_m).__dict__} for item in stable]

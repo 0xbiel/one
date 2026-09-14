@@ -622,6 +622,7 @@ def make_app(
         return response
 
     app.state.db, app.state.store, app.state.clip_store, app.state.bus, app.state.settings, app.state.vision = db, store, clip_store, bus, settings, vision
+    app.state.vision_person_objects = {}
     app.state.geometry_service = geometry
     app.add_middleware(CORSMiddleware, allow_origins=settings.cors_list, allow_credentials=True, allow_methods=["GET", "POST", "PATCH", "DELETE"], allow_headers=["Authorization", "Content-Type", "X-Bootstrap-Secret"])
 
@@ -2365,17 +2366,61 @@ def make_app(
             floor_y,
         ), row.get("map_id")
 
+    def live_person_object_id(home_id: str, camera_id: str, track_id: int) -> str:
+        now = datetime.now(timezone.utc)
+        stale_before = (now - timedelta(seconds=12)).replace(microsecond=0).isoformat()
+        tracks: dict[tuple[str, str, int], tuple[str, datetime]] = app.state.vision_person_objects
+        for key, (_, last_seen) in list(tracks.items()):
+            if (now - last_seen).total_seconds() > 12:
+                tracks.pop(key, None)
+
+        key = (home_id, camera_id, track_id)
+        existing = tracks.get(key)
+        if existing:
+            tracks[key] = (existing[0], now)
+            return existing[0]
+
+        claimed = {object_id for object_id, _ in tracks.values()}
+        reusable = db.many(
+            """
+            SELECT o.id,
+                   (SELECT MAX(ob.observed_at) FROM observations ob WHERE ob.home_id=o.home_id AND ob.object_id=o.id) AS last_seen_at
+            FROM objects o
+            WHERE o.home_id=? AND lower(o.label)='person' AND o.enabled=1
+            ORDER BY COALESCE(last_seen_at, o.created_at)
+            """,
+            (home_id,),
+        )
+        object_id = next(
+            (
+                row["id"]
+                for row in reusable
+                if row["id"] not in claimed and (row.get("last_seen_at") is None or row["last_seen_at"] < stale_before)
+            ),
+            None,
+        )
+        if object_id is None:
+            object_id = str(uuid.uuid4())
+            db.execute("INSERT INTO objects VALUES (?,?,?,?,?,?)", (object_id, home_id, "person", "Person", 1, now_iso()))
+        tracks[key] = (object_id, now)
+        return object_id
+
     async def persist_vision_observation(home_id: str, camera_id: str, map_id: str | None, item: dict, detector_version: str) -> dict | None:
         label = str(item.get("label") or "").strip().lower()
         if not label:
             return None
-        object_row = db.one("SELECT * FROM objects WHERE home_id=? AND lower(label)=? AND enabled=1 ORDER BY created_at LIMIT 1", (home_id, label))
-        if object_row is None:
-            object_id = str(uuid.uuid4())
-            db.execute("INSERT INTO objects VALUES (?,?,?,?,?,?)", (object_id, home_id, label, label.replace("_", " ").title(), 1, now_iso()))
+        track_id = item.get("track_id")
+        if label == "person" and isinstance(track_id, int):
+            object_id = live_person_object_id(home_id, camera_id, track_id)
         else:
-            object_id = object_row["id"]
-        cutoff = (datetime.now(timezone.utc) - timedelta(seconds=5)).replace(microsecond=0).isoformat()
+            object_row = db.one("SELECT * FROM objects WHERE home_id=? AND lower(label)=? AND enabled=1 ORDER BY created_at LIMIT 1", (home_id, label))
+            if object_row is None:
+                object_id = str(uuid.uuid4())
+                db.execute("INSERT INTO objects VALUES (?,?,?,?,?,?)", (object_id, home_id, label, label.replace("_", " ").title(), 1, now_iso()))
+            else:
+                object_id = object_row["id"]
+        persistence_window = 1 if label == "person" else 5
+        cutoff = (datetime.now(timezone.utc) - timedelta(seconds=persistence_window)).replace(microsecond=0).isoformat()
         if db.one("SELECT id FROM observations WHERE home_id=? AND object_id=? AND camera_id=? AND observed_at>=? ORDER BY observed_at DESC LIMIT 1", (home_id, object_id, camera_id, cutoff)):
             return None
         projection = item.get("projection") if isinstance(item.get("projection"), dict) else {}

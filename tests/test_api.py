@@ -8,12 +8,22 @@ from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.main import make_app
-from app.vision import DeterministicDemoDetector
+from app.vision import Detection, DeterministicDemoDetector
 
 
-def client(tmp_path: Path):
-    app = make_app(Settings(database_url="sqlite:///:memory:", object_store_path=tmp_path / "objects", bootstrap_secret="test", env="test", lm_studio_url="http://127.0.0.1:9/v1"), vision_detector=DeterministicDemoDetector())
+def client(tmp_path: Path, vision_detector=None):
+    app = make_app(Settings(database_url="sqlite:///:memory:", object_store_path=tmp_path / "objects", bootstrap_secret="test", env="test", lm_studio_url="http://127.0.0.1:9/v1"), vision_detector=vision_detector or DeterministicDemoDetector())
     return TestClient(app)
+
+
+class TwoPersonDetector:
+    model_version = "two-person-test-v1"
+
+    def detect(self, frame, candidate_labels):
+        return [
+            Detection("person", 0.92, (80, 70, 220, 430), frame.captured_at),
+            Detection("person", 0.90, (300, 65, 450, 425), frame.captured_at),
+        ]
 
 
 def auth(c):
@@ -515,6 +525,27 @@ def test_bounded_vision_ingestion_requires_camera_and_stabilizes(tmp_path):
     assert stable["detector_version"] == "demo-deterministic-v1" and stable["data"][0]["projection"]["quality"] == "zone-fallback"
     prohibited = {**payload, "candidate_labels": ["person identity"]}
     assert c.post(f"/api/v1/homes/{home}/vision/frames", headers=h, json=prohibited).status_code == 422
+
+
+def test_bounded_vision_persists_multiple_people_as_distinct_live_objects(tmp_path):
+    c = client(tmp_path, TwoPersonDetector()); token, home = auth(c); h = {"Authorization": f"Bearer {token}"}
+    camera = c.post(f"/api/v1/homes/{home}/cameras", headers=h, json={"name": "Living room"}).json()
+    assert c.post(
+        f"/api/v1/homes/{home}/consents",
+        headers=h,
+        json={"purpose": "video_capture", "policy_version": "2026-09-01", "granted": True},
+    ).status_code == 200
+    frame = base64.b64encode(b"two-people-frame").decode()
+    payload = {"camera_id": camera["id"], "frame_base64": frame, "width": 640, "height": 480}
+    c.post(f"/api/v1/homes/{home}/vision/frames", headers=h, json=payload)
+    c.post(f"/api/v1/homes/{home}/vision/frames", headers=h, json=payload)
+    stable = c.post(f"/api/v1/homes/{home}/vision/frames", headers=h, json=payload)
+    assert stable.status_code == 200
+    assert len(stable.json()["data"]) == 2
+    assert len(stable.json()["observations"]) == 2
+    people = [item for item in c.get(f"/api/v1/homes/{home}/objects/last-seen", headers=h).json()["data"] if item["label"] == "Person"]
+    assert len(people) == 2
+    assert len({item["id"] for item in people}) == 2
 
 
 def test_registered_roomplan_vision_projects_to_zone_and_persists(tmp_path):
