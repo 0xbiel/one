@@ -57,6 +57,7 @@ class RoomLayoutService(Protocol):
         room_zones: Sequence[dict] = (),
         search_prior: dict | None = None,
         room_objects: Sequence[dict] = (),
+        person_anchors: Sequence[dict] = (),
     ) -> object:
         """Estimate a fixed camera pose in RoomPlan coordinates."""
 
@@ -177,6 +178,7 @@ class HttpRoomLayoutService:
         room_zones: Sequence[dict] = (),
         search_prior: dict | None = None,
         room_objects: Sequence[dict] = (),
+        person_anchors: Sequence[dict] = (),
     ) -> object:
         payload: dict = {
             "schema_version": "roomplan-camera-localization.v1",
@@ -185,6 +187,7 @@ class HttpRoomLayoutService:
             "fov_degrees": fov_degrees,
             "room_zones": list(room_zones),
             "room_objects": list(room_objects),
+            "person_anchors": list(person_anchors),
         }
         if intrinsics is not None:
             payload["intrinsics"] = {"values": intrinsics}

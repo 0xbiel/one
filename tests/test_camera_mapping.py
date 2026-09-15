@@ -493,12 +493,14 @@ def test_roomplan_visual_landmarks_localize_separate_publisher_camera(tmp_path):
             "frames": [{"frame_base64": base64.b64encode(b"fixed-camera-review").decode(), "width": 640, "height": 480}],
             "fov_degrees": 60.0,
             "review_only": True,
+            "person_anchors": [{"frame_index": 0, "x": 0.5, "y": 0.0, "z": -0.5}],
         },
     )
     assert review.status_code == 200
     assert review.json()["status"] == "positioned"
     assert review.json()["review_required"] is True
     assert review.json()["camera_to_world"][0][3] == 1.25
+    assert service.calls[-1]["camera_localization"]["person_anchors"] == [{"frame_index": 0, "x": 0.5, "y": 0.0, "z": -0.5}]
     scene_before_confirmation = client.get(f"/api/v1/homes/{home_id}/scene", headers=admin_headers).json()
     assert scene_before_confirmation["cameraRegistration"]["status"] == "unavailable"
     assert scene_before_confirmation["cameraRegistration"]["cameraToWorld"] is None

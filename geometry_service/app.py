@@ -284,7 +284,7 @@ def create_app(settings: ServiceSettings | None = None) -> FastAPI:
                 "detected_labels": [],
                 "detections": [],
             }
-            if payload.room_objects:
+            if payload.room_objects or payload.person_anchors:
                 prompt_aliases = {
                     "bed": ["bed"],
                     "chair": ["chair"],
@@ -296,9 +296,9 @@ def create_app(settings: ServiceSettings | None = None) -> FastAPI:
                 for room_object in payload.room_objects:
                     category = room_object.label.strip().lower()
                     candidate_labels.extend(prompt_aliases.get(category, [category]))
-                # People are transient occluders for fixed-camera localization.
-                # Detect them so the localizer can suppress ORB features inside
-                # their box; they are never used as semantic pose landmarks.
+                # People are transient occluders during ordinary fixed-camera
+                # localization. In guided calibration the same local detection
+                # becomes a deliberate floor-point correspondence.
                 candidate_labels = list(dict.fromkeys(["person", *(label for label in candidate_labels if label)]))[:32]
                 if runtime.ready and candidate_labels:
                     object_detections: list[CameraLocalizationObjectDetection] = []

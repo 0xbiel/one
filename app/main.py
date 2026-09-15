@@ -385,11 +385,33 @@ class CameraLocalizationFrameIn(BaseModel):
     height: int = Field(gt=0, le=4320)
 
 
+class CameraLocalizationPersonAnchorIn(BaseModel):
+    """Known RoomPlan floor point occupied by a person in one calibration frame."""
+
+    frame_index: int = Field(ge=0, le=7)
+    x: float
+    y: float
+    z: float
+
+    @model_validator(mode="after")
+    def validate_finite_position(self) -> "CameraLocalizationPersonAnchorIn":
+        if not all(math.isfinite(value) for value in (self.x, self.y, self.z)):
+            raise ValueError("guided calibration anchor must be finite")
+        return self
+
+
 class CameraLocalizationIn(BaseModel):
     frames: list[CameraLocalizationFrameIn] = Field(min_length=1, max_length=8)
     intrinsics: Matrix3x3In | None = None
     fov_degrees: float = Field(default=60.0, ge=30.0, le=120.0)
     review_only: bool = False
+    person_anchors: list[CameraLocalizationPersonAnchorIn] = Field(default_factory=list, max_length=8)
+
+    @model_validator(mode="after")
+    def validate_person_anchor_frames(self) -> "CameraLocalizationIn":
+        if any(anchor.frame_index >= len(self.frames) for anchor in self.person_anchors):
+            raise ValueError("guided calibration anchor references a missing frame")
+        return self
 
 
 class CameraLocalizationReferenceIn(BaseModel):
@@ -2031,6 +2053,7 @@ def make_app(
                 room_zones=room_zones,
                 search_prior=search_prior,
                 room_objects=room_objects,
+                person_anchors=[anchor.model_dump(mode="json") for anchor in body.person_anchors],
             )
         except RoomLayoutServiceUnavailable as exc:
             raise HTTPException(503, "Local camera localization service is unavailable") from exc

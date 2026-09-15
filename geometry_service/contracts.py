@@ -340,6 +340,17 @@ class CameraLocalizationObjectDetection(BaseModel):
     bbox: list[float] = Field(min_length=4, max_length=4)
 
 
+class CameraLocalizationPersonAnchor(BaseModel):
+    """Known RoomPlan floor point occupied by a person in one guided frame."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    frame_index: int = Field(ge=0, le=19)
+    x: float
+    y: float
+    z: float
+
+
 class CameraLocalizationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -352,6 +363,7 @@ class CameraLocalizationRequest(BaseModel):
     search_prior: CameraLocalizationSearchPrior | None = None
     room_objects: list[CameraLocalizationRoomObject] = Field(default_factory=list, max_length=100)
     object_detections: list[CameraLocalizationObjectDetection] = Field(default_factory=list, max_length=100)
+    person_anchors: list[CameraLocalizationPersonAnchor] = Field(default_factory=list, max_length=8)
 
 
 class CameraLocalizationResponse(BaseModel):

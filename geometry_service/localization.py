@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import base64
 import binascii
-from itertools import combinations, permutations
+from itertools import combinations, permutations, product
 import math
 from typing import Any
 
@@ -1934,6 +1934,130 @@ def _pose_scene_prior(matrix: np.ndarray, payload: CameraLocalizationRequest) ->
     }
 
 
+def _guided_person_calibration(payload: CameraLocalizationRequest) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+    """Use a person standing on four known floor points as calibration markers."""
+    if not payload.person_anchors:
+        return None, {"status": "not_requested"}
+
+    grouped: dict[tuple[float, float, float], list[int]] = {}
+    for anchor in payload.person_anchors:
+        if anchor.frame_index < len(payload.frames):
+            point = (round(float(anchor.x), 4), round(float(anchor.y), 4), round(float(anchor.z), 4))
+            grouped.setdefault(point, []).append(int(anchor.frame_index))
+    if len(grouped) < 4:
+        return None, {"status": "insufficient_targets", "target_count": len(grouped), "required_target_count": 4}
+
+    targets = list(grouped.items())[:4]
+    frame0 = payload.frames[targets[0][1][0]]
+    camera_matrix, intrinsics_source = _camera_matrix(payload, frame0.width, frame0.height)
+    object_points = np.asarray([point for point, _ in targets], dtype=np.float64)
+    floor_points = object_points[:, [0, 2]]
+    floor_spread = max((float(np.linalg.norm(a - b)) for a, b in combinations(floor_points, 2)), default=0.0)
+    if floor_spread < 0.90:
+        return None, {"status": "targets_too_close", "target_count": 4, "floor_spread_m": round(floor_spread, 4)}
+
+    choices: list[list[dict[str, float]]] = []
+    detection_count = 0
+    for _point, frame_indices in targets:
+        candidates: list[dict[str, float]] = []
+        for frame_index in frame_indices:
+            frame = payload.frames[frame_index]
+            for detection in payload.object_detections:
+                if detection.frame_index != frame_index or detection.label.strip().lower() != "person" or detection.confidence < 0.20:
+                    continue
+                x1, y1, x2, y2 = (float(value) for value in detection.bbox)
+                if x2 <= x1 or y2 <= y1:
+                    continue
+                detection_count += 1
+                candidates.append({
+                    "x": ((x1 + x2) * 0.5) / float(frame.width),
+                    "y": (y2 - max(1.0, (y2 - y1) * 0.015)) / float(frame.height),
+                    "confidence": float(detection.confidence),
+                })
+        if not candidates:
+            return None, {"status": "person_not_found", "resolved_target_count": len(choices), "person_detection_count": detection_count}
+        candidates.sort(key=lambda item: item["confidence"], reverse=True)
+        distinct: list[dict[str, float]] = []
+        for candidate in candidates:
+            if all(math.hypot(candidate["x"] - prior["x"], candidate["y"] - prior["y"]) > 0.08 for prior in distinct):
+                distinct.append(candidate)
+            if len(distinct) == 2:
+                break
+        choices.append(distinct)
+
+    best: dict[str, Any] | None = None
+    assignment_count = 0
+    for assignment in product(*choices):
+        assignment_count += 1
+        image_points = np.asarray(
+            [[item["x"] * frame0.width, item["y"] * frame0.height] for item in assignment],
+            dtype=np.float64,
+        )
+        try:
+            ok, rvecs, tvecs, _ = cv2.solvePnPGeneric(object_points, image_points, camera_matrix, None, flags=cv2.SOLVEPNP_IPPE)
+        except cv2.error:
+            continue
+        if not ok:
+            continue
+        for rvec, tvec in zip(rvecs, tvecs):
+            projected, _ = cv2.projectPoints(object_points, rvec, tvec, camera_matrix, None)
+            residuals = np.linalg.norm(projected.reshape(-1, 2) - image_points, axis=1)
+            matrix = np.asarray(_camera_to_world(rvec, tvec), dtype=np.float64)
+            scene_prior = _pose_scene_prior(matrix, payload)
+            rotation, _ = cv2.Rodrigues(np.asarray(rvec, dtype=np.float64))
+            camera_points = (rotation @ object_points.T + np.asarray(tvec, dtype=np.float64).reshape(3, 1)).T
+            positive_depth_ratio = float(np.mean(camera_points[:, 2] > 0.05))
+            candidate = {
+                "matrix": matrix,
+                "scene_prior": scene_prior,
+                "mean_error": float(np.mean(residuals)),
+                "max_error": float(np.max(residuals)),
+                "positive_depth_ratio": positive_depth_ratio,
+                "person_confidence": float(np.mean([item["confidence"] for item in assignment])),
+            }
+            rank = (int(bool(scene_prior.get("accepted"))), positive_depth_ratio, -candidate["mean_error"], -candidate["max_error"], candidate["person_confidence"])
+            if best is None or rank > best["rank"]:
+                best = {**candidate, "rank": rank}
+
+    if best is None:
+        return None, {"status": "solve_failed", "assignment_count": assignment_count, "person_detection_count": detection_count}
+
+    accepted = bool(best["scene_prior"].get("accepted")) and best["positive_depth_ratio"] >= 1.0 and best["mean_error"] <= 45.0 and best["max_error"] <= 95.0
+    diagnostics = {
+        "status": "accepted" if accepted else "rejected",
+        "target_count": 4,
+        "person_detection_count": detection_count,
+        "assignment_count": assignment_count,
+        "floor_spread_m": round(floor_spread, 4),
+        "mean_reprojection_error_px": round(best["mean_error"], 4),
+        "max_reprojection_error_px": round(best["max_error"], 4),
+        "mean_person_confidence": round(best["person_confidence"], 4),
+        "scene_prior": best["scene_prior"],
+    }
+    if not accepted:
+        return None, diagnostics
+
+    matrix = best["matrix"]
+    confidence = max(0.55, min(0.97, 0.88 - best["mean_error"] / 220.0 + 0.10 * best["person_confidence"]))
+    return {
+        "status": "positioned",
+        "coordinate_frame": "roomplan-local",
+        "camera_to_world": [[round(float(value), 8) for value in row] for row in matrix],
+        "confidence": round(confidence, 6),
+        "inlier_count": 4,
+        "match_count": 4,
+        "reprojection_error_px": round(best["mean_error"], 6),
+        "intrinsics_source": intrinsics_source,
+        "intrinsics": [[round(float(value), 8) for value in row] for row in camera_matrix],
+        "diagnostics": {
+            "selected_camera_center": [round(float(matrix[index, 3]), 4) for index in range(3)],
+            "selected_estimate_source": "guided-person-floor",
+            "guided_person_calibration": diagnostics,
+            "raw_frames_persisted": False,
+        },
+    }, diagnostics
+
+
 def _localization_candidate(
     frame_index: int,
     view_id: str,
@@ -2098,6 +2222,10 @@ def _candidate_is_positioned(candidate: dict[str, Any]) -> bool:
 
 
 def localize_camera(payload: CameraLocalizationRequest) -> dict[str, Any]:
+    guided_person_result, guided_person_diagnostics = _guided_person_calibration(payload)
+    if guided_person_result is not None:
+        return guided_person_result
+
     landmark_points, landmark_descriptors, landmark_view_ids = _landmark_arrays(payload)
     landmark_responses = np.asarray(
         [max(0.0, float(landmark.response)) for landmark in payload.landmarks],
@@ -2988,6 +3116,7 @@ def localize_camera(payload: CameraLocalizationRequest) -> dict[str, Any]:
                     "masked_frame_count": person_masked_frame_count,
                     "max_masked_area_ratio": round(max(person_masked_area_ratios), 4) if person_masked_area_ratios else 0.0,
                 },
+                "guided_person_calibration": guided_person_diagnostics,
                 "raw_frames_persisted": False,
             },
         }
@@ -3098,6 +3227,7 @@ def localize_camera(payload: CameraLocalizationRequest) -> dict[str, Any]:
         "masked_frame_count": person_masked_frame_count,
         "max_masked_area_ratio": round(max(person_masked_area_ratios), 4) if person_masked_area_ratios else 0.0,
     }
+    diagnostics["guided_person_calibration"] = guided_person_diagnostics
     if positioned:
         best["status"] = "positioned"
         best["camera_to_world"] = [[round(float(value), 8) for value in row] for row in pose_matrix]

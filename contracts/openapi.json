@@ -378,6 +378,37 @@
         "title": "CameraLocalizationFrameIn",
         "type": "object"
       },
+      "CameraLocalizationPersonAnchorIn": {
+        "description": "Known RoomPlan floor point occupied by a person in one calibration frame.",
+        "properties": {
+          "frame_index": {
+            "maximum": 7.0,
+            "minimum": 0.0,
+            "title": "Frame Index",
+            "type": "integer"
+          },
+          "x": {
+            "title": "X",
+            "type": "number"
+          },
+          "y": {
+            "title": "Y",
+            "type": "number"
+          },
+          "z": {
+            "title": "Z",
+            "type": "number"
+          }
+        },
+        "required": [
+          "frame_index",
+          "x",
+          "y",
+          "z"
+        ],
+        "title": "CameraLocalizationPersonAnchorIn",
+        "type": "object"
+      },
       "CameraLocalizationIn": {
         "properties": {
           "fov_degrees": {
@@ -405,6 +436,14 @@
                 "type": "null"
               }
             ]
+          },
+          "person_anchors": {
+            "items": {
+              "$ref": "#/components/schemas/CameraLocalizationPersonAnchorIn"
+            },
+            "maxItems": 8,
+            "title": "Person Anchors",
+            "type": "array"
           },
           "review_only": {
             "default": false,
