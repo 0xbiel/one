@@ -5,6 +5,7 @@ import ipaddress
 import json
 import math
 import re
+import threading
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Annotated, Literal, Sequence
@@ -86,6 +87,7 @@ MAP_FRAME_MAX_BYTES = 3_000_000
 MAP_BATCH_MAX_BYTES = 18_000_000
 MAP_FRAME_MAX_COUNT = 20
 MAP_COLLECTING_STALE_AFTER = timedelta(minutes=15)
+ROOMPLAN_CALIBRATION_SESSION_TTL = timedelta(minutes=10)
 ROOMPLAN_USDZ_MAX_BYTES = 50 * 1024 * 1024
 ROOMPLAN_USDZ_CONTENT_TYPES = {
     "model/vnd.usdz+zip",
@@ -412,6 +414,15 @@ class CameraLocalizationIn(BaseModel):
         if any(anchor.frame_index >= len(self.frames) for anchor in self.person_anchors):
             raise ValueError("guided calibration anchor references a missing frame")
         return self
+
+
+class RoomPlanCalibrationCaptureRequestIn(BaseModel):
+    target_index: int = Field(ge=0, le=3)
+
+
+class RoomPlanCalibrationFramesIn(BaseModel):
+    target_index: int = Field(ge=0, le=3)
+    frames: list[CameraLocalizationFrameIn] = Field(min_length=1, max_length=2)
 
 
 class CameraLocalizationReferenceIn(BaseModel):
@@ -798,6 +809,8 @@ def make_app(
     geometry = geometry_service or HttpRoomLayoutService(settings)
     vision = CameraVisionPipeline(vision_detector or LocalServiceDetector(geometry))
     app = FastAPI(title="ONE API", version="0.1.0", openapi_url="/api/v1/openapi.json")
+    roomplan_calibration_sessions: dict[tuple[str, str], dict] = {}
+    roomplan_calibration_lock = threading.RLock()
 
     def request_id(request: Request) -> str:
         """Return a bounded correlation id without reflecting arbitrary input."""
@@ -991,6 +1004,7 @@ def make_app(
             "status": "paused" if connected and is_paused(row["home_id"]) else ("online" if connected else "offline"),
             "lastSeenAt": latest_session["created_at"] if latest_session else row["created_at"],
         }
+        view.update(camera_roomplan_calibration_state(row["home_id"], row["id"]))
         view.pop("metadata_json", None)
         return view
 
@@ -1568,6 +1582,154 @@ def make_app(
             return arkit_video
         return next((row for row in rows if map_uses_real_geometry_model(row)), None)
 
+    def camera_roomplan_calibration_state(home_id: str, camera_id: str) -> dict:
+        map_row = active_map_row(home_id)
+        if not map_row or map_source(map_row) != "roomplan-lidar-3d" or map_dimension(map_row, "roomplan-lidar-3d") != "3d":
+            return {
+                "calibration_needed": False,
+                "roomplan_registration_status": "map_required",
+                "roomplan_map_id": None,
+            }
+        calibration = db.one(
+            "SELECT * FROM calibrations WHERE home_id=? AND camera_id=? AND map_id=? AND source IN ('auto-roomplan-registration','visual-roomplan-registration') AND status IN ('active','needs_rescan','needs_review') ORDER BY created_at DESC LIMIT 1",
+            (home_id, camera_id, map_row["id"]),
+        )
+        registration_status = "unavailable"
+        if calibration:
+            if calibration.get("status") == "needs_review":
+                registration_status = "needs_review"
+            elif calibration.get("status") == "needs_rescan":
+                registration_status = "needs_rescan"
+            else:
+                extrinsics = json_object(calibration.get("extrinsics_json") or "{}")
+                scene_valid, _ = roomplan_pose_scene_validation(map_row, extrinsics.get("camera_to_world"))
+                registration_status = "positioned" if scene_valid else "needs_rescan"
+        return {
+            "calibration_needed": registration_status != "positioned",
+            "roomplan_registration_status": registration_status,
+            "roomplan_map_id": map_row["id"],
+        }
+
+    def roomplan_calibration_targets(map_row: dict) -> list[dict]:
+        try:
+            map_data = json.loads(map_row.get("map_json") or "{}")
+        except (TypeError, json.JSONDecodeError):
+            return []
+        geometry_payload = map_data.get("geometry") if isinstance(map_data, dict) else None
+        geometry_payload = geometry_payload if isinstance(geometry_payload, dict) else map_data
+        raw_zones = geometry_payload.get("room_zones") if isinstance(geometry_payload, dict) else None
+        if not isinstance(raw_zones, list):
+            return []
+
+        def point_in_polygon(point: tuple[float, float], polygon: list[tuple[float, float]]) -> bool:
+            x, z = point
+            inside = False
+            previous = polygon[-1]
+            for current in polygon:
+                x1, z1 = current
+                x2, z2 = previous
+                crosses = (z1 > z) != (z2 > z)
+                if crosses and x < ((x2 - x1) * (z - z1) / ((z2 - z1) or 1e-12)) + x1:
+                    inside = not inside
+                previous = current
+            return inside
+
+        def polygon_area(polygon: list[tuple[float, float]]) -> float:
+            return abs(sum(
+                polygon[index][0] * polygon[(index + 1) % len(polygon)][1]
+                - polygon[(index + 1) % len(polygon)][0] * polygon[index][1]
+                for index in range(len(polygon))
+            )) * 0.5
+
+        zones: list[tuple[float, float, list[tuple[float, float]]]] = []
+        for zone in raw_zones:
+            if not isinstance(zone, dict) or not isinstance(zone.get("polygon"), list) or not isinstance(zone.get("floor_y"), (int, float)):
+                continue
+            polygon = [
+                (float(point["x"]), float(point["z"]))
+                for point in zone["polygon"]
+                if isinstance(point, dict)
+                and isinstance(point.get("x"), (int, float))
+                and isinstance(point.get("z"), (int, float))
+                and math.isfinite(float(point["x"]))
+                and math.isfinite(float(point["z"]))
+            ]
+            if len(polygon) >= 3 and math.isfinite(float(zone["floor_y"])):
+                zones.append((polygon_area(polygon), float(zone["floor_y"]), polygon))
+        if not zones:
+            return []
+        _, floor_y, polygon = max(zones, key=lambda item: item[0])
+        min_x = min(point[0] for point in polygon)
+        max_x = max(point[0] for point in polygon)
+        min_z = min(point[1] for point in polygon)
+        max_z = max(point[1] for point in polygon)
+        center = (
+            sum(point[0] for point in polygon) / len(polygon),
+            sum(point[1] for point in polygon) / len(polygon),
+        )
+        raw_targets = [
+            (min_x * 0.72 + max_x * 0.28, min_z * 0.72 + max_z * 0.28),
+            (min_x * 0.28 + max_x * 0.72, min_z * 0.72 + max_z * 0.28),
+            (min_x * 0.72 + max_x * 0.28, min_z * 0.28 + max_z * 0.72),
+            (min_x * 0.28 + max_x * 0.72, min_z * 0.28 + max_z * 0.72),
+        ]
+        targets: list[dict] = []
+        for index, candidate in enumerate(raw_targets):
+            selected = candidate
+            if not point_in_polygon(selected, polygon):
+                selected = center
+                for factor in (0.8, 0.6, 0.4, 0.2):
+                    pulled = (
+                        center[0] + (candidate[0] - center[0]) * factor,
+                        center[1] + (candidate[1] - center[1]) * factor,
+                    )
+                    if point_in_polygon(pulled, polygon):
+                        selected = pulled
+                        break
+            targets.append({"index": index, "x": round(selected[0], 4), "y": round(floor_y, 4), "z": round(selected[1], 4)})
+        return targets
+
+    def roomplan_calibration_session_view(session: dict) -> dict:
+        current_index = int(session.get("current_target_index", 0))
+        status_value = str(session.get("status") or "waiting_for_person")
+        targets = []
+        for target in session.get("targets", []):
+            index = int(target["index"])
+            if index < current_index or status_value in {"solving", "review", "failed"} and index <= current_index:
+                state = "complete"
+            elif index == current_index and status_value not in {"review", "failed", "cancelled"}:
+                state = "active"
+            else:
+                state = "pending"
+            targets.append({**target, "state": state})
+        return {
+            "session_id": session["session_id"],
+            "camera_id": session["camera_id"],
+            "map_id": session["map_id"],
+            "status": status_value,
+            "current_target_index": current_index,
+            "captured_target_count": min(current_index, len(targets)) if status_value not in {"solving", "review", "failed"} else len(targets),
+            "targets": targets,
+            "proposal": session.get("proposal"),
+            "error": session.get("error"),
+            "created_at": session["created_at"],
+            "expires_at": session["expires_at"],
+            "raw_frames_persisted": False,
+        }
+
+    def active_roomplan_calibration_session(home_id: str, camera_id: str) -> dict | None:
+        key = (home_id, camera_id)
+        with roomplan_calibration_lock:
+            session = roomplan_calibration_sessions.get(key)
+            if not session:
+                return None
+            expires_at = datetime.fromisoformat(str(session["expires_at"]).replace("Z", "+00:00"))
+            if expires_at <= datetime.now(timezone.utc):
+                session["frames"] = []
+                session["anchors"] = []
+                session["status"] = "expired"
+            return session
+
     def roomplan_camera_registration_view(home_id: str, map_row: dict) -> dict | None:
         source = map_source(map_row)
         if source != "roomplan-lidar-3d" or map_dimension(map_row, source) != "3d":
@@ -2140,6 +2302,190 @@ def make_app(
             "diagnostics": result_diagnostics,
             "review_required": bool(body.review_only and positioned),
         }
+
+    @app.post("/api/v1/homes/{home_id}/cameras/{camera_id}/roomplan-calibration-session")
+    def start_roomplan_calibration_session(home_id: str, camera_id: str, actor: Current):
+        """Start a transient caregiver-guided calibration for a fixed publisher camera."""
+        home_check(actor, home_id)
+        family_actor(actor)
+        require_video_capture(home_id)
+        camera = db.one("SELECT id FROM cameras WHERE id=? AND home_id=? AND enabled=1", (camera_id, home_id))
+        if not camera:
+            raise HTTPException(404, "Camera not found or disabled")
+        map_row = active_map_row(home_id)
+        if not map_row or map_source(map_row) != "roomplan-lidar-3d" or map_dimension(map_row, "roomplan-lidar-3d") != "3d":
+            raise HTTPException(409, "A native RoomPlan 3D map is required before guided camera calibration")
+        metadata = json_object(map_row.get("metadata_json") or "{}")
+        landmark_meta = metadata.get("visual_landmarks") if isinstance(metadata.get("visual_landmarks"), dict) else {}
+        if landmark_meta.get("status") != "ready" or not landmark_meta.get("artifact_key"):
+            raise HTTPException(409, "This RoomPlan scan is not ready for fixed-camera calibration yet")
+        targets = roomplan_calibration_targets(map_row)
+        if len(targets) != 4:
+            raise HTTPException(409, "The RoomPlan floor does not contain enough usable geometry for guided calibration")
+        created_at = now_iso()
+        expires_at = (datetime.now(timezone.utc) + ROOMPLAN_CALIBRATION_SESSION_TTL).isoformat().replace("+00:00", "Z")
+        session = {
+            "session_id": str(uuid.uuid4()),
+            "home_id": home_id,
+            "camera_id": camera_id,
+            "map_id": map_row["id"],
+            "status": "waiting_for_person",
+            "current_target_index": 0,
+            "targets": targets,
+            "frames": [],
+            "anchors": [],
+            "proposal": None,
+            "error": None,
+            "created_at": created_at,
+            "expires_at": expires_at,
+        }
+        with roomplan_calibration_lock:
+            previous = roomplan_calibration_sessions.get((home_id, camera_id))
+            if previous:
+                previous["frames"] = []
+                previous["anchors"] = []
+            roomplan_calibration_sessions[(home_id, camera_id)] = session
+        audit(actor, "camera.calibration.roomplan.start", "camera", camera_id, home_id)
+        return roomplan_calibration_session_view(session)
+
+    @app.get("/api/v1/homes/{home_id}/cameras/{camera_id}/roomplan-calibration-session")
+    def get_roomplan_calibration_session(home_id: str, camera_id: str, actor: Current):
+        home_check(actor, home_id)
+        if actor.get("role") == "publisher" and actor.get("user_id") != camera_id:
+            raise HTTPException(403, "A publisher can inspect only its own calibration session")
+        if actor.get("role") != "publisher":
+            family_actor(actor)
+        session = active_roomplan_calibration_session(home_id, camera_id)
+        if not session:
+            raise HTTPException(404, "No active RoomPlan calibration session")
+        return roomplan_calibration_session_view(session)
+
+    @app.post("/api/v1/homes/{home_id}/cameras/{camera_id}/roomplan-calibration-session/request-capture")
+    def request_roomplan_calibration_capture(home_id: str, camera_id: str, body: RoomPlanCalibrationCaptureRequestIn, actor: Current):
+        home_check(actor, home_id)
+        family_actor(actor)
+        session = active_roomplan_calibration_session(home_id, camera_id)
+        if not session:
+            raise HTTPException(404, "No active RoomPlan calibration session")
+        with roomplan_calibration_lock:
+            if session.get("status") == "expired":
+                raise HTTPException(410, "The calibration session expired; start it again")
+            if session.get("map_id") != (active_map_row(home_id) or {}).get("id"):
+                session["status"] = "expired"
+                session["frames"] = []
+                session["anchors"] = []
+                raise HTTPException(409, "The RoomPlan map changed; start calibration again")
+            current_index = int(session.get("current_target_index", 0))
+            if body.target_index != current_index:
+                raise HTTPException(409, "Capture request does not match the current calibration target")
+            if session.get("status") not in {"waiting_for_person", "capture_requested"}:
+                raise HTTPException(409, "The calibration session is not waiting for a target capture")
+            session["status"] = "capture_requested"
+            session["error"] = None
+        return roomplan_calibration_session_view(session)
+
+    @app.post("/api/v1/homes/{home_id}/cameras/{camera_id}/roomplan-calibration-session/frames")
+    def submit_roomplan_calibration_frames(home_id: str, camera_id: str, body: RoomPlanCalibrationFramesIn, actor: Current):
+        home_check(actor, home_id)
+        require_video_capture(home_id)
+        if actor.get("role") != "publisher" or actor.get("user_id") != camera_id:
+            raise HTTPException(403, "Only the paired publisher camera can submit calibration frames")
+        session = active_roomplan_calibration_session(home_id, camera_id)
+        if not session:
+            raise HTTPException(404, "No active RoomPlan calibration session")
+        should_solve = False
+        frames_for_solve: list[CameraLocalizationFrameIn] = []
+        anchors_for_solve: list[CameraLocalizationPersonAnchorIn] = []
+        with roomplan_calibration_lock:
+            if session.get("status") == "expired":
+                raise HTTPException(410, "The calibration session expired; start it again")
+            if session.get("status") != "capture_requested":
+                raise HTTPException(409, "The caregiver has not requested this calibration capture")
+            current_index = int(session.get("current_target_index", 0))
+            if body.target_index != current_index:
+                raise HTTPException(409, "Submitted frames do not match the current calibration target")
+            target = session["targets"][current_index]
+            base_index = len(session["frames"])
+            if base_index + len(body.frames) > 8:
+                raise HTTPException(413, "Guided calibration accepts at most eight transient frames")
+            session["frames"].extend(body.frames)
+            session["anchors"].extend(
+                CameraLocalizationPersonAnchorIn(
+                    frame_index=base_index + offset,
+                    x=float(target["x"]),
+                    y=float(target["y"]),
+                    z=float(target["z"]),
+                )
+                for offset, _ in enumerate(body.frames)
+            )
+            if current_index < len(session["targets"]) - 1:
+                session["current_target_index"] = current_index + 1
+                session["status"] = "waiting_for_person"
+                return roomplan_calibration_session_view(session)
+            session["status"] = "solving"
+            should_solve = True
+            frames_for_solve = list(session["frames"])
+            anchors_for_solve = list(session["anchors"])
+
+        if should_solve:
+            try:
+                localization = localize_roomplan_camera(
+                    home_id,
+                    camera_id,
+                    CameraLocalizationIn(
+                        frames=frames_for_solve,
+                        fov_degrees=60.0,
+                        review_only=True,
+                        person_anchors=anchors_for_solve,
+                    ),
+                    actor,
+                )
+                with roomplan_calibration_lock:
+                    session["frames"] = []
+                    session["anchors"] = []
+                    if localization.get("status") == "positioned" and localization.get("camera_to_world"):
+                        session["proposal"] = {
+                            "id": localization.get("id"),
+                            "camera_id": camera_id,
+                            "map_id": localization.get("map_id"),
+                            "camera_to_world": localization.get("camera_to_world"),
+                            "confidence": localization.get("confidence"),
+                            "tracking_state": localization.get("tracking_state"),
+                            "source": localization.get("source"),
+                        }
+                        session["status"] = "review"
+                        session["error"] = None
+                    else:
+                        session["status"] = "failed"
+                        session["error"] = "The four standing points did not produce a confident camera placement."
+            except HTTPException as exc:
+                with roomplan_calibration_lock:
+                    session["frames"] = []
+                    session["anchors"] = []
+                    session["status"] = "failed"
+                    session["error"] = str(exc.detail)
+            except Exception:
+                with roomplan_calibration_lock:
+                    session["frames"] = []
+                    session["anchors"] = []
+                    session["status"] = "failed"
+                    session["error"] = "The local camera localization service could not finish this calibration."
+            return roomplan_calibration_session_view(session)
+        return roomplan_calibration_session_view(session)
+
+    @app.delete("/api/v1/homes/{home_id}/cameras/{camera_id}/roomplan-calibration-session")
+    def cancel_roomplan_calibration_session(home_id: str, camera_id: str, actor: Current):
+        home_check(actor, home_id)
+        if actor.get("role") == "publisher" and actor.get("user_id") != camera_id:
+            raise HTTPException(403, "A publisher can cancel only its own calibration session")
+        if actor.get("role") != "publisher":
+            family_actor(actor)
+        with roomplan_calibration_lock:
+            session = roomplan_calibration_sessions.pop((home_id, camera_id), None)
+            if session:
+                session["frames"] = []
+                session["anchors"] = []
+        return {"camera_id": camera_id, "status": "cancelled", "raw_frames_persisted": False}
 
     @app.get("/api/v1/homes/{home_id}/cameras/{camera_id}/localization-history")
     def camera_localization_history(home_id: str, camera_id: str, actor: Current, limit: int = 30):

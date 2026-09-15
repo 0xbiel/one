@@ -582,6 +582,105 @@ def test_roomplan_visual_landmarks_localize_separate_publisher_camera(tmp_path):
     assert service.calls[-1]["camera_localization"]["landmarks"]
 
 
+def test_remote_roomplan_calibration_session_uses_publisher_frames_and_requires_review(tmp_path):
+    service = FakeRoomLayoutService()
+    client = make_client(tmp_path, service)
+    admin_headers, publisher_headers, home_id, camera_id = make_admin_and_publisher(client)
+    roomplan_payload = json.loads((Path(__file__).parent / "fixtures" / "roomplan-lidar-valid.json").read_text())
+    roomplan_payload["normalized_scan"]["floors"] = [{
+        "id": "floor-1",
+        "category": "floor",
+        "confidence": "high",
+        "center": {"x": 0.0, "y": 0.0, "z": 0.0},
+        "dimensions": {"x": 4.0, "y": 0.1, "z": 4.0},
+        "transform": [[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [0.0, 0.0, 0.0, 1.0]],
+        "vertices": [
+            {"x": -2.0, "y": 0.0, "z": -2.0},
+            {"x": 2.0, "y": 0.0, "z": -2.0},
+            {"x": 2.0, "y": 0.0, "z": 2.0},
+            {"x": -2.0, "y": 0.0, "z": 2.0},
+        ],
+        "attributes": ["room-floor"],
+    }]
+    room_map = client.post(f"/api/v1/homes/{home_id}/maps/roomplan", headers=admin_headers, json=roomplan_payload).json()
+    visual_frame = {
+        "frame_base64": base64.b64encode(b"jpeg").decode(),
+        "width": 640,
+        "height": 480,
+        "intrinsics": {"values": [[554.3, 0.0, 320.0], [0.0, 554.3, 240.0], [0.0, 0.0, 1.0]]},
+        "camera_to_world": [[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 1.5], [0.0, 0.0, 1.0, 0.0], [0.0, 0.0, 0.0, 1.0]],
+    }
+    assert client.post(
+        f"/api/v1/homes/{home_id}/maps/{room_map['id']}/visual-landmarks",
+        headers=admin_headers,
+        json={"frames": [visual_frame]},
+    ).status_code == 200
+    assert client.post(
+        f"/api/v1/homes/{home_id}/consents",
+        headers=publisher_headers,
+        json={"purpose": "video_capture", "policy_version": "2026-09-01"},
+    ).status_code == 200
+
+    camera_before = client.get(f"/api/v1/homes/{home_id}/cameras", headers=admin_headers).json()["data"][0]
+    assert camera_before["calibration_needed"] is True
+    assert camera_before["roomplan_registration_status"] == "unavailable"
+
+    started = client.post(
+        f"/api/v1/homes/{home_id}/cameras/{camera_id}/roomplan-calibration-session",
+        headers=admin_headers,
+    )
+    assert started.status_code == 200
+    session = started.json()
+    assert session["status"] == "waiting_for_person"
+    assert len(session["targets"]) == 4
+    assert session["raw_frames_persisted"] is False
+
+    fixed_frame = {"frame_base64": base64.b64encode(b"fixed-camera-guided").decode(), "width": 640, "height": 480}
+    for target_index in range(4):
+        requested = client.post(
+            f"/api/v1/homes/{home_id}/cameras/{camera_id}/roomplan-calibration-session/request-capture",
+            headers=admin_headers,
+            json={"target_index": target_index},
+        )
+        assert requested.status_code == 200
+        assert requested.json()["status"] == "capture_requested"
+        submitted = client.post(
+            f"/api/v1/homes/{home_id}/cameras/{camera_id}/roomplan-calibration-session/frames",
+            headers=publisher_headers,
+            json={"target_index": target_index, "frames": [fixed_frame]},
+        )
+        assert submitted.status_code == 200
+        session = submitted.json()
+
+    assert session["status"] == "review"
+    assert session["captured_target_count"] == 4
+    assert session["proposal"]["camera_to_world"][0][3] == 1.25
+    anchors = service.calls[-1]["camera_localization"]["person_anchors"]
+    assert len(anchors) == 4
+    assert [anchor["frame_index"] for anchor in anchors] == [0, 1, 2, 3]
+
+    camera_during_review = client.get(f"/api/v1/homes/{home_id}/cameras", headers=admin_headers).json()["data"][0]
+    assert camera_during_review["calibration_needed"] is True
+    assert camera_during_review["roomplan_registration_status"] == "needs_review"
+
+    proposal = session["proposal"]
+    confirmed = client.post(
+        f"/api/v1/homes/{home_id}/camera-registrations/roomplan",
+        headers=admin_headers,
+        json={
+            "camera_id": camera_id,
+            "map_id": room_map["id"],
+            "camera_to_world": proposal["camera_to_world"],
+            "confidence": proposal["confidence"],
+            "tracking_state": "normal",
+        },
+    )
+    assert confirmed.status_code == 200
+    camera_after = client.get(f"/api/v1/homes/{home_id}/cameras", headers=admin_headers).json()["data"][0]
+    assert camera_after["calibration_needed"] is False
+    assert camera_after["roomplan_registration_status"] == "positioned"
+
+
 def test_roomplan_placement_preview_is_scoped_and_serves_usdz(tmp_path):
     service = FakeRoomLayoutService()
     client = make_client(tmp_path, service)
