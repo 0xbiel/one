@@ -196,6 +196,7 @@ class ConsentIn(BaseModel):
     # representation process is separately documented; this field never
     # infers authority from a caregiver role.
     subject_user_id: str | None = None
+    care_recipient_id: str | None = None
 class CameraIn(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     room_id: str | None = None
@@ -508,6 +509,7 @@ class CareRecipientOut(BaseModel):
     display_name: str
     relationship: str | None = None
     room_label: str | None = None
+    medication_reminders_enabled: bool = False
     created_at: str
 
 
@@ -520,7 +522,8 @@ class CareRecipientListResponse(BaseModel):
 
 
 class MedicationPlanIn(BaseModel):
-    subject_user_id: str
+    subject_user_id: str | None = None
+    care_recipient_id: str | None = None
     name: str = Field(min_length=1, max_length=160)
     dose: str = Field(min_length=1, max_length=120)
     schedule: str = Field(min_length=1, max_length=500)
@@ -548,6 +551,7 @@ class MedicationCheckInIn(BaseModel):
 class FamilyAssistantIn(BaseModel):
     message: str = Field(default="", max_length=1000)
     subject_user_id: str | None = None
+    care_recipient_id: str | None = None
 
 
 def _camera_localization_search_prior(rows: Sequence[dict]) -> dict | None:
@@ -781,6 +785,13 @@ def make_app(
         except (ValueError, AttributeError):
             return str(uuid.uuid4())
 
+    def canonical_uuid(value: str, field_name: str) -> str:
+        """Normalize UUID text before comparing it with canonical database ids."""
+        try:
+            return str(uuid.UUID(value))
+        except (ValueError, AttributeError, TypeError):
+            raise HTTPException(422, f"{field_name} must be a UUID")
+
     def error_code(http_status: int) -> str:
         return {
             400: "bad_request",
@@ -887,6 +898,26 @@ def make_app(
         if not active_consent(home_id, subject_user_id, purpose):
             raise HTTPException(403, f"Active {purpose} consent is required")
 
+    def active_care_recipient_consent(home_id: str, care_recipient_id: str, purpose: str) -> bool:
+        row = db.one(
+            "SELECT revoked_at FROM consents WHERE home_id=? AND care_recipient_id=? AND purpose=? ORDER BY granted_at DESC LIMIT 1",
+            (home_id, care_recipient_id, purpose),
+        )
+        return bool(row and row["revoked_at"] is None)
+
+    def require_care_recipient_consent(home_id: str, care_recipient_id: str, purpose: str):
+        if not active_care_recipient_consent(home_id, care_recipient_id, purpose):
+            raise HTTPException(403, f"Active {purpose} consent is required for this cared-for person")
+
+    def medication_care_recipient(home_id: str, actor: dict, care_recipient_id: str, purpose: str = "medication_management") -> dict:
+        family_actor(actor)
+        care_recipient_id = canonical_uuid(care_recipient_id, "care_recipient_id")
+        row = db.one("SELECT * FROM care_recipients WHERE id=? AND home_id=?", (care_recipient_id, home_id))
+        if not row:
+            raise HTTPException(404, "Care recipient not found")
+        require_care_recipient_consent(home_id, care_recipient_id, purpose)
+        return row
+
     def member(home_id: str, user_id: str) -> dict:
         row = db.one(
             "SELECT u.id, u.display_name, u.email, u.created_at, m.role FROM users u JOIN memberships m ON m.user_id=u.id WHERE m.home_id=? AND u.id=?",
@@ -911,7 +942,7 @@ def make_app(
 
     def assigned_caregiver(home_id: str, caregiver_id: str | None, fallback_actor: dict | None = None) -> dict | None:
         """Validate a named same-home caregiver without granting extra rights."""
-        selected_id = caregiver_id or (fallback_actor["user_id"] if fallback_actor and fallback_actor["role"] in {"admin", "caregiver"} else None)
+        selected_id = canonical_uuid(caregiver_id, "assigned_caregiver_id") if caregiver_id else (fallback_actor["user_id"] if fallback_actor and fallback_actor["role"] in {"admin", "caregiver"} else None)
         if not selected_id:
             return None
         selected = member(home_id, selected_id)
@@ -1277,15 +1308,25 @@ def make_app(
                 publisher_block(actor)
         else:
             publisher_block(actor)
+        if body.subject_user_id and body.care_recipient_id:
+            raise HTTPException(422, "Choose either subject_user_id or care_recipient_id")
         subject_user_id = body.subject_user_id or actor["user_id"]
         if actor["role"] != "publisher":
             member(home_id, subject_user_id)
         if subject_user_id != actor["user_id"] and actor["role"] not in {"admin", "caregiver"}:
             raise HTTPException(403, "Only a caregiver or admin can record a represented subject decision")
-        cid = str(uuid.uuid4()); timestamp = now_iso(); db.execute("INSERT INTO consents VALUES (?,?,?,?,?,?,?)", (cid, home_id, subject_user_id, body.purpose, body.policy_version, timestamp, None if body.granted else timestamp))
+        care_recipient_id = canonical_uuid(body.care_recipient_id, "care_recipient_id") if body.care_recipient_id else None
+        if care_recipient_id:
+            family_actor(actor)
+            if not db.one("SELECT id FROM care_recipients WHERE id=? AND home_id=?", (care_recipient_id, home_id)):
+                raise HTTPException(404, "Care recipient not found")
+        cid = str(uuid.uuid4()); timestamp = now_iso(); db.execute(
+            "INSERT INTO consents(id,home_id,subject_user_id,purpose,policy_version,granted_at,revoked_at,care_recipient_id) VALUES (?,?,?,?,?,?,?,?)",
+            (cid, home_id, subject_user_id, body.purpose, body.policy_version, timestamp, None if body.granted else timestamp, care_recipient_id),
+        )
         if body.purpose == "video_capture":
             db.execute("INSERT INTO home_runtime(home_id,paused,updated_at) VALUES (?,?,?) ON CONFLICT(home_id) DO UPDATE SET paused=excluded.paused, updated_at=excluded.updated_at", (home_id, 0 if body.granted else 1, timestamp))
-        audit(actor, "consent.grant" if body.granted else "consent.revoke", "consent", cid, home_id); return {"id": cid, "granted": body.granted, "subject_user_id": subject_user_id, "paused": is_paused(home_id)}
+        audit(actor, "consent.grant" if body.granted else "consent.revoke", "consent", cid, home_id); return {"id": cid, "granted": body.granted, "subject_user_id": subject_user_id, "care_recipient_id": care_recipient_id, "paused": is_paused(home_id)}
 
     @app.get("/api/v1/homes/{home_id}/consents")
     def consent_list(home_id: str, actor: Current): home_check(actor, home_id); publisher_block(actor); return {"data": db.many("SELECT * FROM consents WHERE home_id=? ORDER BY granted_at DESC", (home_id,))}
@@ -3221,6 +3262,7 @@ def make_app(
             "display_name": row["display_name"],
             "relationship": row.get("relationship"),
             "room_label": row.get("room_label"),
+            "medication_reminders_enabled": active_care_recipient_consent(row["home_id"], row["id"], "medication_management"),
             "created_at": row["created_at"],
         }
 
@@ -3402,6 +3444,7 @@ def make_app(
             "id": row["id"],
             "home_id": row["home_id"],
             "subject_user_id": row["subject_user_id"],
+            "care_recipient_id": row.get("care_recipient_id"),
             "name": row["name"],
             "dose": row["dose"],
             "schedule": row["schedule"],
@@ -3421,27 +3464,47 @@ def make_app(
         return row
 
     @app.get("/api/v1/homes/{home_id}/medication-plans")
-    def medication_plans(home_id: str, actor: Current, subject_user_id: str | None = None, active_only: bool = True):
+    def medication_plans(home_id: str, actor: Current, subject_user_id: str | None = None, care_recipient_id: str | None = None, active_only: bool = True):
         home_check(actor, home_id); publisher_block(actor)
-        subject_id = subject_user_id or actor["user_id"]
-        member(home_id, subject_id)
-        if subject_id != actor["user_id"]:
-            family_actor(actor)
-        require_consent(home_id, subject_id, "medication_management")
-        query = "SELECT * FROM medication_plans WHERE home_id=? AND subject_user_id=?"
-        params: list[object] = [home_id, subject_id]
+        if subject_user_id and care_recipient_id:
+            raise HTTPException(422, "Choose either subject_user_id or care_recipient_id")
+        if care_recipient_id:
+            care_recipient_id = medication_care_recipient(home_id, actor, care_recipient_id)["id"]
+            query = "SELECT * FROM medication_plans WHERE home_id=? AND care_recipient_id=?"
+            params: list[object] = [home_id, care_recipient_id]
+            subject_id = None
+        else:
+            subject_id = subject_user_id or actor["user_id"]
+            member(home_id, subject_id)
+            if subject_id != actor["user_id"]:
+                family_actor(actor)
+            require_consent(home_id, subject_id, "medication_management")
+            query = "SELECT * FROM medication_plans WHERE home_id=? AND subject_user_id=? AND care_recipient_id IS NULL"
+            params = [home_id, subject_id]
         if active_only:
             query += " AND active=1"
         query += " ORDER BY active DESC, name"
-        return {"data": [medication_plan_view(row) for row in db.many(query, tuple(params))], "subject_user_id": subject_id, "purpose": "medication_management", "medical_advice": False}
+        return {"data": [medication_plan_view(row) for row in db.many(query, tuple(params))], "subject_user_id": subject_id, "care_recipient_id": care_recipient_id, "purpose": "medication_management", "medical_advice": False}
 
     @app.post("/api/v1/homes/{home_id}/medication-plans")
     def medication_plan_create(home_id: str, body: MedicationPlanIn, actor: Current):
         home_check(actor, home_id); family_actor(actor)
-        subject = family_subject(home_id, actor, body.subject_user_id, "medication_management")
+        if body.subject_user_id and body.care_recipient_id:
+            raise HTTPException(422, "Choose either subject_user_id or care_recipient_id")
+        care_recipient_id = canonical_uuid(body.care_recipient_id, "care_recipient_id") if body.care_recipient_id else None
+        if care_recipient_id:
+            care_recipient_id = medication_care_recipient(home_id, actor, care_recipient_id)["id"]
+            subject_id = actor["user_id"]
+        elif body.subject_user_id:
+            subject_id = family_subject(home_id, actor, body.subject_user_id, "medication_management")["id"]
+        else:
+            raise HTTPException(422, "A medication subject is required")
         caregiver = assigned_caregiver(home_id, body.assigned_caregiver_id, actor)
         plan_id, created = str(uuid.uuid4()), now_iso()
-        db.execute("INSERT INTO medication_plans VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)", (plan_id, home_id, subject["id"], body.name, body.dose, body.schedule, body.instructions, int(body.active), 1, actor["user_id"], caregiver["id"] if caregiver else None, created, created))
+        db.execute(
+            "INSERT INTO medication_plans(id,home_id,subject_user_id,name,dose,schedule,instructions,active,version,created_by,assigned_caregiver_id,created_at,updated_at,care_recipient_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (plan_id, home_id, subject_id, body.name, body.dose, body.schedule, body.instructions, int(body.active), 1, actor["user_id"], caregiver["id"] if caregiver else None, created, created, care_recipient_id),
+        )
         audit(actor, "medication.plan.create", "medication_plan", plan_id, home_id)
         result = medication_plan_view(db.one("SELECT * FROM medication_plans WHERE id=?", (plan_id,)))
         result["medical_advice"] = False
@@ -3451,7 +3514,10 @@ def make_app(
     def medication_plan_update(home_id: str, plan_id: str, body: MedicationPlanUpdate, actor: Current):
         home_check(actor, home_id); family_actor(actor)
         current = medication_plan(home_id, plan_id)
-        require_consent(home_id, current["subject_user_id"], "medication_management")
+        if current.get("care_recipient_id"):
+            require_care_recipient_consent(home_id, current["care_recipient_id"], "medication_management")
+        else:
+            require_consent(home_id, current["subject_user_id"], "medication_management")
         if body.version is not None and body.version != current["version"]:
             raise HTTPException(409, "Medication plan version conflict")
         values = {key: value for key, value in body.model_dump(exclude_unset=True).items() if key != "version"}
@@ -3473,33 +3539,53 @@ def make_app(
         return result
 
     @app.get("/api/v1/homes/{home_id}/medication-check-ins")
-    def medication_check_ins(home_id: str, actor: Current, subject_user_id: str | None = None, scheduled_from: datetime | None = None, scheduled_to: datetime | None = None):
+    def medication_check_ins(home_id: str, actor: Current, subject_user_id: str | None = None, care_recipient_id: str | None = None, scheduled_from: datetime | None = None, scheduled_to: datetime | None = None):
         home_check(actor, home_id); publisher_block(actor)
-        subject_id = subject_user_id or actor["user_id"]
-        member(home_id, subject_id)
-        if subject_id != actor["user_id"]:
-            family_actor(actor)
-        require_consent(home_id, subject_id, "medication_management")
-        query = "SELECT * FROM medication_check_ins WHERE home_id=? AND subject_user_id=?"
-        params: list[object] = [home_id, subject_id]
+        if subject_user_id and care_recipient_id:
+            raise HTTPException(422, "Choose either subject_user_id or care_recipient_id")
+        if care_recipient_id:
+            care_recipient_id = medication_care_recipient(home_id, actor, care_recipient_id)["id"]
+            query = "SELECT * FROM medication_check_ins WHERE home_id=? AND care_recipient_id=?"
+            params: list[object] = [home_id, care_recipient_id]
+            subject_id = None
+        else:
+            subject_id = subject_user_id or actor["user_id"]
+            member(home_id, subject_id)
+            if subject_id != actor["user_id"]:
+                family_actor(actor)
+            require_consent(home_id, subject_id, "medication_management")
+            query = "SELECT * FROM medication_check_ins WHERE home_id=? AND subject_user_id=? AND care_recipient_id IS NULL"
+            params = [home_id, subject_id]
         if scheduled_from:
             query += " AND scheduled_for>=?"; params.append(scheduled_from.isoformat())
         if scheduled_to:
             query += " AND scheduled_for<=?"; params.append(scheduled_to.isoformat())
         query += " ORDER BY scheduled_for DESC"
-        return {"data": db.many(query, tuple(params)), "subject_user_id": subject_id, "medical_advice": False}
+        rows = db.many(query, tuple(params))
+        for row in rows:
+            marker = db.one("SELECT display_name FROM users WHERE id=?", (row.get("marked_by"),)) if row.get("marked_by") else None
+            row["marked_by_name"] = marker["display_name"] if marker else None
+        return {"data": rows, "subject_user_id": subject_id, "care_recipient_id": care_recipient_id, "medical_advice": False}
 
     @app.post("/api/v1/homes/{home_id}/medication-plans/{plan_id}/check-ins")
     def medication_check_in(home_id: str, plan_id: str, body: MedicationCheckInIn, actor: Current):
         home_check(actor, home_id); publisher_block(actor)
         plan = medication_plan(home_id, plan_id)
-        if actor["user_id"] != plan["subject_user_id"]:
+        if plan.get("care_recipient_id"):
             family_actor(actor)
-        require_consent(home_id, plan["subject_user_id"], "medication_management")
+            require_care_recipient_consent(home_id, plan["care_recipient_id"], "medication_management")
+        else:
+            if actor["user_id"] != plan["subject_user_id"]:
+                family_actor(actor)
+            require_consent(home_id, plan["subject_user_id"], "medication_management")
         timestamp, scheduled = now_iso(), body.scheduled_for.replace(microsecond=0).isoformat()
         check_id = str(uuid.uuid4())
-        db.execute("INSERT INTO medication_check_ins VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(plan_id,scheduled_for) DO UPDATE SET status=excluded.status, note=excluded.note, marked_by=excluded.marked_by, updated_at=excluded.updated_at", (check_id, home_id, plan_id, plan["subject_user_id"], scheduled, body.status, body.note, actor["user_id"], timestamp, timestamp))
+        db.execute(
+            "INSERT INTO medication_check_ins(id,home_id,plan_id,subject_user_id,scheduled_for,status,note,marked_by,created_at,updated_at,care_recipient_id) VALUES (?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(plan_id,scheduled_for) DO UPDATE SET status=excluded.status, note=excluded.note, marked_by=excluded.marked_by, updated_at=excluded.updated_at, care_recipient_id=excluded.care_recipient_id",
+            (check_id, home_id, plan_id, plan["subject_user_id"], scheduled, body.status, body.note, actor["user_id"], timestamp, timestamp, plan.get("care_recipient_id")),
+        )
         row = db.one("SELECT * FROM medication_check_ins WHERE plan_id=? AND scheduled_for=?", (plan_id, scheduled))
+        row["marked_by_name"] = actor["display_name"]
         audit(actor, "medication.check_in.update", "medication_check_in", row["id"], home_id)
         return {"data": row, "medical_advice": False}
 
@@ -3568,34 +3654,51 @@ def make_app(
         return list(dict.fromkeys(slots)) or []
 
     @app.get("/api/v1/homes/{home_id}/medication-reminders")
-    def medication_reminders(home_id: str, actor: Current, day: str | None = None, subject_user_id: str | None = None):
+    def medication_reminders(home_id: str, actor: Current, day: str | None = None, subject_user_id: str | None = None, care_recipient_id: str | None = None):
         home_check(actor, home_id); publisher_block(actor)
-        subject_id = subject_user_id or actor["user_id"]
-        member(home_id, subject_id)
-        if subject_id != actor["user_id"]:
-            family_actor(actor)
-        require_consent(home_id, subject_id, "medication_management")
+        if subject_user_id and care_recipient_id:
+            raise HTTPException(422, "Choose either subject_user_id or care_recipient_id")
+        if care_recipient_id:
+            care_recipient_id = medication_care_recipient(home_id, actor, care_recipient_id)["id"]
+            subject_id = None
+        else:
+            subject_id = subject_user_id or actor["user_id"]
+            member(home_id, subject_id)
+            if subject_id != actor["user_id"]:
+                family_actor(actor)
+            require_consent(home_id, subject_id, "medication_management")
         target_day = day or datetime.now(timezone.utc).date().isoformat()
         if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", target_day):
             raise HTTPException(422, "day must use YYYY-MM-DD")
-        plans = db.many("SELECT * FROM medication_plans WHERE home_id=? AND subject_user_id=? AND active=1 ORDER BY name", (home_id, subject_id))
+        plans = db.many(
+            "SELECT * FROM medication_plans WHERE home_id=? AND care_recipient_id=? AND active=1 ORDER BY name" if care_recipient_id else "SELECT * FROM medication_plans WHERE home_id=? AND subject_user_id=? AND care_recipient_id IS NULL AND active=1 ORDER BY name",
+            (home_id, care_recipient_id if care_recipient_id else subject_id),
+        )
         reminders = []
         for plan in plans:
             for slot in schedule_slots(plan["schedule"], target_day):
                 scheduled = f"{target_day}T{slot}:00+00:00" if slot != "unscheduled" else f"{target_day}T00:00:00+00:00"
-                status_row = db.one("SELECT status, note, updated_at FROM medication_check_ins WHERE plan_id=? AND scheduled_for=?", (plan["id"], scheduled))
+                status_row = db.one("SELECT status, note, marked_by, updated_at FROM medication_check_ins WHERE plan_id=? AND scheduled_for=?", (plan["id"], scheduled))
                 caregiver = db.one("SELECT display_name FROM users WHERE id=?", (plan["assigned_caregiver_id"],)) if plan.get("assigned_caregiver_id") else None
-                reminders.append({"plan_id": plan["id"], "name": plan["name"], "dose": plan["dose"], "instructions": plan["instructions"], "schedule_rule": plan["schedule"], "scheduled_for": scheduled, "status": status_row["status"] if status_row else "pending", "note": status_row["note"] if status_row else "", "updated_at": status_row["updated_at"] if status_row else None, "assigned_caregiver_id": plan.get("assigned_caregiver_id"), "assigned_caregiver_name": caregiver["display_name"] if caregiver else None})
-        return {"data": reminders, "subject_user_id": subject_id, "timezone": "UTC", "deterministic": True, "medical_advice": False}
+                marker = db.one("SELECT display_name FROM users WHERE id=?", (status_row.get("marked_by"),)) if status_row and status_row.get("marked_by") else None
+                reminders.append({"plan_id": plan["id"], "care_recipient_id": plan.get("care_recipient_id"), "name": plan["name"], "dose": plan["dose"], "instructions": plan["instructions"], "schedule_rule": plan["schedule"], "scheduled_for": scheduled, "status": status_row["status"] if status_row else "pending", "note": status_row["note"] if status_row else "", "updated_at": status_row["updated_at"] if status_row else None, "marked_by": status_row["marked_by"] if status_row else None, "marked_by_name": marker["display_name"] if marker else None, "assigned_caregiver_id": plan.get("assigned_caregiver_id"), "assigned_caregiver_name": caregiver["display_name"] if caregiver else None})
+        return {"data": reminders, "subject_user_id": subject_id, "care_recipient_id": care_recipient_id, "timezone": "UTC", "deterministic": True, "medical_advice": False}
 
     @app.post("/api/v1/homes/{home_id}/family-assistant")
     def family_assistant(home_id: str, body: FamilyAssistantIn, actor: Current):
         home_check(actor, home_id); family_actor(actor)
-        subject = family_subject(home_id, actor, body.subject_user_id, "family_assistant")
+        if body.subject_user_id and body.care_recipient_id:
+            raise HTTPException(422, "Choose either subject_user_id or care_recipient_id")
+        if body.care_recipient_id:
+            subject = medication_care_recipient(home_id, actor, body.care_recipient_id)
+            target_field, target_id = "care_recipient_id", subject["id"]
+        else:
+            subject = family_subject(home_id, actor, body.subject_user_id, "family_assistant")
+            target_field, target_id = "subject_user_id", subject["id"]
         # Keep this context narrow: plans and their bounded check-in statuses
         # only. Do not pass events, frames, transcripts, or a household stream.
-        plans = db.many("SELECT id, name, dose, schedule, instructions, active, version, assigned_caregiver_id FROM medication_plans WHERE home_id=? AND subject_user_id=? AND active=1 ORDER BY name LIMIT 50", (home_id, subject["id"]))
-        checks = db.many("SELECT id, plan_id, scheduled_for, status, note, updated_at FROM medication_check_ins WHERE home_id=? AND subject_user_id=? ORDER BY scheduled_for DESC LIMIT 100", (home_id, subject["id"]))
+        plans = db.many(f"SELECT id, name, dose, schedule, instructions, active, version, assigned_caregiver_id FROM medication_plans WHERE home_id=? AND {target_field}=? AND active=1 ORDER BY name LIMIT 50", (home_id, target_id))
+        checks = db.many(f"SELECT id, plan_id, scheduled_for, status, note, updated_at FROM medication_check_ins WHERE home_id=? AND {target_field}=? ORDER BY scheduled_for DESC LIMIT 100", (home_id, target_id))
         context = {"subject": {"id": subject["id"], "display_name": subject["display_name"]}, "plans": plans, "check_ins": checks, "request": body.message, "evidence_scope": "medication plans and check-ins only"}
         result = lm.family_summary(context)
         degraded = result is None
@@ -3606,8 +3709,8 @@ def make_app(
         allowed_evidence = {row["id"] for row in checks} | {row["id"] for row in plans}
         result["evidence_ids"] = [item for item in result.get("evidence_ids", []) if item in allowed_evidence][:20]
         result["evidence_timestamps"] = {row["id"]: row["updated_at"] for row in checks if row["id"] in result["evidence_ids"]}
-        audit(actor, "assistant.family_summary", "user", subject["id"], home_id)
-        return {"data": result, "degraded": degraded, "inference_status": lm.last_error if degraded else "ok", "subject_user_id": subject["id"], "context_scope": "medication plans and check-ins only", "medical_advice": False, "model_version": settings.effective_llm_model if not degraded else "rules-family-v1"}
+        audit(actor, "assistant.family_summary", "care_recipient" if body.care_recipient_id else "user", subject["id"], home_id)
+        return {"data": result, "degraded": degraded, "inference_status": lm.last_error if degraded else "ok", "subject_user_id": subject["id"] if not body.care_recipient_id else None, "care_recipient_id": body.care_recipient_id, "context_scope": "medication plans and check-ins only", "medical_advice": False, "model_version": settings.effective_llm_model if not degraded else "rules-family-v1"}
 
     @app.post("/api/v1/admin/retention/run")
     def retention_run(actor: Current):

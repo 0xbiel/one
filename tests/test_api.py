@@ -221,7 +221,8 @@ def test_care_recipient_crud_is_separate_from_home_membership(tmp_path):
     assert updated.status_code == 200
     assert updated.json()["data"] | {"created_at": recipient["created_at"]} == {
         "id": recipient["id"], "display_name": "Maria", "relationship": None,
-        "room_label": "Suite A", "created_at": recipient["created_at"],
+        "room_label": "Suite A", "medication_reminders_enabled": False,
+        "created_at": recipient["created_at"],
     }
     assert c.patch(f"/api/v1/homes/{home}/care-recipients/{recipient['id']}", headers=headers, json={}).status_code == 422
     assert c.post(f"/api/v1/homes/{home}/care-recipients", headers=headers, json={"display_name": "   "}).status_code == 422
@@ -734,3 +735,56 @@ def test_medication_schedule_respects_weekdays_and_caregiver_assignment(tmp_path
     assert [row["scheduled_for"] for row in tuesday] == ["2026-09-15T20:00:00+00:00"]
     assert sunday == []
     assert monday[0]["assigned_caregiver_name"] == "Marta"
+
+
+def test_care_recipient_medication_plan_checkin_and_attribution(tmp_path):
+    c = client(tmp_path); token, home = auth(c); h = {"Authorization": f"Bearer {token}"}
+    actor_id = c.get("/api/v1/me", headers=h).json()["actor"]["id"]
+    recipient = c.post(
+        f"/api/v1/homes/{home}/care-recipients",
+        headers=h,
+        json={"display_name": "María", "relationship": "Mother"},
+    ).json()["data"]
+    blocked = c.post(
+        f"/api/v1/homes/{home}/medication-plans",
+        headers=h,
+        json={"care_recipient_id": recipient["id"], "name": "Morning", "dose": "1 tablet", "schedule": "Mon,Wed,Fri @ 08:00"},
+    )
+    assert blocked.status_code == 403
+    consent = c.post(
+        f"/api/v1/homes/{home}/consents",
+        headers=h,
+        json={"purpose": "medication_management", "policy_version": "2026-09-01", "care_recipient_id": recipient["id"]},
+    )
+    assert consent.status_code == 200 and consent.json()["care_recipient_id"] == recipient["id"]
+    listed_recipient = c.get(f"/api/v1/homes/{home}/care-recipients", headers=h).json()["data"][0]
+    assert listed_recipient["medication_reminders_enabled"] is True
+
+    plan = c.post(
+        f"/api/v1/homes/{home}/medication-plans",
+        headers=h,
+        json={"care_recipient_id": recipient["id"].upper(), "assigned_caregiver_id": actor_id.upper(), "name": "Morning", "dose": "1 tablet", "schedule": "Mon,Wed,Fri @ 08:00"},
+    )
+    assert plan.status_code == 200 and plan.json()["care_recipient_id"] == recipient["id"]
+    assert plan.json()["assigned_caregiver_id"] == actor_id
+    plan_id = plan.json()["id"]
+    reminders = c.get(
+        f"/api/v1/homes/{home}/medication-reminders?day=2026-09-14&care_recipient_id={recipient['id']}",
+        headers=h,
+    )
+    assert reminders.status_code == 200 and len(reminders.json()["data"]) == 1
+    scheduled = reminders.json()["data"][0]["scheduled_for"]
+    checkin = c.post(
+        f"/api/v1/homes/{home}/medication-plans/{plan_id}/check-ins",
+        headers=h,
+        json={"scheduled_for": scheduled, "status": "taken"},
+    )
+    assert checkin.status_code == 200 and checkin.json()["data"]["marked_by_name"]
+    marker_name = checkin.json()["data"]["marked_by_name"]
+    refreshed = c.get(
+        f"/api/v1/homes/{home}/medication-reminders?day=2026-09-14&care_recipient_id={recipient['id']}",
+        headers=h,
+    ).json()["data"][0]
+    assert refreshed["status"] == "taken"
+    assert refreshed["marked_by_name"] == marker_name
+    assert refreshed["updated_at"] is not None

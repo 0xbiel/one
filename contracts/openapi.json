@@ -720,6 +720,11 @@
             "title": "Id",
             "type": "string"
           },
+          "medication_reminders_enabled": {
+            "default": false,
+            "title": "Medication Reminders Enabled",
+            "type": "boolean"
+          },
           "relationship": {
             "anyOf": [
               {
@@ -886,6 +891,17 @@
       },
       "ConsentIn": {
         "properties": {
+          "care_recipient_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Care Recipient Id"
+          },
           "granted": {
             "default": true,
             "title": "Granted",
@@ -1104,6 +1120,17 @@
       },
       "FamilyAssistantIn": {
         "properties": {
+          "care_recipient_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Care Recipient Id"
+          },
           "message": {
             "default": "",
             "maxLength": 1000,
@@ -1412,6 +1439,17 @@
             ],
             "title": "Assigned Caregiver Id"
           },
+          "care_recipient_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Care Recipient Id"
+          },
           "dose": {
             "maxLength": 120,
             "minLength": 1,
@@ -1437,12 +1475,18 @@
             "type": "string"
           },
           "subject_user_id": {
-            "title": "Subject User Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject User Id"
           }
         },
         "required": [
-          "subject_user_id",
           "name",
           "dose",
           "schedule"
@@ -5231,6 +5275,22 @@
           },
           {
             "in": "query",
+            "name": "care_recipient_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Care Recipient Id"
+            }
+          },
+          {
+            "in": "query",
             "name": "scheduled_from",
             "required": false,
             "schema": {
@@ -5314,6 +5374,22 @@
                 }
               ],
               "title": "Subject User Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "care_recipient_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Care Recipient Id"
             }
           },
           {
@@ -5550,6 +5626,22 @@
                 }
               ],
               "title": "Subject User Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "care_recipient_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Care Recipient Id"
             }
           }
         ],
