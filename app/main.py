@@ -1610,7 +1610,7 @@ def make_app(
             "roomplan_map_id": map_row["id"],
         }
 
-    def roomplan_calibration_targets(map_row: dict) -> list[dict]:
+    def roomplan_calibration_targets(map_row: dict, target_count: int = 4) -> list[dict]:
         try:
             map_data = json.loads(map_row.get("map_json") or "{}")
         except (TypeError, json.JSONDecodeError):
@@ -1777,7 +1777,10 @@ def make_app(
                 result.append(point)
             return result
 
+        desired_count = max(4, min(12, int(target_count)))
         chosen: list[tuple[float, float]] = []
+        remaining: list[tuple[float, float]] = []
+        selected_separation = 0.60
         for wall_clearance, minimum_separation in ((0.35, 0.75), (0.22, 0.60)):
             available = safe_candidates(wall_clearance)
             chosen = []
@@ -1793,9 +1796,30 @@ def make_app(
                 chosen.append(selected)
                 available.remove(selected)
             if len(chosen) == 4:
+                remaining = available
+                selected_separation = minimum_separation
                 break
         if len(chosen) != 4:
             return []
+
+        # Keep extra clear-floor candidates private to the session. If the
+        # fixed camera cannot see a person at one of the primary four points,
+        # the API can swap only that point while preserving prior captures.
+        replacement_separation = max(0.48, selected_separation * 0.72)
+        while len(chosen) < desired_count:
+            eligible = [
+                point for point in remaining
+                if all(math.hypot(point[0] - prior[0], point[1] - prior[1]) >= replacement_separation for prior in chosen)
+            ]
+            if not eligible:
+                break
+            selected = max(
+                eligible,
+                key=lambda point: min(math.hypot(point[0] - prior[0], point[1] - prior[1]) for prior in chosen),
+            )
+            chosen.append(selected)
+            remaining.remove(selected)
+
         return [
             {"index": index, "x": round(point[0], 4), "y": round(floor_y, 4), "z": round(point[1], 4)}
             for index, point in enumerate(chosen)
@@ -2431,9 +2455,14 @@ def make_app(
         landmark_meta = metadata.get("visual_landmarks") if isinstance(metadata.get("visual_landmarks"), dict) else {}
         if landmark_meta.get("status") != "ready" or not landmark_meta.get("artifact_key"):
             raise HTTPException(409, "This RoomPlan scan is not ready for fixed-camera calibration yet")
-        targets = roomplan_calibration_targets(map_row)
-        if len(targets) != 4:
+        target_pool = roomplan_calibration_targets(map_row, target_count=10)
+        if len(target_pool) < 4:
             raise HTTPException(409, "The RoomPlan floor does not contain enough usable geometry for guided calibration")
+        targets = [{**target, "index": index} for index, target in enumerate(target_pool[:4])]
+        replacement_targets = [
+            {"x": target["x"], "y": target["y"], "z": target["z"]}
+            for target in target_pool[4:]
+        ]
         created_at = now_iso()
         expires_at = (datetime.now(timezone.utc) + ROOMPLAN_CALIBRATION_SESSION_TTL).isoformat().replace("+00:00", "Z")
         session = {
@@ -2444,6 +2473,7 @@ def make_app(
             "status": "waiting_for_person",
             "current_target_index": 0,
             "targets": targets,
+            "replacement_targets": replacement_targets,
             "frames": [],
             "anchors": [],
             "proposal": None,
@@ -2508,6 +2538,45 @@ def make_app(
         should_solve = False
         frames_for_solve: list[CameraLocalizationFrameIn] = []
         anchors_for_solve: list[CameraLocalizationPersonAnchorIn] = []
+
+        # Validate the standing point before consuming it. A calibration target
+        # can be perfectly valid floor geometry while still sitting outside the
+        # fixed camera's field of view. In that case keep prior good captures and
+        # swap only this target for another safe floor point. If the local
+        # detector is temporarily unavailable, preserve the older solve path
+        # rather than rejecting a capture on infrastructure alone.
+        person_visible: bool | None = None
+        detect = getattr(geometry, "detect", None)
+        if callable(detect):
+            detector_ready = False
+            try:
+                for frame in body.frames:
+                    detection_result = detect(
+                        frame_base64=frame.frame_base64,
+                        width=frame.width,
+                        height=frame.height,
+                        candidate_labels=["person"],
+                    )
+                    if not isinstance(detection_result, dict) or detection_result.get("status") != "ready":
+                        continue
+                    detector_ready = True
+                    detections = detection_result.get("detections")
+                    if not isinstance(detections, list):
+                        continue
+                    if any(
+                        isinstance(item, dict)
+                        and str(item.get("label") or "").strip().lower() == "person"
+                        and isinstance(item.get("confidence"), (int, float))
+                        and float(item["confidence"]) >= 0.20
+                        for item in detections
+                    ):
+                        person_visible = True
+                        break
+                if person_visible is None and detector_ready:
+                    person_visible = False
+            except (RoomLayoutServiceUnavailable, RoomLayoutServiceError):
+                person_visible = None
+
         with roomplan_calibration_lock:
             if session.get("status") == "expired":
                 raise HTTPException(410, "The calibration session expired; start it again")
@@ -2517,6 +2586,28 @@ def make_app(
             if body.target_index != current_index:
                 raise HTTPException(409, "Submitted frames do not match the current calibration target")
             target = session["targets"][current_index]
+            if person_visible is False:
+                replacements = session.get("replacement_targets")
+                if isinstance(replacements, list) and replacements:
+                    replacement = replacements.pop(0)
+                    session["targets"][current_index] = {
+                        "index": current_index,
+                        "x": float(replacement["x"]),
+                        "y": float(replacement["y"]),
+                        "z": float(replacement["z"]),
+                    }
+                    session["status"] = "waiting_for_person"
+                    session["error"] = (
+                        "The fixed camera could not see a person at that point, so ONE moved only this target. "
+                        "Your earlier calibration points are still kept."
+                    )
+                    return roomplan_calibration_session_view(session)
+                session["status"] = "failed"
+                session["error"] = (
+                    "The fixed camera cannot see enough of the safe floor targets from its current position. "
+                    "Move the camera or use manual placement instead."
+                )
+                return roomplan_calibration_session_view(session)
             base_index = len(session["frames"])
             if base_index + len(body.frames) > 8:
                 raise HTTPException(413, "Guided calibration accepts at most eight transient frames")

@@ -17,6 +17,7 @@ class FakeRoomLayoutService:
         self.reprojection_error_px = reprojection_error_px
         self.homography_inlier_ratio = homography_inlier_ratio
         self.unavailable = unavailable
+        self.detect_person_visible: bool | None = None
         self.calls: list[dict] = []
 
     def infer(self, **kwargs):
@@ -78,6 +79,20 @@ class FakeRoomLayoutService:
                 },
             },
             "diagnostics": {"raw_frames_persisted": False},
+        }
+
+    def detect(self, **kwargs):
+        self.calls.append({"detect": kwargs})
+        if self.detect_person_visible is None:
+            return {"status": "unavailable", "detections": []}
+        return {
+            "status": "ready",
+            "model_version": "fake-person-detector",
+            "detections": ([{
+                "label": "person",
+                "confidence": 0.91,
+                "bbox": [220.0, 100.0, 360.0, 470.0],
+            }] if self.detect_person_visible else []),
         }
 
     def build_visual_landmarks(self, **kwargs):
@@ -650,6 +665,32 @@ def test_remote_roomplan_calibration_session_uses_publisher_frames_and_requires_
         assert not (-1.86 <= target["x"] <= 0.10 and -1.86 <= target["z"] <= 0.10)
 
     fixed_frame = {"frame_base64": base64.b64encode(b"fixed-camera-guided").decode(), "width": 640, "height": 480}
+
+    # A safe RoomPlan point can still fall outside the fixed camera's field of
+    # view. Keep all prior progress and replace only that point when no person
+    # is visible in its capture.
+    original_first_target = dict(session["targets"][0])
+    service.detect_person_visible = False
+    requested = client.post(
+        f"/api/v1/homes/{home_id}/cameras/{camera_id}/roomplan-calibration-session/request-capture",
+        headers=admin_headers,
+        json={"target_index": 0},
+    )
+    assert requested.status_code == 200
+    replaced = client.post(
+        f"/api/v1/homes/{home_id}/cameras/{camera_id}/roomplan-calibration-session/frames",
+        headers=publisher_headers,
+        json={"target_index": 0, "frames": [fixed_frame]},
+    )
+    assert replaced.status_code == 200
+    session = replaced.json()
+    assert session["status"] == "waiting_for_person"
+    assert session["current_target_index"] == 0
+    assert session["captured_target_count"] == 0
+    assert (session["targets"][0]["x"], session["targets"][0]["z"]) != (original_first_target["x"], original_first_target["z"])
+    assert "earlier calibration points are still kept" in session["error"]
+
+    service.detect_person_visible = True
     for target_index in range(4):
         requested = client.post(
             f"/api/v1/homes/{home_id}/cameras/{camera_id}/roomplan-calibration-session/request-capture",
