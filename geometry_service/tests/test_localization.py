@@ -115,6 +115,63 @@ class LocalizationTests(unittest.TestCase):
         recovered = np.asarray(result["camera_to_world"], dtype=np.float64)
         self.assertLess(float(np.linalg.norm(recovered[:3, 3] - camera_to_world[:3, 3])), 0.15)
 
+    def test_guided_person_calibration_sweeps_unknown_fov_with_six_targets(self) -> None:
+        request = _request(8, 640, 480)
+        camera_to_world = np.eye(4, dtype=np.float64)
+        camera_to_world[:3, 3] = [0.15, 1.45, 3.1]
+        world_to_cv = _world_to_cv(camera_to_world)
+        true_fov = 84.0
+        focal = 640.0 / (2.0 * np.tan(np.deg2rad(true_fov) * 0.5))
+        intrinsics = np.asarray([[focal, 0.0, 320.0], [0.0, focal, 240.0], [0.0, 0.0, 1.0]], dtype=np.float64)
+        projection = intrinsics @ world_to_cv[:3, :]
+        targets = [
+            (-1.2, 0.0, 1.0),
+            (0.0, 0.0, 1.0),
+            (1.2, 0.0, 1.0),
+            (-1.2, 0.0, -0.6),
+            (0.0, 0.0, -0.6),
+            (1.2, 0.0, -0.6),
+        ]
+        frames = [{"frame_base64": "x", "width": 640, "height": 480} for _ in range(12)]
+        anchors = []
+        detections = []
+        for target_index, target in enumerate(targets):
+            pixel = _project_point(projection, np.asarray(target, dtype=np.float64))
+            self.assertIsNotNone(pixel)
+            assert pixel is not None
+            for offset in range(2):
+                frame_index = target_index * 2 + offset
+                anchors.append({"frame_index": frame_index, "x": target[0], "y": target[1], "z": target[2]})
+                foot_x = float(pixel[0]) + (-0.8 if offset == 0 else 0.8)
+                foot_y = float(pixel[1]) + (-0.5 if offset == 0 else 0.5)
+                y2 = foot_y + 1.5
+                detections.extend([
+                    {"frame_index": frame_index, "label": "person", "confidence": 0.86, "bbox": [foot_x - 26.0, y2 - 96.0, foot_x + 26.0, y2]},
+                    {"frame_index": frame_index, "label": "person", "confidence": 0.96, "bbox": [60.0, 115.0, 145.0, 355.0]},
+                ])
+        payload = request.model_dump()
+        payload.update({
+            "frames": frames,
+            "person_anchors": anchors,
+            "object_detections": detections,
+            "room_zones": [{
+                "id": "room",
+                "floor_y": 0.0,
+                "polygon": [{"x": -2.5, "z": -2.0}, {"x": 2.5, "z": -2.0}, {"x": 2.5, "z": 3.5}, {"x": -2.5, "z": 3.5}],
+            }],
+        })
+        request = CameraLocalizationRequest.model_validate(payload)
+
+        result, diagnostics = _guided_person_calibration(request)
+
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result["status"], "positioned")
+        self.assertEqual(diagnostics["target_count"], 6)
+        self.assertLess(abs(float(diagnostics["selected_fov_degrees"]) - true_fov), 8.0)
+        recovered = np.asarray(result["camera_to_world"], dtype=np.float64)
+        self.assertLess(float(np.linalg.norm(recovered[:3, 3] - camera_to_world[:3, 3])), 0.20)
+
     def test_semantic_cuboid_rank_rejects_extra_bad_assignment(self) -> None:
         strong_two_object = {
             "matched_object_count": 2,

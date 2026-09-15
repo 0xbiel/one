@@ -356,14 +356,14 @@ class CameraLocalizationRequest(BaseModel):
 
     schema_version: Literal["roomplan-camera-localization.v1"] = "roomplan-camera-localization.v1"
     landmarks: list[VisualLandmark] = Field(min_length=6, max_length=5_000)
-    frames: list[CameraLocalizationFrame] = Field(min_length=1, max_length=8)
+    frames: list[CameraLocalizationFrame] = Field(min_length=1, max_length=16)
     intrinsics: Matrix3x3 | None = None
     fov_degrees: float = Field(default=60.0, ge=30.0, le=120.0)
     room_zones: list[CameraLocalizationRoomZone] = Field(default_factory=list, max_length=16)
     search_prior: CameraLocalizationSearchPrior | None = None
     room_objects: list[CameraLocalizationRoomObject] = Field(default_factory=list, max_length=100)
     object_detections: list[CameraLocalizationObjectDetection] = Field(default_factory=list, max_length=100)
-    person_anchors: list[CameraLocalizationPersonAnchor] = Field(default_factory=list, max_length=8)
+    person_anchors: list[CameraLocalizationPersonAnchor] = Field(default_factory=list, max_length=16)
 
 
 class CameraLocalizationResponse(BaseModel):
@@ -374,6 +374,6 @@ class CameraLocalizationResponse(BaseModel):
     inlier_count: int = Field(default=0, ge=0)
     match_count: int = Field(default=0, ge=0)
     reprojection_error_px: float | None = Field(default=None, ge=0.0)
-    intrinsics_source: Literal["provided", "estimated-fov"]
+    intrinsics_source: Literal["provided", "estimated-fov", "estimated-fov-sweep"]
     intrinsics: list[list[float]] | None = None
     diagnostics: dict[str, Any] = Field(default_factory=dict)

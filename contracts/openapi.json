@@ -391,7 +391,7 @@
             "items": {
               "$ref": "#/components/schemas/CameraLocalizationFrameIn"
             },
-            "maxItems": 8,
+            "maxItems": 16,
             "minItems": 1,
             "title": "Frames",
             "type": "array"
@@ -410,7 +410,7 @@
             "items": {
               "$ref": "#/components/schemas/CameraLocalizationPersonAnchorIn"
             },
-            "maxItems": 8,
+            "maxItems": 16,
             "title": "Person Anchors",
             "type": "array"
           },
@@ -430,7 +430,7 @@
         "description": "Known RoomPlan floor point occupied by a person in one calibration frame.",
         "properties": {
           "frame_index": {
-            "maximum": 7.0,
+            "maximum": 15.0,
             "minimum": 0.0,
             "title": "Frame Index",
             "type": "integer"
@@ -1960,7 +1960,7 @@
       "RoomPlanCalibrationCaptureRequestIn": {
         "properties": {
           "target_index": {
-            "maximum": 3.0,
+            "maximum": 7.0,
             "minimum": 0.0,
             "title": "Target Index",
             "type": "integer"
@@ -1984,7 +1984,7 @@
             "type": "array"
           },
           "target_index": {
-            "maximum": 3.0,
+            "maximum": 7.0,
             "minimum": 0.0,
             "title": "Target Index",
             "type": "integer"

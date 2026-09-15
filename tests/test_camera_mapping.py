@@ -658,7 +658,7 @@ def test_remote_roomplan_calibration_session_uses_publisher_frames_and_requires_
     session = started.json()
     assert session["status"] == "waiting_for_person"
     assert session["capture_request_seq"] == 0
-    assert len(session["targets"]) == 4
+    assert len(session["targets"]) == 6
     assert session["raw_frames_persisted"] is False
     for target in session["targets"]:
         assert -1.78 <= target["x"] <= 1.78
@@ -700,7 +700,7 @@ def test_remote_roomplan_calibration_session_uses_publisher_frames_and_requires_
     assert "earlier calibration points are still kept" in session["error"]
 
     service.detect_person_visible = True
-    for target_index in range(4):
+    for target_index in range(6):
         requested = client.post(
             f"/api/v1/homes/{home_id}/cameras/{camera_id}/roomplan-calibration-session/request-capture",
             headers=admin_headers,
@@ -717,11 +717,11 @@ def test_remote_roomplan_calibration_session_uses_publisher_frames_and_requires_
         session = submitted.json()
 
     assert session["status"] == "review"
-    assert session["captured_target_count"] == 4
+    assert session["captured_target_count"] == 6
     assert session["proposal"]["camera_to_world"][0][3] == 1.25
     anchors = service.calls[-1]["camera_localization"]["person_anchors"]
-    assert len(anchors) == 4
-    assert [anchor["frame_index"] for anchor in anchors] == [0, 1, 2, 3]
+    assert len(anchors) == 6
+    assert [anchor["frame_index"] for anchor in anchors] == [0, 1, 2, 3, 4, 5]
 
     camera_during_review = client.get(f"/api/v1/homes/{home_id}/cameras", headers=admin_headers).json()["data"][0]
     assert camera_during_review["calibration_needed"] is True

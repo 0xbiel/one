@@ -390,7 +390,7 @@ class CameraLocalizationFrameIn(BaseModel):
 class CameraLocalizationPersonAnchorIn(BaseModel):
     """Known RoomPlan floor point occupied by a person in one calibration frame."""
 
-    frame_index: int = Field(ge=0, le=7)
+    frame_index: int = Field(ge=0, le=15)
     x: float
     y: float
     z: float
@@ -403,11 +403,11 @@ class CameraLocalizationPersonAnchorIn(BaseModel):
 
 
 class CameraLocalizationIn(BaseModel):
-    frames: list[CameraLocalizationFrameIn] = Field(min_length=1, max_length=8)
+    frames: list[CameraLocalizationFrameIn] = Field(min_length=1, max_length=16)
     intrinsics: Matrix3x3In | None = None
     fov_degrees: float = Field(default=60.0, ge=30.0, le=120.0)
     review_only: bool = False
-    person_anchors: list[CameraLocalizationPersonAnchorIn] = Field(default_factory=list, max_length=8)
+    person_anchors: list[CameraLocalizationPersonAnchorIn] = Field(default_factory=list, max_length=16)
 
     @model_validator(mode="after")
     def validate_person_anchor_frames(self) -> "CameraLocalizationIn":
@@ -417,11 +417,11 @@ class CameraLocalizationIn(BaseModel):
 
 
 class RoomPlanCalibrationCaptureRequestIn(BaseModel):
-    target_index: int = Field(ge=0, le=3)
+    target_index: int = Field(ge=0, le=7)
 
 
 class RoomPlanCalibrationFramesIn(BaseModel):
-    target_index: int = Field(ge=0, le=3)
+    target_index: int = Field(ge=0, le=7)
     frames: list[CameraLocalizationFrameIn] = Field(min_length=1, max_length=2)
 
 
@@ -1803,7 +1803,7 @@ def make_app(
             return []
 
         # Keep extra clear-floor candidates private to the session. If the
-        # fixed camera cannot see a person at one of the primary four points,
+        # fixed camera cannot see a person at one of the primary points,
         # the API can swap only that point while preserving prior captures.
         replacement_separation = max(0.48, selected_separation * 0.72)
         while len(chosen) < desired_count:
@@ -2456,13 +2456,14 @@ def make_app(
         landmark_meta = metadata.get("visual_landmarks") if isinstance(metadata.get("visual_landmarks"), dict) else {}
         if landmark_meta.get("status") != "ready" or not landmark_meta.get("artifact_key"):
             raise HTTPException(409, "This RoomPlan scan is not ready for fixed-camera calibration yet")
-        target_pool = roomplan_calibration_targets(map_row, target_count=10)
+        target_pool = roomplan_calibration_targets(map_row, target_count=12)
         if len(target_pool) < 4:
             raise HTTPException(409, "The RoomPlan floor does not contain enough usable geometry for guided calibration")
-        targets = [{**target, "index": index} for index, target in enumerate(target_pool[:4])]
+        primary_target_count = 6 if len(target_pool) >= 6 else 4
+        targets = [{**target, "index": index} for index, target in enumerate(target_pool[:primary_target_count])]
         replacement_targets = [
             {"x": target["x"], "y": target["y"], "z": target["z"]}
-            for target in target_pool[4:]
+            for target in target_pool[primary_target_count:]
         ]
         created_at = now_iso()
         expires_at = (datetime.now(timezone.utc) + ROOMPLAN_CALIBRATION_SESSION_TTL).isoformat().replace("+00:00", "Z")
@@ -2612,8 +2613,8 @@ def make_app(
                 )
                 return roomplan_calibration_session_view(session)
             base_index = len(session["frames"])
-            if base_index + len(body.frames) > 8:
-                raise HTTPException(413, "Guided calibration accepts at most eight transient frames")
+            if base_index + len(body.frames) > 16:
+                raise HTTPException(413, "Guided calibration accepts at most sixteen transient frames")
             session["frames"].extend(body.frames)
             session["anchors"].extend(
                 CameraLocalizationPersonAnchorIn(
@@ -2663,7 +2664,7 @@ def make_app(
                         session["error"] = None
                     else:
                         session["status"] = "failed"
-                        session["error"] = "The four standing points did not produce a confident camera placement."
+                        session["error"] = "The standing points did not produce a confident camera placement."
             except HTTPException as exc:
                 with roomplan_calibration_lock:
                     session["frames"] = []
