@@ -1844,6 +1844,7 @@ def make_app(
             "map_id": session["map_id"],
             "status": status_value,
             "current_target_index": current_index,
+            "capture_request_seq": int(session.get("capture_request_seq", 0)),
             "captured_target_count": min(current_index, len(targets)) if status_value not in {"solving", "review", "failed"} else len(targets),
             "targets": targets,
             "proposal": session.get("proposal"),
@@ -2472,6 +2473,7 @@ def make_app(
             "map_id": map_row["id"],
             "status": "waiting_for_person",
             "current_target_index": 0,
+            "capture_request_seq": 0,
             "targets": targets,
             "replacement_targets": replacement_targets,
             "frames": [],
@@ -2522,6 +2524,7 @@ def make_app(
                 raise HTTPException(409, "Capture request does not match the current calibration target")
             if session.get("status") not in {"waiting_for_person", "capture_requested"}:
                 raise HTTPException(409, "The calibration session is not waiting for a target capture")
+            session["capture_request_seq"] = int(session.get("capture_request_seq", 0)) + 1
             session["status"] = "capture_requested"
             session["error"] = None
         return roomplan_calibration_session_view(session)

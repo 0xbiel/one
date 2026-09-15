@@ -657,6 +657,7 @@ def test_remote_roomplan_calibration_session_uses_publisher_frames_and_requires_
     assert started.status_code == 200
     session = started.json()
     assert session["status"] == "waiting_for_person"
+    assert session["capture_request_seq"] == 0
     assert len(session["targets"]) == 4
     assert session["raw_frames_persisted"] is False
     for target in session["targets"]:
@@ -677,6 +678,14 @@ def test_remote_roomplan_calibration_session_uses_publisher_frames_and_requires_
         json={"target_index": 0},
     )
     assert requested.status_code == 200
+    assert requested.json()["capture_request_seq"] == 1
+    retried = client.post(
+        f"/api/v1/homes/{home_id}/cameras/{camera_id}/roomplan-calibration-session/request-capture",
+        headers=admin_headers,
+        json={"target_index": 0},
+    )
+    assert retried.status_code == 200
+    assert retried.json()["capture_request_seq"] == 2
     replaced = client.post(
         f"/api/v1/homes/{home_id}/cameras/{camera_id}/roomplan-calibration-session/frames",
         headers=publisher_headers,
