@@ -1617,6 +1617,8 @@ def make_app(
             return []
         geometry_payload = map_data.get("geometry") if isinstance(map_data, dict) else None
         geometry_payload = geometry_payload if isinstance(geometry_payload, dict) else map_data
+        normalized_scan = map_data.get("normalized_scan") if isinstance(map_data, dict) else None
+        normalized_scan = normalized_scan if isinstance(normalized_scan, dict) else {}
         raw_zones = geometry_payload.get("room_zones") if isinstance(geometry_payload, dict) else None
         if not isinstance(raw_zones, list):
             return []
@@ -1640,6 +1642,78 @@ def make_app(
                 - polygon[(index + 1) % len(polygon)][0] * polygon[index][1]
                 for index in range(len(polygon))
             )) * 0.5
+
+        def distance_to_segment(point: tuple[float, float], start: tuple[float, float], end: tuple[float, float]) -> float:
+            px, pz = point
+            sx, sz = start
+            ex, ez = end
+            dx = ex - sx
+            dz = ez - sz
+            length_sq = dx * dx + dz * dz
+            if length_sq <= 1e-12:
+                return math.hypot(px - sx, pz - sz)
+            t = max(0.0, min(1.0, ((px - sx) * dx + (pz - sz) * dz) / length_sq))
+            return math.hypot(px - (sx + t * dx), pz - (sz + t * dz))
+
+        def distance_to_polygon_edge(point: tuple[float, float], polygon: list[tuple[float, float]]) -> float:
+            return min(
+                distance_to_segment(point, polygon[index], polygon[(index + 1) % len(polygon)])
+                for index in range(len(polygon))
+            )
+
+        def finite_number(value: object) -> float | None:
+            if not isinstance(value, (int, float)):
+                return None
+            number = float(value)
+            return number if math.isfinite(number) else None
+
+        def obstacle_footprints(floor_y: float) -> list[list[tuple[float, float]]]:
+            raw_objects = normalized_scan.get("objects")
+            if not isinstance(raw_objects, list) or not raw_objects:
+                raw_objects = geometry_payload.get("objects") if isinstance(geometry_payload, dict) else []
+            if not isinstance(raw_objects, list):
+                return []
+            footprints: list[list[tuple[float, float]]] = []
+            standing_clearance = 0.38
+            for room_object in raw_objects:
+                if not isinstance(room_object, dict):
+                    continue
+                center = room_object.get("center") if isinstance(room_object.get("center"), dict) else room_object.get("position")
+                dimensions = room_object.get("dimensions")
+                if not isinstance(center, dict) or not isinstance(dimensions, dict):
+                    continue
+                center_x = finite_number(center.get("x"))
+                center_y = finite_number(center.get("y"))
+                center_z = finite_number(center.get("z"))
+                width = finite_number(dimensions.get("x"))
+                height = finite_number(dimensions.get("y"))
+                depth = finite_number(dimensions.get("z"))
+                if None in {center_x, center_y, center_z, width, height, depth} or width <= 0 or height <= 0 or depth <= 0:
+                    continue
+                bottom_y = center_y - height * 0.5
+                top_y = center_y + height * 0.5
+                if top_y < floor_y + 0.04 or bottom_y > floor_y + 2.0:
+                    continue
+                half_x = width * 0.5 + standing_clearance
+                half_z = depth * 0.5 + standing_clearance
+                local_corners = [(-half_x, -half_z), (half_x, -half_z), (half_x, half_z), (-half_x, half_z)]
+                transform = room_object.get("transform")
+                if (
+                    isinstance(transform, list)
+                    and len(transform) == 4
+                    and all(isinstance(row, list) and len(row) == 4 for row in transform)
+                    and all(isinstance(value, (int, float)) and math.isfinite(float(value)) for row in transform for value in row)
+                ):
+                    footprints.append([
+                        (
+                            float(transform[0][0]) * x + float(transform[0][2]) * z + float(transform[0][3]),
+                            float(transform[2][0]) * x + float(transform[2][2]) * z + float(transform[2][3]),
+                        )
+                        for x, z in local_corners
+                    ])
+                else:
+                    footprints.append([(center_x + x, center_z + z) for x, z in local_corners])
+            return footprints
 
         zones: list[tuple[float, float, list[tuple[float, float]]]] = []
         for zone in raw_zones:
@@ -1673,21 +1747,59 @@ def make_app(
             (min_x * 0.72 + max_x * 0.28, min_z * 0.28 + max_z * 0.72),
             (min_x * 0.28 + max_x * 0.72, min_z * 0.28 + max_z * 0.72),
         ]
-        targets: list[dict] = []
-        for index, candidate in enumerate(raw_targets):
-            selected = candidate
-            if not point_in_polygon(selected, polygon):
-                selected = center
-                for factor in (0.8, 0.6, 0.4, 0.2):
-                    pulled = (
-                        center[0] + (candidate[0] - center[0]) * factor,
-                        center[1] + (candidate[1] - center[1]) * factor,
-                    )
-                    if point_in_polygon(pulled, polygon):
-                        selected = pulled
-                        break
-            targets.append({"index": index, "x": round(selected[0], 4), "y": round(floor_y, 4), "z": round(selected[1], 4)})
-        return targets
+        obstacles = obstacle_footprints(floor_y)
+        span_x = max_x - min_x
+        span_z = max_z - min_z
+        grid_step = max(0.18, min(0.30, min(span_x, span_z) / 14.0))
+        candidate_points: list[tuple[float, float]] = [*raw_targets, center]
+        x = min_x + grid_step
+        while x < max_x - grid_step * 0.5:
+            z = min_z + grid_step
+            while z < max_z - grid_step * 0.5:
+                candidate_points.append((x, z))
+                z += grid_step
+            x += grid_step
+
+        def safe_candidates(wall_clearance: float) -> list[tuple[float, float]]:
+            seen: set[tuple[int, int]] = set()
+            result: list[tuple[float, float]] = []
+            for point in candidate_points:
+                key = (round(point[0] * 1000), round(point[1] * 1000))
+                if key in seen:
+                    continue
+                seen.add(key)
+                if not point_in_polygon(point, polygon):
+                    continue
+                if distance_to_polygon_edge(point, polygon) < wall_clearance:
+                    continue
+                if any(point_in_polygon(point, footprint) for footprint in obstacles):
+                    continue
+                result.append(point)
+            return result
+
+        chosen: list[tuple[float, float]] = []
+        for wall_clearance, minimum_separation in ((0.35, 0.75), (0.22, 0.60)):
+            available = safe_candidates(wall_clearance)
+            chosen = []
+            for seed in raw_targets:
+                eligible = [
+                    point for point in available
+                    if all(math.hypot(point[0] - prior[0], point[1] - prior[1]) >= minimum_separation for prior in chosen)
+                ]
+                if not eligible:
+                    chosen = []
+                    break
+                selected = min(eligible, key=lambda point: (point[0] - seed[0]) ** 2 + (point[1] - seed[1]) ** 2)
+                chosen.append(selected)
+                available.remove(selected)
+            if len(chosen) == 4:
+                break
+        if len(chosen) != 4:
+            return []
+        return [
+            {"index": index, "x": round(point[0], 4), "y": round(floor_y, 4), "z": round(point[1], 4)}
+            for index, point in enumerate(chosen)
+        ]
 
     def roomplan_calibration_session_view(session: dict) -> dict:
         current_index = int(session.get("current_target_index", 0))

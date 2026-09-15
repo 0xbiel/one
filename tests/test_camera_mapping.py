@@ -602,6 +602,16 @@ def test_remote_roomplan_calibration_session_uses_publisher_frames_and_requires_
         ],
         "attributes": ["room-floor"],
     }]
+    roomplan_payload["normalized_scan"]["objects"] = [{
+        "id": "bed-1",
+        "category": "bed",
+        "confidence": "high",
+        "center": {"x": -0.88, "y": 0.30, "z": -0.88},
+        "dimensions": {"x": 1.20, "y": 0.60, "z": 1.20},
+        "transform": [[1.0, 0.0, 0.0, -0.88], [0.0, 1.0, 0.0, 0.30], [0.0, 0.0, 1.0, -0.88], [0.0, 0.0, 0.0, 1.0]],
+        "vertices": [],
+        "attributes": [],
+    }]
     room_map = client.post(f"/api/v1/homes/{home_id}/maps/roomplan", headers=admin_headers, json=roomplan_payload).json()
     visual_frame = {
         "frame_base64": base64.b64encode(b"jpeg").decode(),
@@ -634,6 +644,10 @@ def test_remote_roomplan_calibration_session_uses_publisher_frames_and_requires_
     assert session["status"] == "waiting_for_person"
     assert len(session["targets"]) == 4
     assert session["raw_frames_persisted"] is False
+    for target in session["targets"]:
+        assert -1.78 <= target["x"] <= 1.78
+        assert -1.78 <= target["z"] <= 1.78
+        assert not (-1.86 <= target["x"] <= 0.10 and -1.86 <= target["z"] <= 0.10)
 
     fixed_frame = {"frame_base64": base64.b64encode(b"fixed-camera-guided").decode(), "width": 640, "height": 480}
     for target_index in range(4):
