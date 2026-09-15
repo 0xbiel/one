@@ -405,12 +405,43 @@
                 "type": "null"
               }
             ]
+          },
+          "review_only": {
+            "default": false,
+            "title": "Review Only",
+            "type": "boolean"
           }
         },
         "required": [
           "frames"
         ],
         "title": "CameraLocalizationIn",
+        "type": "object"
+      },
+      "CameraLocalizationReferenceIn": {
+        "description": "Physical top-down camera location in the active RoomPlan coordinate frame.",
+        "properties": {
+          "source": {
+            "default": "manual-floor-reference",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Source",
+            "type": "string"
+          },
+          "x": {
+            "title": "X",
+            "type": "number"
+          },
+          "z": {
+            "title": "Z",
+            "type": "number"
+          }
+        },
+        "required": [
+          "x",
+          "z"
+        ],
+        "title": "CameraLocalizationReferenceIn",
         "type": "object"
       },
       "CameraMapFrameIn": {
@@ -3227,6 +3258,120 @@
         "summary": "Camera Update"
       }
     },
+    "/api/v1/homes/{home_id}/cameras/{camera_id}/localization-history": {
+      "get": {
+        "description": "Return a bounded, image-free temporal trace of RoomPlan pose hypotheses.",
+        "operationId": "camera_localization_history_api_v1_homes__home_id__cameras__camera_id__localization_history_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "camera_id",
+            "required": true,
+            "schema": {
+              "title": "Camera Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Camera Localization History"
+      }
+    },
+    "/api/v1/homes/{home_id}/cameras/{camera_id}/localization-reference": {
+      "put": {
+        "description": "Persist a human-verified floor location for localization evaluation.",
+        "operationId": "set_camera_localization_reference_api_v1_homes__home_id__cameras__camera_id__localization_reference_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "camera_id",
+            "required": true,
+            "schema": {
+              "title": "Camera Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CameraLocalizationReferenceIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Camera Localization Reference"
+      }
+    },
     "/api/v1/homes/{home_id}/cameras/{camera_id}/localize-roomplan": {
       "post": {
         "description": "Visually register a separate fixed camera inside the active RoomPlan scene.",
@@ -3502,6 +3647,94 @@
           }
         },
         "summary": "Map Generation Frames"
+      }
+    },
+    "/api/v1/homes/{home_id}/cameras/{camera_id}/roomplan-placement-preview": {
+      "get": {
+        "description": "Expose only the active RoomPlan scene needed to review this publisher camera's placement.",
+        "operationId": "roomplan_camera_placement_preview_api_v1_homes__home_id__cameras__camera_id__roomplan_placement_preview_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "camera_id",
+            "required": true,
+            "schema": {
+              "title": "Camera Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Roomplan Camera Placement Preview"
+      }
+    },
+    "/api/v1/homes/{home_id}/cameras/{camera_id}/roomplan-placement-preview/usdz": {
+      "get": {
+        "operationId": "roomplan_camera_placement_preview_usdz_api_v1_homes__home_id__cameras__camera_id__roomplan_placement_preview_usdz_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "camera_id",
+            "required": true,
+            "schema": {
+              "title": "Camera Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Roomplan Camera Placement Preview Usdz"
       }
     },
     "/api/v1/homes/{home_id}/cameras/{camera_id}/roomplan-readiness": {

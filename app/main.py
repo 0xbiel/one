@@ -388,6 +388,21 @@ class CameraLocalizationIn(BaseModel):
     frames: list[CameraLocalizationFrameIn] = Field(min_length=1, max_length=8)
     intrinsics: Matrix3x3In | None = None
     fov_degrees: float = Field(default=60.0, ge=30.0, le=120.0)
+    review_only: bool = False
+
+
+class CameraLocalizationReferenceIn(BaseModel):
+    """Physical top-down camera location in the active RoomPlan coordinate frame."""
+
+    x: float
+    z: float
+    source: str = Field(default="manual-floor-reference", min_length=1, max_length=80)
+
+    @model_validator(mode="after")
+    def validate_finite_position(self) -> "CameraLocalizationReferenceIn":
+        if not math.isfinite(self.x) or not math.isfinite(self.z):
+            raise ValueError("camera localization reference must be finite")
+        return self
 
 
 class ObjectIn(BaseModel): label: str = Field(min_length=1, max_length=80); display_name: str | None = Field(default=None, max_length=120)
@@ -533,6 +548,207 @@ class MedicationCheckInIn(BaseModel):
 class FamilyAssistantIn(BaseModel):
     message: str = Field(default="", max_length=1000)
     subject_user_id: str | None = None
+
+
+def _camera_localization_search_prior(rows: Sequence[dict]) -> dict | None:
+    """Find a tight recurring rejected-pose cluster to steer the next solve.
+
+    This history is deliberately search-only: it never contributes to
+    localization consensus or activation.  Each calibration can contribute at
+    most one sample to a cluster so duplicate fixed-camera frames cannot turn
+    into independent evidence.
+    """
+    samples: list[dict] = []
+    for row in rows:
+        try:
+            metrics = json.loads(row.get("metrics_json") or "{}")
+        except (TypeError, json.JSONDecodeError):
+            continue
+        diagnostics = metrics.get("diagnostics") if isinstance(metrics, dict) else None
+        if not isinstance(diagnostics, dict):
+            continue
+        summaries = diagnostics.get("candidate_summaries")
+        if isinstance(summaries, list):
+            for summary in summaries:
+                if not isinstance(summary, dict) or summary.get("scene_plausible") is not True:
+                    continue
+                view_id = summary.get("landmark_view_id")
+                center = summary.get("camera_center")
+                if not isinstance(view_id, str) or not view_id or view_id == "all-views":
+                    continue
+                if not isinstance(center, list) or len(center) != 3:
+                    continue
+                try:
+                    values = tuple(float(value) for value in center)
+                except (TypeError, ValueError):
+                    continue
+                if not all(math.isfinite(value) for value in values):
+                    continue
+                fov = summary.get("selected_fov_degrees")
+                try:
+                    fov_value = float(fov) if fov is not None else None
+                except (TypeError, ValueError):
+                    fov_value = None
+                samples.append(
+                    {
+                        "calibration_id": str(row.get("id") or ""),
+                        "source": "visual-pnp",
+                        "view_id": view_id,
+                        "center": values,
+                        "fov_degrees": fov_value,
+                    }
+                )
+
+        # A repeated high-quality semantic cuboid fit can also establish a
+        # useful fixed-camera search basin. It remains search-only and never
+        # contributes to localization consensus or activation.
+        semantic_candidates = diagnostics.get("semantic_cuboid_candidates")
+        if isinstance(semantic_candidates, list):
+            for candidate in semantic_candidates:
+                if not isinstance(candidate, dict):
+                    continue
+                if (
+                    int(candidate.get("matched_object_count") or 0) < 2
+                    or int(candidate.get("semantic_group_count") or 0) < 2
+                    or float(candidate.get("minimum_iou") or 0.0) < 0.30
+                    or float(candidate.get("mean_iou") or 0.0) < 0.55
+                ):
+                    continue
+                center = candidate.get("camera_center")
+                if not isinstance(center, list) or len(center) != 3:
+                    continue
+                try:
+                    values = tuple(float(value) for value in center)
+                except (TypeError, ValueError):
+                    continue
+                if not all(math.isfinite(value) for value in values):
+                    continue
+                fov = candidate.get("selected_fov_degrees")
+                try:
+                    fov_value = float(fov) if fov is not None else None
+                except (TypeError, ValueError):
+                    fov_value = None
+                samples.append(
+                    {
+                        "calibration_id": str(row.get("id") or ""),
+                        "source": "semantic-cuboid",
+                        "view_id": None,
+                        "center": values,
+                        "fov_degrees": fov_value,
+                    }
+                )
+                # Diagnostics are already ranked; retain at most one semantic
+                # sample from each calibration so one frame cannot self-vote.
+                break
+
+    best_by_source: dict[str, tuple[tuple[int, float], dict]] = {}
+    for anchor in samples:
+        nearby = [
+            sample
+            for sample in samples
+            if sample["source"] == anchor["source"]
+            and sample["view_id"] == anchor["view_id"]
+            and math.dist(sample["center"], anchor["center"]) <= 0.35
+        ]
+        nearest_by_calibration: dict[str, dict] = {}
+        for sample in nearby:
+            calibration_id = sample["calibration_id"]
+            current = nearest_by_calibration.get(calibration_id)
+            if current is None or math.dist(sample["center"], anchor["center"]) < math.dist(current["center"], anchor["center"]):
+                nearest_by_calibration[calibration_id] = sample
+        # Rows arrive newest-first. Cap the retained support so a camera that
+        # stays installed for a long time cannot overflow the wire contract,
+        # while still letting several rapid retries coexist with the last
+        # tight recurring cluster.
+        chosen = list(nearest_by_calibration.values())[:30]
+        if len(chosen) < 3:
+            continue
+
+        center = tuple(
+            sorted(sample["center"][axis] for sample in chosen)[len(chosen) // 2]
+            for axis in range(3)
+        )
+        residuals = [math.dist(sample["center"], center) for sample in chosen]
+        mean_residual = sum(residuals) / len(residuals)
+        # A loose historical cloud is more likely to encode repeated PnP
+        # ambiguity than a stable physical camera location.
+        if mean_residual > 0.12:
+            continue
+
+        fovs = [sample["fov_degrees"] for sample in chosen if sample["fov_degrees"] is not None]
+        stable_fov = None
+        if len(fovs) >= 3 and max(fovs) - min(fovs) <= 8.0:
+            stable_fov = sorted(fovs)[len(fovs) // 2]
+        prior = {
+            "center": [round(value, 4) for value in center],
+            "support_count": len(chosen),
+            "mean_residual_m": round(mean_residual, 4),
+            "source": anchor["source"],
+            "landmark_view_id": anchor["view_id"],
+            "fov_degrees": stable_fov,
+        }
+        score = (len(chosen), -mean_residual)
+        current = best_by_source.get(anchor["source"])
+        if current is None or score > current[0]:
+            best_by_source[anchor["source"]] = (score, prior)
+
+    # Prefer a robust semantic basin once it has repeated across calibrations:
+    # it is tied to RoomPlan object geometry and remains only a search hint.
+    # Fall back to the existing visual-view cluster when semantic support is
+    # not yet stable enough.
+    semantic_best = best_by_source.get("semantic-cuboid")
+    if semantic_best is not None:
+        return semantic_best[1]
+    visual_best = best_by_source.get("visual-pnp")
+    return None if visual_best is None else visual_best[1]
+
+
+def _stabilize_camera_localization_diagnostics(
+    diagnostics: dict,
+    search_prior: dict | None,
+    *,
+    positioned: bool,
+) -> dict:
+    """Keep rejected fixed-camera diagnostics stable through occlusion.
+
+    This only affects the numeric trace shown while the fresh attempt is still
+    ``needs_rescan``.  It never supplies ``camera_to_world`` and therefore
+    cannot activate a camera registration.
+    """
+    if positioned or not isinstance(search_prior, dict) or search_prior.get("source") != "semantic-cuboid":
+        return diagnostics
+    if int(search_prior.get("support_count") or 0) < 3 or float(search_prior.get("mean_residual_m") or 1.0) > 0.12:
+        return diagnostics
+    if diagnostics.get("selected_estimate_source") == "semantic-cuboid":
+        return diagnostics
+
+    prior_center = search_prior.get("center")
+    selected_center = diagnostics.get("selected_camera_center")
+    if not (
+        isinstance(prior_center, list)
+        and len(prior_center) == 3
+        and all(isinstance(value, (int, float)) and math.isfinite(float(value)) for value in prior_center)
+    ):
+        return diagnostics
+    selected_is_valid = (
+        isinstance(selected_center, list)
+        and len(selected_center) == 3
+        and all(isinstance(value, (int, float)) and math.isfinite(float(value)) for value in selected_center)
+    )
+    if selected_is_valid and math.dist(
+        [float(value) for value in selected_center],
+        [float(value) for value in prior_center],
+    ) <= 0.80:
+        return diagnostics
+
+    return {
+        **diagnostics,
+        "unstabilized_selected_camera_center": selected_center if selected_is_valid else None,
+        "unstabilized_selected_estimate_source": diagnostics.get("selected_estimate_source"),
+        "selected_camera_center": [round(float(value), 4) for value in prior_center],
+        "selected_estimate_source": "temporal-prior",
+        "selected_estimate_stabilized": True,
+    }
 
 
 def make_app(
@@ -1170,6 +1386,92 @@ def make_app(
         normalized = model_version.strip().lower() if isinstance(model_version, str) else ""
         return not normalized.startswith(("mock", "fixture", "deterministic"))
 
+    def roomplan_pose_scene_validation(map_row: dict, camera_to_world: object) -> tuple[bool, dict]:
+        """Reject visual-PnP poses that contradict the metric RoomPlan floor."""
+        if (
+            not isinstance(camera_to_world, list)
+            or len(camera_to_world) != 4
+            or any(not isinstance(row, list) or len(row) != 4 for row in camera_to_world)
+        ):
+            return False, {"accepted": False, "reason": "invalid_pose_matrix"}
+        try:
+            values = [[float(value) for value in row] for row in camera_to_world]
+        except (TypeError, ValueError):
+            return False, {"accepted": False, "reason": "invalid_pose_matrix"}
+        if not all(math.isfinite(value) for row in values for value in row):
+            return False, {"accepted": False, "reason": "invalid_pose_matrix"}
+
+        map_data = json_object(map_row.get("map_json") or "{}")
+        geometry = map_data.get("geometry") if isinstance(map_data.get("geometry"), dict) else {}
+        zones = geometry.get("room_zones") if isinstance(geometry.get("room_zones"), list) else []
+        if not zones:
+            return True, {"accepted": True, "reason": "room_zone_prior_unavailable"}
+
+        x, y, z = values[0][3], values[1][3], values[2][3]
+
+        def segment_distance(px: float, pz: float, ax: float, az: float, bx: float, bz: float) -> float:
+            dx, dz = bx - ax, bz - az
+            length_sq = dx * dx + dz * dz
+            if length_sq <= 1e-12:
+                return math.hypot(px - ax, pz - az)
+            t = max(0.0, min(1.0, ((px - ax) * dx + (pz - az) * dz) / length_sq))
+            return math.hypot(px - (ax + t * dx), pz - (az + t * dz))
+
+        def polygon_distance(px: float, pz: float, polygon: list[tuple[float, float]]) -> float:
+            inside = False
+            previous = polygon[-1]
+            minimum = float("inf")
+            for current in polygon:
+                ax, az = previous
+                bx, bz = current
+                minimum = min(minimum, segment_distance(px, pz, ax, az, bx, bz))
+                if (az > pz) != (bz > pz):
+                    crossing_x = (bx - ax) * (pz - az) / (bz - az) + ax
+                    if px < crossing_x:
+                        inside = not inside
+                previous = current
+            return 0.0 if inside else minimum
+
+        candidates: list[dict] = []
+        for zone in zones:
+            if not isinstance(zone, dict):
+                continue
+            raw_polygon = zone.get("polygon")
+            floor_y = zone.get("floor_y")
+            if not isinstance(raw_polygon, list) or len(raw_polygon) < 3 or not isinstance(floor_y, (int, float)):
+                continue
+            polygon: list[tuple[float, float]] = []
+            for point in raw_polygon:
+                if not isinstance(point, dict):
+                    continue
+                px, pz = point.get("x"), point.get("z")
+                if isinstance(px, (int, float)) and isinstance(pz, (int, float)) and math.isfinite(float(px)) and math.isfinite(float(pz)):
+                    polygon.append((float(px), float(pz)))
+            if len(polygon) < 3 or not math.isfinite(float(floor_y)):
+                continue
+            candidates.append(
+                {
+                    "zone_id": zone.get("id"),
+                    "distance_m": polygon_distance(x, z, polygon),
+                    "height_above_floor_m": y - float(floor_y),
+                }
+            )
+
+        if not candidates:
+            return True, {"accepted": True, "reason": "usable_room_zone_prior_unavailable"}
+
+        nearest = min(candidates, key=lambda item: item["distance_m"])
+        height = float(nearest["height_above_floor_m"])
+        distance = float(nearest["distance_m"])
+        accepted = 0.15 <= height <= 3.50 and distance <= 0.75
+        return accepted, {
+            "accepted": accepted,
+            "reason": "within_roomplan_bounds" if accepted else "pose_outside_roomplan_bounds",
+            "zone_id": nearest.get("zone_id"),
+            "camera_height_above_floor_m": round(height, 4),
+            "distance_from_room_polygon_m": round(distance, 4),
+        }
+
     def active_map_row(home_id: str) -> dict | None:
         rows = db.many(
             "SELECT * FROM room_maps WHERE home_id=? ORDER BY revision DESC, created_at DESC",
@@ -1208,7 +1510,7 @@ def make_app(
         if source != "roomplan-lidar-3d" or map_dimension(map_row, source) != "3d":
             return None
         calibration = db.one(
-            "SELECT * FROM calibrations WHERE home_id=? AND map_id=? AND source IN ('auto-roomplan-registration','visual-roomplan-registration') ORDER BY created_at DESC LIMIT 1",
+            "SELECT * FROM calibrations WHERE home_id=? AND map_id=? AND source IN ('auto-roomplan-registration','visual-roomplan-registration') AND status IN ('active','needs_rescan') ORDER BY created_at DESC LIMIT 1",
             (home_id, map_row["id"]),
         )
         if not calibration:
@@ -1231,7 +1533,8 @@ def make_app(
             "SELECT id FROM cameras WHERE id=? AND home_id=? AND enabled=1",
             (calibration["camera_id"], home_id),
         )
-        positioned = calibration.get("status") == "active" and camera is not None
+        scene_valid, _ = roomplan_pose_scene_validation(map_row, extrinsics.get("camera_to_world"))
+        positioned = calibration.get("status") == "active" and camera is not None and scene_valid
         status_value = "positioned" if positioned else ("needs_rescan" if camera is not None else "unavailable")
         return {
             "status": status_value,
@@ -1248,7 +1551,7 @@ def make_app(
         if map_source(map_row) != "roomplan-lidar-3d" or map_dimension(map_row, "roomplan-lidar-3d") != "3d":
             return []
         rows = db.many(
-            "SELECT * FROM calibrations WHERE home_id=? AND map_id=? AND source IN ('auto-roomplan-registration','visual-roomplan-registration') ORDER BY created_at DESC",
+            "SELECT * FROM calibrations WHERE home_id=? AND map_id=? AND source IN ('auto-roomplan-registration','visual-roomplan-registration') AND status IN ('active','needs_rescan') ORDER BY created_at DESC",
             (home_id, map_row["id"]),
         )
         seen: set[str] = set()
@@ -1263,7 +1566,8 @@ def make_app(
                 continue
             metrics = json_object(calibration.get("metrics_json") or "{}")
             extrinsics = json_object(calibration.get("extrinsics_json") or "{}")
-            positioned = calibration.get("status") == "active"
+            scene_valid, _ = roomplan_pose_scene_validation(map_row, extrinsics.get("camera_to_world"))
+            positioned = calibration.get("status") == "active" and scene_valid
             result.append(
                 {
                     "status": "positioned" if positioned else "needs_rescan",
@@ -1616,12 +1920,76 @@ def make_app(
         landmarks = landmark_payload.get("landmarks") if isinstance(landmark_payload, dict) else None
         if not isinstance(landmarks, list) or len(landmarks) < 6:
             raise HTTPException(409, "The RoomPlan visual landmark index is incomplete; rebuild the scan")
+        map_data = json_object(map_row.get("map_json") or "{}")
+        map_geometry = map_data.get("geometry") if isinstance(map_data.get("geometry"), dict) else {}
+        raw_room_zones = map_geometry.get("room_zones") if isinstance(map_geometry.get("room_zones"), list) else []
+        room_zones: list[dict] = []
+        for zone in raw_room_zones:
+            if not isinstance(zone, dict) or not isinstance(zone.get("polygon"), list) or not isinstance(zone.get("floor_y"), (int, float)):
+                continue
+            polygon = [
+                {"x": float(point["x"]), "z": float(point["z"])}
+                for point in zone["polygon"]
+                if isinstance(point, dict) and isinstance(point.get("x"), (int, float)) and isinstance(point.get("z"), (int, float))
+            ]
+            if len(polygon) >= 3:
+                room_zones.append({"id": zone.get("id"), "floor_y": float(zone["floor_y"]), "polygon": polygon})
+        room_objects: list[dict] = []
+        normalized_scan = map_data.get("normalized_scan") if isinstance(map_data.get("normalized_scan"), dict) else {}
+        native_room_objects = normalized_scan.get("objects") if isinstance(normalized_scan.get("objects"), list) else []
+        raw_room_objects = native_room_objects or (map_geometry.get("objects") if isinstance(map_geometry.get("objects"), list) else [])
+        for room_object in raw_room_objects:
+            if not isinstance(room_object, dict):
+                continue
+            center = room_object.get("center") if isinstance(room_object.get("center"), dict) else room_object.get("position")
+            dimensions = room_object.get("dimensions")
+            label = room_object.get("category") if isinstance(room_object.get("category"), str) else room_object.get("label")
+            if (
+                not isinstance(center, dict)
+                or not isinstance(dimensions, dict)
+                or not isinstance(label, str)
+                or not label.strip()
+                or not all(isinstance(center.get(axis), (int, float)) for axis in ("x", "y", "z"))
+                or not all(isinstance(dimensions.get(axis), (int, float)) for axis in ("x", "y", "z"))
+            ):
+                continue
+            confidence_value = room_object.get("confidence")
+            if isinstance(confidence_value, str):
+                confidence = {"high": 0.95, "medium": 0.75, "low": 0.45}.get(confidence_value.strip().lower(), 1.0)
+            elif isinstance(confidence_value, (int, float)):
+                confidence = float(confidence_value)
+            else:
+                confidence = 1.0
+            room_objects.append(
+                {
+                    "id": str(room_object.get("id") or f"room-object-{len(room_objects) + 1}"),
+                    "label": label.strip().lower(),
+                    "center": {axis: float(center[axis]) for axis in ("x", "y", "z")},
+                    "dimensions": {axis: float(dimensions[axis]) for axis in ("x", "y", "z")},
+                    **(
+                        {"transform": {"values": room_object["transform"]}}
+                        if isinstance(room_object.get("transform"), list)
+                        and len(room_object["transform"]) == 4
+                        and all(isinstance(row, list) and len(row) == 4 for row in room_object["transform"])
+                        else {}
+                    ),
+                    "confidence": max(0.0, min(1.0, confidence)),
+                }
+            )
+        recent_calibrations = db.many(
+            "SELECT id,metrics_json FROM calibrations WHERE home_id=? AND camera_id=? AND map_id=? AND source='visual-roomplan-registration' AND status='needs_rescan' ORDER BY created_at DESC LIMIT 80",
+            (home_id, camera_id, map_row["id"]),
+        )
+        search_prior = _camera_localization_search_prior(recent_calibrations)
         try:
             result = geometry.localize_camera(
                 landmarks=landmarks,
                 frames=[frame.model_dump(mode="json") for frame in body.frames],
                 intrinsics=body.intrinsics.values if body.intrinsics is not None else None,
                 fov_degrees=body.fov_degrees,
+                room_zones=room_zones,
+                search_prior=search_prior,
+                room_objects=room_objects,
             )
         except RoomLayoutServiceUnavailable as exc:
             raise HTTPException(503, "Local camera localization service is unavailable") from exc
@@ -1631,6 +1999,23 @@ def make_app(
             raise HTTPException(502, "Local camera localization service returned an invalid result")
 
         positioned = result.get("status") == "positioned" and isinstance(result.get("camera_to_world"), list)
+        scene_valid, scene_diagnostics = roomplan_pose_scene_validation(map_row, result.get("camera_to_world"))
+        if positioned and not scene_valid:
+            positioned = False
+            result["status"] = "needs_rescan"
+            result["camera_to_world"] = None
+        result_diagnostics = result.get("diagnostics") if isinstance(result.get("diagnostics"), dict) else {}
+        result_diagnostics = {
+            **result_diagnostics,
+            "scene_validation": scene_diagnostics,
+            "search_prior": search_prior,
+        }
+        result_diagnostics = _stabilize_camera_localization_diagnostics(
+            result_diagnostics,
+            search_prior,
+            positioned=positioned,
+        )
+        result["diagnostics"] = result_diagnostics
         created = now_iso()
         cid = str(uuid.uuid4())
         metrics = {
@@ -1640,7 +2025,7 @@ def make_app(
             "match_count": result.get("match_count", 0),
             "reprojection_error_px": result.get("reprojection_error_px"),
             "intrinsics_source": result.get("intrinsics_source"),
-            "diagnostics": result.get("diagnostics") if isinstance(result.get("diagnostics"), dict) else {},
+            "diagnostics": result_diagnostics,
         }
         intrinsics = result.get("intrinsics") if isinstance(result.get("intrinsics"), list) else (body.intrinsics.values if body.intrinsics else None)
         intrinsics_json = {
@@ -1648,10 +2033,12 @@ def make_app(
             "source": result.get("intrinsics_source"),
             "fov_degrees": body.fov_degrees,
         }
-        db.execute(
-            "UPDATE calibrations SET status='invalidated', invalidated_at=?, invalidation_reason='superseded by visual RoomPlan registration' WHERE home_id=? AND camera_id=? AND status='active'",
-            (created, home_id, camera_id),
-        )
+        if not body.review_only:
+            db.execute(
+                "UPDATE calibrations SET status='invalidated', invalidated_at=?, invalidation_reason='superseded by visual RoomPlan registration' WHERE home_id=? AND camera_id=? AND status='active'",
+                (created, home_id, camera_id),
+            )
+        storage_status = "needs_review" if body.review_only else ("active" if positioned else "needs_rescan")
         db.execute(
             "INSERT INTO calibrations(id,home_id,camera_id,map_id,intrinsics_json,extrinsics_json,accuracy_m,created_at,resolution_width,resolution_height,camera_metadata_json,metrics_json,source,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (
@@ -1668,7 +2055,7 @@ def make_app(
                 camera.get("metadata_json") or "{}",
                 json.dumps(metrics),
                 "visual-roomplan-registration",
-                "active" if positioned else "needs_rescan",
+                storage_status,
             ),
         )
         audit(actor, "camera.register.visual_roomplan", "calibration", cid, home_id)
@@ -1686,7 +2073,256 @@ def make_app(
             "match_count": result.get("match_count", 0),
             "reprojection_error_px": result.get("reprojection_error_px"),
             "intrinsics_source": result.get("intrinsics_source"),
-            "diagnostics": result.get("diagnostics") if isinstance(result.get("diagnostics"), dict) else {},
+            "diagnostics": result_diagnostics,
+            "review_required": bool(body.review_only and positioned),
+        }
+
+    @app.get("/api/v1/homes/{home_id}/cameras/{camera_id}/localization-history")
+    def camera_localization_history(home_id: str, camera_id: str, actor: Current, limit: int = 30):
+        """Return a bounded, image-free temporal trace of RoomPlan pose hypotheses."""
+        home_check(actor, home_id)
+        if actor.get("role") == "publisher" and actor.get("user_id") != camera_id:
+            raise HTTPException(403, "A publisher can inspect only its own camera localization")
+        camera = db.one("SELECT id FROM cameras WHERE id=? AND home_id=? AND enabled=1", (camera_id, home_id))
+        if not camera:
+            raise HTTPException(404, "Camera not found or disabled")
+
+        map_row = active_map_row(home_id)
+        if not map_row or map_source(map_row) != "roomplan-lidar-3d":
+            return {"camera_id": camera_id, "map_id": None, "reference": None, "attempts": []}
+
+        bounded_limit = max(1, min(80, int(limit)))
+        rows = db.many(
+            "SELECT id,status,created_at,metrics_json,extrinsics_json FROM calibrations "
+            "WHERE home_id=? AND camera_id=? AND map_id=? AND source='visual-roomplan-registration' "
+            "ORDER BY created_at DESC LIMIT ?",
+            (home_id, camera_id, map_row["id"], bounded_limit),
+        )
+
+        def center3(value: object) -> list[float] | None:
+            if not isinstance(value, list) or len(value) != 3 or not all(isinstance(item, (int, float)) for item in value):
+                return None
+            values = [float(item) for item in value]
+            return values if all(math.isfinite(item) for item in values) else None
+
+        def matrix_center(value: object) -> list[float] | None:
+            if not isinstance(value, list) or len(value) != 4:
+                return None
+            if not all(isinstance(row, list) and len(row) == 4 for row in value):
+                return None
+            try:
+                return center3([value[0][3], value[1][3], value[2][3]])
+            except (IndexError, TypeError):
+                return None
+
+        reference_row = db.one(
+            "SELECT x,z,source,created_at,updated_at FROM camera_localization_references WHERE home_id=? AND camera_id=? AND map_id=?",
+            (home_id, camera_id, map_row["id"]),
+        )
+        ground_truth_reference = None if reference_row is None else {
+            "kind": "ground-truth-floor",
+            "floor_position": [float(reference_row["x"]), float(reference_row["z"])],
+            "source": reference_row.get("source") or "manual-floor-reference",
+            "created_at": reference_row.get("created_at"),
+            "updated_at": reference_row.get("updated_at"),
+        }
+
+        parsed_rows: list[dict] = []
+        accepted_reference: dict | None = None
+        for row in rows:
+            metrics = json_object(row.get("metrics_json") or "{}")
+            diagnostics = metrics.get("diagnostics") if isinstance(metrics.get("diagnostics"), dict) else {}
+            extrinsics = json_object(row.get("extrinsics_json") or "{}")
+            accepted_center = matrix_center(extrinsics.get("camera_to_world"))
+            if accepted_reference is None and row.get("status") == "active" and accepted_center is not None:
+                accepted_reference = {
+                    "kind": "latest-positioned-registration",
+                    "camera_center": accepted_center,
+                    "calibration_id": row["id"],
+                    "created_at": row.get("created_at"),
+                    "source": "latest-positioned-registration",
+                }
+            parsed_rows.append({
+                "row": row,
+                "metrics": metrics,
+                "diagnostics": diagnostics,
+                "accepted_center": accepted_center,
+            })
+
+        reference = ground_truth_reference or accepted_reference
+        reference_center = center3(accepted_reference.get("camera_center")) if accepted_reference is not None else None
+        ground_truth_xz = (
+            tuple(float(value) for value in ground_truth_reference["floor_position"])
+            if ground_truth_reference is not None
+            else None
+        )
+
+        def distance_to_reference(center: list[float] | None) -> float | None:
+            if center is None:
+                return None
+            if ground_truth_xz is not None:
+                return round(math.hypot(center[0] - ground_truth_xz[0], center[2] - ground_truth_xz[1]), 4)
+            if reference_center is not None:
+                return round(math.dist(center, reference_center), 4)
+            return None
+
+        attempts: list[dict] = []
+        for parsed in reversed(parsed_rows):
+            row = parsed["row"]
+            metrics = parsed["metrics"]
+            diagnostics = parsed["diagnostics"]
+            accepted_center = parsed["accepted_center"]
+            raw_candidates = diagnostics.get("candidate_summaries") if isinstance(diagnostics.get("candidate_summaries"), list) else []
+            raw_semantic_candidates = diagnostics.get("semantic_cuboid_candidates") if isinstance(diagnostics.get("semantic_cuboid_candidates"), list) else []
+            candidates: list[dict] = []
+            for raw_candidate in raw_candidates[:12]:
+                if not isinstance(raw_candidate, dict):
+                    continue
+                candidate_center = center3(raw_candidate.get("camera_center"))
+                if candidate_center is None:
+                    continue
+                candidates.append({
+                    "kind": "visual-pnp",
+                    "frame_index": raw_candidate.get("frame_index"),
+                    "landmark_view_id": raw_candidate.get("landmark_view_id"),
+                    "camera_center": candidate_center,
+                    "distance_to_reference_m": distance_to_reference(candidate_center),
+                    "inlier_count": int(raw_candidate.get("inlier_count") or 0),
+                    "match_count": int(raw_candidate.get("match_count") or 0),
+                    "reprojection_error_px": raw_candidate.get("reprojection_error_px"),
+                    "consensus_frame_count": int(raw_candidate.get("consensus_frame_count") or 0),
+                    "consensus_scan_view_count": int(raw_candidate.get("consensus_scan_view_count") or 0),
+                    "scene_plausible": bool(raw_candidate.get("scene_plausible", True)),
+                    "scene_reason": raw_candidate.get("scene_reason"),
+                })
+            for raw_candidate in raw_semantic_candidates[:12]:
+                if not isinstance(raw_candidate, dict):
+                    continue
+                candidate_center = center3(raw_candidate.get("camera_center"))
+                if candidate_center is None:
+                    continue
+                candidates.append({
+                    "kind": "semantic-cuboid",
+                    "frame_index": raw_candidate.get("frame_index"),
+                    "landmark_view_id": None,
+                    "camera_center": candidate_center,
+                    "distance_to_reference_m": distance_to_reference(candidate_center),
+                    "inlier_count": 0,
+                    "match_count": int(raw_candidate.get("match_count") or raw_candidate.get("matched_object_count") or 0),
+                    "reprojection_error_px": None,
+                    "consensus_frame_count": 0,
+                    "consensus_scan_view_count": 0,
+                    "scene_plausible": True,
+                    "scene_reason": "semantic_cuboid_initializer",
+                    "selected_fov_degrees": raw_candidate.get("selected_fov_degrees"),
+                    "cuboid_score": raw_candidate.get("cuboid_score"),
+                    "mean_iou": raw_candidate.get("mean_iou"),
+                    "minimum_iou": raw_candidate.get("minimum_iou"),
+                    "matched_object_count": int(raw_candidate.get("matched_object_count") or 0),
+                    "semantic_group_count": int(raw_candidate.get("semantic_group_count") or 0),
+                    "labels": raw_candidate.get("labels") if isinstance(raw_candidate.get("labels"), list) else [],
+                })
+
+            selected_center = center3(diagnostics.get("selected_camera_center")) or accepted_center
+            if selected_center is None and candidates:
+                selected_center = candidates[0]["camera_center"]
+            attempts.append({
+                "id": row["id"],
+                "created_at": row.get("created_at"),
+                "status": "positioned" if accepted_center is not None else "needs_rescan",
+                "storage_status": row.get("status"),
+                "confidence": metrics.get("confidence"),
+                "inlier_count": int(metrics.get("inlier_count") or 0),
+                "match_count": int(metrics.get("match_count") or 0),
+                "reprojection_error_px": metrics.get("reprojection_error_px"),
+                "selected_camera_center": selected_center,
+                "selected_distance_to_reference_m": distance_to_reference(selected_center),
+                "selected_estimate_source": diagnostics.get("selected_estimate_source"),
+                "candidates": candidates,
+            })
+
+        return {
+            "camera_id": camera_id,
+            "map_id": map_row["id"],
+            "reference": reference,
+            "ground_truth_reference": ground_truth_reference,
+            "accepted_reference": accepted_reference,
+            "distance_metric": "horizontal-floor" if ground_truth_reference is not None else "3d-to-latest-accepted",
+            "attempts": attempts,
+        }
+
+    @app.put("/api/v1/homes/{home_id}/cameras/{camera_id}/localization-reference")
+    def set_camera_localization_reference(home_id: str, camera_id: str, body: CameraLocalizationReferenceIn, actor: Current):
+        """Persist a human-verified floor location for localization evaluation."""
+        home_check(actor, home_id)
+        publisher_block(actor)
+        camera = db.one("SELECT id FROM cameras WHERE id=? AND home_id=? AND enabled=1", (camera_id, home_id))
+        if not camera:
+            raise HTTPException(404, "Camera not found or disabled")
+        map_row = active_map_row(home_id)
+        if not map_row or map_source(map_row) != "roomplan-lidar-3d" or map_dimension(map_row, "roomplan-lidar-3d") != "3d":
+            raise HTTPException(409, "A native RoomPlan 3D map is required before setting a camera reference")
+        map_data = json_object(map_row.get("map_json") or "{}")
+        geometry = map_data.get("geometry") if isinstance(map_data.get("geometry"), dict) else {}
+        raw_zones = geometry.get("room_zones") if isinstance(geometry.get("room_zones"), list) else []
+
+        def polygon_distance(px: float, pz: float, polygon: list[tuple[float, float]]) -> float:
+            inside = False
+            previous = polygon[-1]
+            minimum = float("inf")
+            for current in polygon:
+                ax, az = previous
+                bx, bz = current
+                dx, dz = bx - ax, bz - az
+                length_sq = dx * dx + dz * dz
+                if length_sq <= 1e-12:
+                    distance = math.hypot(px - ax, pz - az)
+                else:
+                    t = max(0.0, min(1.0, ((px - ax) * dx + (pz - az) * dz) / length_sq))
+                    distance = math.hypot(px - (ax + t * dx), pz - (az + t * dz))
+                minimum = min(minimum, distance)
+                if (az > pz) != (bz > pz):
+                    crossing_x = (bx - ax) * (pz - az) / (bz - az) + ax
+                    if px < crossing_x:
+                        inside = not inside
+                previous = current
+            return 0.0 if inside else minimum
+
+        inside_or_near = False
+        for zone in raw_zones:
+            polygon = zone.get("polygon") if isinstance(zone, dict) else None
+            if not isinstance(polygon, list):
+                continue
+            points = [
+                (float(point["x"]), float(point["z"]))
+                for point in polygon
+                if isinstance(point, dict) and isinstance(point.get("x"), (int, float)) and isinstance(point.get("z"), (int, float))
+            ]
+            if len(points) >= 3 and polygon_distance(body.x, body.z, points) <= 0.40:
+                inside_or_near = True
+                break
+        if raw_zones and not inside_or_near:
+            raise HTTPException(422, "Camera reference must lie inside or immediately beside the active RoomPlan room")
+        existing = db.one(
+            "SELECT created_at FROM camera_localization_references WHERE home_id=? AND camera_id=? AND map_id=?",
+            (home_id, camera_id, map_row["id"]),
+        )
+        updated = now_iso()
+        created = existing.get("created_at") if existing else updated
+        db.execute(
+            "INSERT INTO camera_localization_references(home_id,camera_id,map_id,x,z,source,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?) "
+            "ON CONFLICT(home_id,camera_id,map_id) DO UPDATE SET x=excluded.x,z=excluded.z,source=excluded.source,updated_at=excluded.updated_at",
+            (home_id, camera_id, map_row["id"], body.x, body.z, body.source, created, updated),
+        )
+        audit(actor, "camera.localization_reference.set", "camera", camera_id, home_id)
+        return {
+            "camera_id": camera_id,
+            "map_id": map_row["id"],
+            "kind": "ground-truth-floor",
+            "floor_position": [body.x, body.z],
+            "source": body.source,
+            "created_at": created,
+            "updated_at": updated,
         }
 
     @app.get("/api/v1/homes/{home_id}/cameras/{camera_id}/roomplan-readiness")
@@ -1773,21 +2409,7 @@ def make_app(
         audit(actor, "map.usdz.upload", "room_map", map_id, home_id)
         return {"map_id": map_id, "source": "roomplan-lidar-3d", "dimension": "3d", "usdz": metadata["usdz"]}
 
-    @app.get(
-        "/api/v1/homes/{home_id}/maps/{map_id}/usdz",
-        response_class=Response,
-        responses={
-            200: {
-                "content": {
-                    "model/vnd.usdz+zip": {
-                        "schema": {"type": "string", "format": "binary"}
-                    }
-                }
-            }
-        },
-    )
-    def roomplan_usdz_download(home_id: str, map_id: str, actor: Current):
-        home_check(actor, home_id); publisher_block(actor)
+    def roomplan_usdz_response(home_id: str, map_id: str) -> Response:
         row = db.one("SELECT * FROM room_maps WHERE id=? AND home_id=?", (map_id, home_id))
         if not row or map_source(row) not in {"roomplan-lidar-3d", "arkit-video-3d"} or map_dimension(row, map_source(row)) != "3d":
             raise HTTPException(404, "USDZ model not found")
@@ -1809,6 +2431,23 @@ def make_app(
         if isinstance(digest, str):
             headers["ETag"] = digest
         return Response(content=payload, media_type="model/vnd.usdz+zip", headers=headers)
+
+    @app.get(
+        "/api/v1/homes/{home_id}/maps/{map_id}/usdz",
+        response_class=Response,
+        responses={
+            200: {
+                "content": {
+                    "model/vnd.usdz+zip": {
+                        "schema": {"type": "string", "format": "binary"}
+                    }
+                }
+            }
+        },
+    )
+    def roomplan_usdz_download(home_id: str, map_id: str, actor: Current):
+        home_check(actor, home_id); publisher_block(actor)
+        return roomplan_usdz_response(home_id, map_id)
 
     def map_generation_camera(home_id: str, camera_id: str, actor: dict) -> dict:
         home_check(actor, home_id)
@@ -2121,11 +2760,7 @@ def make_app(
         audit(actor, "map.scale.measure", "room_map", map_id, home_id)
         return map_view(db.one("SELECT * FROM room_maps WHERE id=? AND home_id=?", (map_id, home_id)))
 
-    @app.get("/api/v1/homes/{home_id}/scene")
-    def scene(home_id: str, actor: Current):
-        """Return the compact scene contract consumed by the dashboard map."""
-        home_check(actor, home_id); publisher_block(actor)
-        row = active_map_row(home_id)
+    def scene_response(home_id: str, row: dict | None) -> dict:
         if not row:
             return {"sceneId": None, "version": 0, "dimension": "2d", "source": "legacy-2d", "provenance": "legacy-2d", "approximate": True, "metricScaleKnown": False, "geometryStatus": "empty", "rescanRequired": True, "zones": [], "polygons": [], "walls": [], "camera": None, "cameraRegistration": None, "cameraRegistrations": [], "canonicalGeometry": None, "geometry": {"polygons": [], "walls": [], "furniture": [], "openings": [], "zones": []}, "usdz": None}
         try:
@@ -2157,9 +2792,47 @@ def make_app(
         canonical_geometry = map_data.get("normalized_scan") if view["dimension"] == "3d" and isinstance(map_data.get("normalized_scan"), dict) else None
         return {"sceneId": row["id"], "version": row["revision"], "dimension": view["dimension"], "source": view["source"], "provenance": view["provenance"], "approximate": view["approximate"], "metricScaleKnown": view["metric_scale_known"], "scale": view["scale"], "geometryStatus": view["geometry_status"], "rescanRequired": view["rescan_required"], "confidence": map_data.get("confidence"), "modelVersion": view["model_version"], "zones": zones, "polygons": polygons, "walls": walls, "camera": camera, "cameraRegistration": camera_registration, "cameraRegistrations": camera_registrations, "canonicalGeometry": canonical_geometry, "geometry": geometry, "mapId": row["id"], "coordinateFrame": row["coordinate_frame"], "usdz": view["usdz"]}
 
+    @app.get("/api/v1/homes/{home_id}/scene")
+    def scene(home_id: str, actor: Current):
+        """Return the compact scene contract consumed by the dashboard map."""
+        home_check(actor, home_id); publisher_block(actor)
+        return scene_response(home_id, active_map_row(home_id))
+
+    @app.get("/api/v1/homes/{home_id}/cameras/{camera_id}/roomplan-placement-preview")
+    def roomplan_camera_placement_preview(home_id: str, camera_id: str, actor: Current):
+        """Expose only the active RoomPlan scene needed to review this publisher camera's placement."""
+        home_check(actor, home_id)
+        if actor.get("role") == "publisher" and actor.get("user_id") != camera_id:
+            raise HTTPException(403, "A publisher can preview only its own camera placement")
+        camera = db.one("SELECT id FROM cameras WHERE id=? AND home_id=? AND enabled=1", (camera_id, home_id))
+        if not camera:
+            raise HTTPException(404, "Camera not found or disabled")
+        row = active_map_row(home_id)
+        if not row or map_source(row) != "roomplan-lidar-3d" or map_dimension(row, "roomplan-lidar-3d") != "3d":
+            raise HTTPException(409, "A native RoomPlan 3D map is required before camera placement can be reviewed")
+        return scene_response(home_id, row)
+
+    @app.get(
+        "/api/v1/homes/{home_id}/cameras/{camera_id}/roomplan-placement-preview/usdz",
+        response_class=Response,
+    )
+    def roomplan_camera_placement_preview_usdz(home_id: str, camera_id: str, actor: Current):
+        home_check(actor, home_id)
+        if actor.get("role") == "publisher" and actor.get("user_id") != camera_id:
+            raise HTTPException(403, "A publisher can preview only its own camera placement")
+        camera = db.one("SELECT id FROM cameras WHERE id=? AND home_id=? AND enabled=1", (camera_id, home_id))
+        if not camera:
+            raise HTTPException(404, "Camera not found or disabled")
+        row = active_map_row(home_id)
+        if not row or map_source(row) != "roomplan-lidar-3d" or map_dimension(row, "roomplan-lidar-3d") != "3d":
+            raise HTTPException(409, "A native RoomPlan 3D map is required before camera placement can be reviewed")
+        return roomplan_usdz_response(home_id, row["id"])
+
     @app.post("/api/v1/homes/{home_id}/camera-registrations/roomplan")
     def roomplan_camera_registration(home_id: str, body: RoomPlanCameraRegistrationIn, actor: Current):
-        home_check(actor, home_id); publisher_block(actor)
+        home_check(actor, home_id)
+        if actor.get("role") == "publisher" and actor.get("user_id") != body.camera_id:
+            raise HTTPException(403, "A publisher can register only its own camera")
         camera = db.one("SELECT * FROM cameras WHERE id=? AND home_id=? AND enabled=1", (body.camera_id, home_id))
         if not camera:
             raise HTTPException(404, "Camera not found or disabled")
@@ -2182,7 +2855,7 @@ def make_app(
             response_status = "needs_rescan"
         cid = str(uuid.uuid4())
         db.execute(
-            "UPDATE calibrations SET status='invalidated', invalidated_at=?, invalidation_reason='superseded by RoomPlan camera registration' WHERE home_id=? AND camera_id=? AND status='active'",
+            "UPDATE calibrations SET status='invalidated', invalidated_at=?, invalidation_reason='superseded by RoomPlan camera registration' WHERE home_id=? AND camera_id=? AND status IN ('active','needs_review')",
             (created, home_id, body.camera_id),
         )
         db.execute(
@@ -2336,6 +3009,11 @@ def make_app(
         matrix = extrinsics.get("camera_to_world")
         if not isinstance(matrix, list) or len(matrix) != 4 or any(not isinstance(item, list) or len(item) != 4 for item in matrix):
             return None, row.get("map_id")
+        map_row = db.one("SELECT * FROM room_maps WHERE id=? AND home_id=?", (row.get("map_id"), home_id))
+        if map_row and map_source(map_row) == "roomplan-lidar-3d":
+            scene_valid, _ = roomplan_pose_scene_validation(map_row, matrix)
+            if not scene_valid:
+                return None, row.get("map_id")
         intrinsics_payload = json_object(row.get("intrinsics_json") or "{}")
         camera_matrix = intrinsics_payload.get("matrix")
         if isinstance(camera_matrix, list) and len(camera_matrix) == 3 and all(isinstance(item, list) and len(item) == 3 for item in camera_matrix):

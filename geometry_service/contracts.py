@@ -290,6 +290,56 @@ class CameraLocalizationFrame(BaseModel):
     height: int = Field(gt=0, le=4_320)
 
 
+class CameraLocalizationXZPoint(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    x: float
+    z: float
+
+
+class CameraLocalizationRoomZone(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str | None = None
+    floor_y: float
+    polygon: list[CameraLocalizationXZPoint] = Field(min_length=3, max_length=64)
+
+
+class CameraLocalizationSearchPrior(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    center: list[float] = Field(min_length=3, max_length=3)
+    support_count: int = Field(ge=3, le=30)
+    mean_residual_m: float = Field(ge=0.0, le=1.0)
+    source: Literal["visual-pnp", "semantic-cuboid"] = "visual-pnp"
+    landmark_view_id: str | None = Field(default=None, min_length=1, max_length=64)
+    fov_degrees: float | None = Field(default=None, ge=30.0, le=120.0)
+
+
+class CameraLocalizationRoomObject(BaseModel):
+    """A native RoomPlan object used as a semantic pose initializer."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(min_length=1, max_length=120)
+    label: str = Field(min_length=1, max_length=80)
+    center: Point3D
+    dimensions: Point3D
+    transform: Matrix4x4 | None = None
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
+
+
+class CameraLocalizationObjectDetection(BaseModel):
+    """One transient detector box aligned with a fixed-camera frame."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    frame_index: int = Field(ge=0, le=19)
+    label: str = Field(min_length=1, max_length=80)
+    confidence: float = Field(ge=0.0, le=1.0)
+    bbox: list[float] = Field(min_length=4, max_length=4)
+
+
 class CameraLocalizationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -298,6 +348,10 @@ class CameraLocalizationRequest(BaseModel):
     frames: list[CameraLocalizationFrame] = Field(min_length=1, max_length=8)
     intrinsics: Matrix3x3 | None = None
     fov_degrees: float = Field(default=60.0, ge=30.0, le=120.0)
+    room_zones: list[CameraLocalizationRoomZone] = Field(default_factory=list, max_length=16)
+    search_prior: CameraLocalizationSearchPrior | None = None
+    room_objects: list[CameraLocalizationRoomObject] = Field(default_factory=list, max_length=100)
+    object_detections: list[CameraLocalizationObjectDetection] = Field(default_factory=list, max_length=100)
 
 
 class CameraLocalizationResponse(BaseModel):

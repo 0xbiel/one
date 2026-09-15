@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
 from typing import Any
 
 from fastapi import FastAPI, Request
@@ -10,6 +12,7 @@ from fastapi.responses import JSONResponse
 from .config import ServiceSettings
 from .contracts import (
     CameraLocalizationRequest,
+    CameraLocalizationObjectDetection,
     CameraLocalizationResponse,
     RoomLayoutRequest,
     RoomLayoutResponse,
@@ -274,7 +277,125 @@ def create_app(settings: ServiceSettings | None = None) -> FastAPI:
     @api.post("/v1/camera-localization", response_model=CameraLocalizationResponse)
     async def camera_localization(payload: CameraLocalizationRequest) -> Any:
         try:
-            return localize_camera(payload)
+            object_detection_diagnostics: dict[str, Any] = {
+                "status": "skipped",
+                "room_object_count": len(payload.room_objects),
+                "detected_count": 0,
+                "detected_labels": [],
+                "detections": [],
+            }
+            if payload.room_objects:
+                prompt_aliases = {
+                    "bed": ["bed"],
+                    "chair": ["chair"],
+                    "table": ["table", "desk", "dining table"],
+                    "storage": ["cabinet", "shelf", "bookcase", "wardrobe", "dresser", "nightstand"],
+                    "sofa": ["sofa", "couch"],
+                }
+                candidate_labels: list[str] = []
+                for room_object in payload.room_objects:
+                    category = room_object.label.strip().lower()
+                    candidate_labels.extend(prompt_aliases.get(category, [category]))
+                # People are transient occluders for fixed-camera localization.
+                # Detect them so the localizer can suppress ORB features inside
+                # their box; they are never used as semantic pose landmarks.
+                candidate_labels = list(dict.fromkeys(["person", *(label for label in candidate_labels if label)]))[:32]
+                if runtime.ready and candidate_labels:
+                    object_detections: list[CameraLocalizationObjectDetection] = []
+                    frame_diagnostics: list[dict[str, Any]] = []
+                    detection_error: str | None = None
+                    for frame_index, frame in enumerate(payload.frames):
+                        encoded = frame.frame_base64.strip()
+                        if encoded.startswith("data:image/jpeg;base64,"):
+                            encoded = encoded.partition(",")[2]
+                        jpeg = base64.b64decode(encoded, validate=True)
+                        try:
+                            raw_detections = runtime.detect_jpeg(jpeg, frame.width, frame.height, candidate_labels)
+                        except (RuntimeInferenceError, RuntimeUnavailable) as exc:
+                            detection_error = str(exc) or "object detection failed"
+                            frame_diagnostics.append(
+                                {
+                                    "frame_index": frame_index,
+                                    "status": "unavailable",
+                                    "reason": detection_error,
+                                }
+                            )
+                            continue
+                        frame_items = [
+                            CameraLocalizationObjectDetection(
+                                frame_index=frame_index,
+                                label=str(item["label"]),
+                                confidence=float(item["confidence"]),
+                                bbox=[float(value) for value in item["bbox"]],
+                            )
+                            for item in raw_detections
+                            if isinstance(item, dict)
+                            and isinstance(item.get("label"), str)
+                            and isinstance(item.get("confidence"), (int, float))
+                            and isinstance(item.get("bbox"), list)
+                            and len(item["bbox"]) == 4
+                        ]
+                        object_detections.extend(frame_items)
+                        frame_diagnostics.append(
+                            {
+                                "frame_index": frame_index,
+                                "status": "ready",
+                                "detected_count": len(frame_items),
+                                "detected_labels": sorted({item.label for item in frame_items}),
+                            }
+                        )
+                    payload = payload.model_copy(update={"object_detections": object_detections})
+                    object_detection_diagnostics = {
+                        "status": "ready" if object_detections or detection_error is None else "unavailable",
+                        "reason": detection_error if detection_error and not object_detections else None,
+                        "room_object_count": len(payload.room_objects),
+                        "detected_count": len(object_detections),
+                        "detected_labels": sorted({item.label for item in object_detections}),
+                        "detections": [
+                            {
+                                "frame_index": item.frame_index,
+                                "label": item.label,
+                                "confidence": round(float(item.confidence), 6),
+                                "bbox": [round(float(value), 3) for value in item.bbox],
+                            }
+                            for item in object_detections
+                        ],
+                        "frames": frame_diagnostics,
+                        "candidate_labels": candidate_labels,
+                    }
+                elif not runtime.ready:
+                    object_detection_diagnostics["status"] = "unavailable"
+                    object_detection_diagnostics["reason"] = runtime.reason or "vision runtime is unavailable"
+                else:
+                    object_detection_diagnostics["status"] = "skipped"
+                    object_detection_diagnostics["reason"] = "roomplan_object_labels_are_not_supported_by_the_detector"
+            result = localize_camera(payload)
+            if isinstance(result, dict):
+                diagnostics = result.get("diagnostics") if isinstance(result.get("diagnostics"), dict) else {}
+                result["diagnostics"] = {
+                    **diagnostics,
+                    "semantic_object_detection": object_detection_diagnostics,
+                }
+            return result
+        except (binascii.Error, ValueError) as exc:
+            # The localization path will report malformed frame input below;
+            # this branch keeps the worker boundary explicit if object-seed
+            # preparation rejects the transient JPEG first.
+            return JSONResponse(
+                status_code=422,
+                content={
+                    "status": "failed",
+                    "coordinate_frame": "roomplan-local",
+                    "camera_to_world": None,
+                    "confidence": None,
+                    "inlier_count": 0,
+                    "match_count": 0,
+                    "reprojection_error_px": None,
+                    "intrinsics_source": "estimated-fov",
+                    "intrinsics": None,
+                    "diagnostics": {"reason": str(exc), "raw_frames_persisted": False},
+                },
+            )
         except LocalizationInputError as exc:
             return JSONResponse(
                 status_code=422,

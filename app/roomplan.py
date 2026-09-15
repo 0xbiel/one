@@ -429,6 +429,7 @@ def roomplan_geometry(scan: RoomPlanNormalizedScan) -> dict[str, Any]:
                         "label": element.category,
                         "position": element.center.model_dump(mode="json"),
                         "dimensions": element.dimensions.model_dump(mode="json"),
+                        "transform": element.transform,
                         "confidence": confidence,
                     }
                 )

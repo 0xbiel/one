@@ -1,11 +1,14 @@
 import base64
+import io
 import json
+import math
+import zipfile
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 
 from app.config import Settings
-from app.main import make_app
+from app.main import _camera_localization_search_prior, _stabilize_camera_localization_diagnostics, make_app
 
 
 class FakeRoomLayoutService:
@@ -106,6 +109,125 @@ class FakeRoomLayoutService:
             "intrinsics_source": "estimated-fov",
             "intrinsics": [[554.3, 0.0, 320.0], [0.0, 554.3, 240.0], [0.0, 0.0, 1.0]],
         }
+
+
+def test_camera_localization_search_prior_requires_recurring_tight_cluster():
+    def row(calibration_id: str, summaries: list[dict]) -> dict:
+        return {
+            "id": calibration_id,
+            "metrics_json": json.dumps({"diagnostics": {"candidate_summaries": summaries}}),
+        }
+
+    stable = [
+        row("a", [
+            {"scene_plausible": True, "landmark_view_id": "scan-view-4", "camera_center": [-0.3904, -0.8438, -1.0177], "selected_fov_degrees": 96.0},
+            {"scene_plausible": True, "landmark_view_id": "scan-view-4", "camera_center": [-0.3920, -0.8420, -1.0180], "selected_fov_degrees": 96.0},
+        ]),
+        row("b", [{"scene_plausible": True, "landmark_view_id": "scan-view-4", "camera_center": [-0.3958, -0.8427, -1.0234], "selected_fov_degrees": 96.0}]),
+        row("c", [{"scene_plausible": True, "landmark_view_id": "scan-view-4", "camera_center": [-0.3975, -0.8415, -1.0203], "selected_fov_degrees": 96.0}]),
+        row("noise", [{"scene_plausible": True, "landmark_view_id": "scan-view-2", "camera_center": [3.19, 0.39, -0.61], "selected_fov_degrees": 60.0}]),
+    ]
+
+    prior = _camera_localization_search_prior(stable)
+
+    assert prior is not None
+    assert prior["source"] == "visual-pnp"
+    assert prior["support_count"] == 3
+    assert prior["landmark_view_id"] == "scan-view-4"
+    assert prior["fov_degrees"] == 96.0
+    assert prior["mean_residual_m"] < 0.01
+    assert math.dist(prior["center"], [-0.3958, -0.8427, -1.0203]) < 0.01
+    assert _camera_localization_search_prior(stable[:2]) is None
+
+
+def test_camera_localization_search_prior_prefers_repeated_semantic_basin():
+    def row(calibration_id: str, center: list[float], *, minimum_iou: float = 0.72) -> dict:
+        return {
+            "id": calibration_id,
+            "metrics_json": json.dumps(
+                {
+                    "diagnostics": {
+                        "candidate_summaries": [
+                            {
+                                "scene_plausible": True,
+                                "landmark_view_id": "scan-view-4",
+                                "camera_center": [-0.39, -0.84, -1.02],
+                                "selected_fov_degrees": 96.0,
+                            }
+                        ],
+                        "semantic_cuboid_candidates": [
+                            {
+                                "camera_center": center,
+                                "selected_fov_degrees": 74.0,
+                                "matched_object_count": 2,
+                                "semantic_group_count": 2,
+                                "mean_iou": 0.82,
+                                "minimum_iou": minimum_iou,
+                            }
+                        ],
+                    }
+                }
+            ),
+        }
+
+    rows = [
+        row("a", [1.16, -0.42, 1.80]),
+        row("b", [1.14, -0.44, 1.78]),
+        row("c", [1.17, -0.43, 1.81]),
+        # A weak extra assignment must not become semantic prior evidence.
+        row("weak", [0.2, -0.4, -2.0], minimum_iou=0.01),
+    ]
+
+    prior = _camera_localization_search_prior(rows)
+
+    assert prior is not None
+    assert prior["source"] == "semantic-cuboid"
+    assert prior["landmark_view_id"] is None
+    assert prior["support_count"] == 3
+    assert prior["fov_degrees"] == 74.0
+    assert math.dist(prior["center"], [1.16, -0.43, 1.80]) < 0.03
+
+
+def test_camera_localization_diagnostics_hold_stable_semantic_prior_during_occlusion():
+    diagnostics = {
+        "selected_camera_center": [-0.98, -1.15, -0.98],
+        "selected_estimate_source": "visual-pnp",
+    }
+    prior = {
+        "center": [0.81, -0.67, 0.82],
+        "support_count": 5,
+        "mean_residual_m": 0.056,
+        "source": "semantic-cuboid",
+        "landmark_view_id": None,
+        "fov_degrees": 96.0,
+    }
+
+    stabilized = _stabilize_camera_localization_diagnostics(diagnostics, prior, positioned=False)
+
+    assert stabilized["selected_estimate_source"] == "temporal-prior"
+    assert stabilized["selected_camera_center"] == [0.81, -0.67, 0.82]
+    assert stabilized["unstabilized_selected_camera_center"] == [-0.98, -1.15, -0.98]
+    assert stabilized["selected_estimate_stabilized"] is True
+
+
+def test_camera_localization_diagnostics_never_replace_current_semantic_or_positioned_pose():
+    prior = {
+        "center": [0.81, -0.67, 0.82],
+        "support_count": 5,
+        "mean_residual_m": 0.056,
+        "source": "semantic-cuboid",
+    }
+    semantic = {
+        "selected_camera_center": [0.84, -0.68, 0.79],
+        "selected_estimate_source": "semantic-cuboid",
+    }
+    positioned = {
+        "selected_camera_center": [1.4, 1.5, -0.4],
+        "selected_estimate_source": "visual-pnp",
+    }
+
+    assert _stabilize_camera_localization_diagnostics(semantic, prior, positioned=False) == semantic
+    assert _stabilize_camera_localization_diagnostics(positioned, prior, positioned=True) == positioned
 
 
 def make_client(tmp_path: Path, service: FakeRoomLayoutService) -> TestClient:
@@ -364,6 +486,53 @@ def test_roomplan_visual_landmarks_localize_separate_publisher_camera(tmp_path):
         headers=publisher_headers,
         json={"purpose": "video_capture", "policy_version": "2026-09-01"},
     )
+    review = client.post(
+        f"/api/v1/homes/{home_id}/cameras/{camera_id}/localize-roomplan",
+        headers=publisher_headers,
+        json={
+            "frames": [{"frame_base64": base64.b64encode(b"fixed-camera-review").decode(), "width": 640, "height": 480}],
+            "fov_degrees": 60.0,
+            "review_only": True,
+        },
+    )
+    assert review.status_code == 200
+    assert review.json()["status"] == "positioned"
+    assert review.json()["review_required"] is True
+    assert review.json()["camera_to_world"][0][3] == 1.25
+    scene_before_confirmation = client.get(f"/api/v1/homes/{home_id}/scene", headers=admin_headers).json()
+    assert scene_before_confirmation["cameraRegistration"]["status"] == "unavailable"
+    assert scene_before_confirmation["cameraRegistration"]["cameraToWorld"] is None
+    review_row = client.app.state.db.one(
+        "SELECT status FROM calibrations WHERE id=?",
+        (review.json()["id"],),
+    )
+    assert review_row["status"] == "needs_review"
+
+    confirmed = client.post(
+        f"/api/v1/homes/{home_id}/camera-registrations/roomplan",
+        headers=publisher_headers,
+        json={
+            "camera_id": camera_id,
+            "map_id": room_map["id"],
+            "camera_to_world": review.json()["camera_to_world"],
+            "confidence": review.json()["confidence"],
+            "tracking_state": "normal",
+        },
+    )
+    assert confirmed.status_code == 200
+    assert confirmed.json()["status"] == "positioned"
+    assert client.get(f"/api/v1/homes/{home_id}/scene", headers=admin_headers).json()["cameraRegistration"]["cameraToWorld"][0][3] == 1.25
+    assert client.post(
+        f"/api/v1/homes/{home_id}/camera-registrations/roomplan",
+        headers=other_headers,
+        json={
+            "camera_id": camera_id,
+            "map_id": room_map["id"],
+            "camera_to_world": review.json()["camera_to_world"],
+            "tracking_state": "normal",
+        },
+    ).status_code == 403
+
     localized = client.post(
         f"/api/v1/homes/{home_id}/cameras/{camera_id}/localize-roomplan",
         headers=publisher_headers,
@@ -374,11 +543,192 @@ def test_roomplan_visual_landmarks_localize_separate_publisher_camera(tmp_path):
     assert localized.json()["source"] == "visual-roomplan-registration"
     assert localized.json()["inlier_count"] == 19
 
+    history = client.get(
+        f"/api/v1/homes/{home_id}/cameras/{camera_id}/localization-history",
+        headers=publisher_headers,
+    )
+    assert history.status_code == 200
+    history_body = history.json()
+    assert history_body["map_id"] == room_map["id"]
+    assert history_body["reference"]["camera_center"] == [1.25, 1.55, -0.75]
+    assert history_body["attempts"][-1]["status"] == "positioned"
+    assert history_body["attempts"][-1]["selected_distance_to_reference_m"] == 0.0
+
+    saved_reference = client.put(
+        f"/api/v1/homes/{home_id}/cameras/{camera_id}/localization-reference",
+        headers=admin_headers,
+        json={"x": 1.0, "z": -0.5, "source": "test-floor-reference"},
+    )
+    assert saved_reference.status_code == 200
+    history_with_ground_truth = client.get(
+        f"/api/v1/homes/{home_id}/cameras/{camera_id}/localization-history",
+        headers=admin_headers,
+    ).json()
+    assert history_with_ground_truth["reference"]["kind"] == "ground-truth-floor"
+    assert history_with_ground_truth["reference"]["floor_position"] == [1.0, -0.5]
+    assert history_with_ground_truth["distance_metric"] == "horizontal-floor"
+    assert history_with_ground_truth["attempts"][-1]["selected_distance_to_reference_m"] == 0.3536
+    assert client.get(
+        f"/api/v1/homes/{home_id}/cameras/{camera_id}/localization-history",
+        headers=other_headers,
+    ).status_code == 403
+
     scene = client.get(f"/api/v1/homes/{home_id}/scene", headers=admin_headers).json()
     assert scene["mapId"] == room_map["id"]
     assert scene["cameraRegistrations"][0]["cameraId"] == camera_id
     assert scene["cameraRegistrations"][0]["cameraToWorld"][0][3] == 1.25
     assert service.calls[-1]["camera_localization"]["landmarks"]
+
+
+def test_roomplan_placement_preview_is_scoped_and_serves_usdz(tmp_path):
+    service = FakeRoomLayoutService()
+    client = make_client(tmp_path, service)
+    admin_headers, publisher_headers, home_id, camera_id = make_admin_and_publisher(client)
+    preview_path = f"/api/v1/homes/{home_id}/cameras/{camera_id}/roomplan-placement-preview"
+
+    assert client.get(preview_path, headers=publisher_headers).status_code == 409
+
+    assert client.post(
+        f"/api/v1/homes/{home_id}/consents",
+        headers=admin_headers,
+        json={"purpose": "family_mode", "policy_version": "2026-09-01"},
+    ).status_code == 200
+    caregiver_invite = client.post(
+        f"/api/v1/homes/{home_id}/family/invites",
+        headers=admin_headers,
+        json={"display_name": "Placement reviewer", "role": "caregiver"},
+    ).json()
+    caregiver = client.post("/api/v1/family/invites/accept", json={"code": caregiver_invite["code"]}).json()
+    caregiver_headers = {"Authorization": f"Bearer {caregiver['access_token']}"}
+
+    other_start = client.post(
+        f"/api/v1/homes/{home_id}/pairing/start",
+        headers=admin_headers,
+        json={"label": "Other camera"},
+    ).json()
+    other_publisher = client.post("/api/v1/pairing/complete", json={"code": other_start["pairing_code"]}).json()
+    other_headers = {"Authorization": f"Bearer {other_publisher['access_token']}"}
+
+    roomplan_payload = json.loads((Path(__file__).parent / "fixtures" / "roomplan-lidar-valid.json").read_text())
+    room_map = client.post(
+        f"/api/v1/homes/{home_id}/maps/roomplan",
+        headers=admin_headers,
+        json=roomplan_payload,
+    ).json()
+
+    for headers in (publisher_headers, admin_headers, caregiver_headers):
+        preview = client.get(preview_path, headers=headers)
+        assert preview.status_code == 200
+        assert preview.json()["mapId"] == room_map["id"]
+        assert preview.json()["source"] == "roomplan-lidar-3d"
+    assert client.get(preview_path, headers=other_headers).status_code == 403
+    assert client.get(f"/api/v1/homes/{home_id}/scene", headers=publisher_headers).status_code == 403
+
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_STORED) as archive:
+        archive.writestr("Payload/model.usdc", b"placement-preview-test-model")
+    model = output.getvalue()
+    attached = client.put(
+        f"/api/v1/homes/{home_id}/maps/{room_map['id']}/usdz",
+        headers={**admin_headers, "Content-Type": "model/vnd.usdz+zip"},
+        content=model,
+    )
+    assert attached.status_code == 200
+
+    usdz_path = f"{preview_path}/usdz"
+    for headers in (publisher_headers, admin_headers, caregiver_headers):
+        downloaded = client.get(usdz_path, headers=headers)
+        assert downloaded.status_code == 200
+        assert downloaded.content == model
+        assert downloaded.headers["content-type"].startswith("model/vnd.usdz+zip")
+    assert client.get(usdz_path, headers=other_headers).status_code == 403
+    assert client.get(
+        f"/api/v1/homes/{home_id}/maps/{room_map['id']}/usdz",
+        headers=publisher_headers,
+    ).status_code == 403
+
+
+def test_roomplan_visual_localization_rejects_pose_below_scanned_floor(tmp_path):
+    class BelowFloorService(FakeRoomLayoutService):
+        def localize_camera(self, **kwargs):
+            result = super().localize_camera(**kwargs)
+            result["camera_to_world"][1][3] = -0.45
+            return result
+
+    service = BelowFloorService()
+    client = make_client(tmp_path, service)
+    admin_headers, publisher_headers, home_id, camera_id = make_admin_and_publisher(client)
+    roomplan_payload = json.loads((Path(__file__).parent / "fixtures" / "roomplan-lidar-valid.json").read_text())
+    identity = [[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [0.0, 0.0, 0.0, 1.0]]
+    roomplan_payload["normalized_scan"]["floors"] = [{
+        "id": "floor-main",
+        "category": "floor",
+        "confidence": "high",
+        "center": {"x": 1.0, "y": 0.0, "z": 0.0},
+        "dimensions": {"x": 4.0, "y": 0.001, "z": 4.0},
+        "transform": identity,
+        "vertices": [
+            {"x": -1.0, "y": 0.0, "z": -2.0},
+            {"x": 3.0, "y": 0.0, "z": -2.0},
+            {"x": 3.0, "y": 0.0, "z": 2.0},
+            {"x": -1.0, "y": 0.0, "z": 2.0},
+        ],
+        "attributes": [],
+    }]
+    room_map = client.post(f"/api/v1/homes/{home_id}/maps/roomplan", headers=admin_headers, json=roomplan_payload).json()
+
+    visual_frame = {
+        "frame_base64": base64.b64encode(b"jpeg").decode(),
+        "width": 640,
+        "height": 480,
+        "intrinsics": {"values": [[554.3, 0.0, 320.0], [0.0, 554.3, 240.0], [0.0, 0.0, 1.0]]},
+        "camera_to_world": [[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 1.5], [0.0, 0.0, 1.0, 0.0], [0.0, 0.0, 0.0, 1.0]],
+        "captured_at": "2026-09-13T12:00:00Z",
+    }
+    assert client.post(
+        f"/api/v1/homes/{home_id}/maps/{room_map['id']}/visual-landmarks",
+        headers=admin_headers,
+        json={"frames": [visual_frame]},
+    ).status_code == 200
+    assert client.post(
+        f"/api/v1/homes/{home_id}/consents",
+        headers=publisher_headers,
+        json={"purpose": "video_capture", "policy_version": "2026-09-01"},
+    ).status_code == 200
+
+    localized = client.post(
+        f"/api/v1/homes/{home_id}/cameras/{camera_id}/localize-roomplan",
+        headers=publisher_headers,
+        json={"frames": [{"frame_base64": base64.b64encode(b"fixed-camera").decode(), "width": 640, "height": 480}]},
+    )
+    assert localized.status_code == 200
+    assert localized.json()["status"] == "needs_rescan"
+    assert localized.json()["camera_to_world"] is None
+    scene_validation = localized.json()["diagnostics"]["scene_validation"]
+    assert scene_validation["accepted"] is False
+    assert scene_validation["reason"] == "pose_outside_roomplan_bounds"
+    assert scene_validation["camera_height_above_floor_m"] == -0.45
+
+    scene = client.get(f"/api/v1/homes/{home_id}/scene", headers=admin_headers).json()
+    assert scene["cameraRegistration"]["status"] == "needs_rescan"
+    assert scene["cameraRegistration"]["cameraToWorld"] is None
+
+    # Historical versions could persist this same impossible pose as active.
+    # The scene contract must suppress it immediately, even before a fresh
+    # localization attempt replaces the old calibration row.
+    calibration_id = localized.json()["id"]
+    client.app.state.db.execute(
+        "UPDATE calibrations SET status='active', extrinsics_json=? WHERE id=?",
+        (json.dumps({"camera_to_world": [
+            [1.0, 0.0, 0.0, 1.25],
+            [0.0, 1.0, 0.0, -0.45],
+            [0.0, 0.0, 1.0, -0.75],
+            [0.0, 0.0, 0.0, 1.0],
+        ]}), calibration_id),
+    )
+    historical_scene = client.get(f"/api/v1/homes/{home_id}/scene", headers=admin_headers).json()
+    assert historical_scene["cameraRegistration"]["status"] == "needs_rescan"
+    assert historical_scene["cameraRegistration"]["cameraToWorld"] is None
 
 
 def test_roomplan_visual_landmarks_accumulate_across_incremental_scan_frames(tmp_path):
