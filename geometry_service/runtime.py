@@ -10,6 +10,8 @@ from pathlib import Path
 from typing import Any
 
 from .config import ServiceSettings
+from .gpu_runtime import GPU_COMPUTE_LOCK
+from .low_light import enhance_low_light_image
 
 
 class RuntimeUnavailable(RuntimeError):
@@ -243,13 +245,14 @@ class RoomLayoutRuntime:
         try:
             from .real_layout import RealLayoutNeedsRescan, infer_real_room_layout
 
-            with self._model_lock:
-                return infer_real_room_layout(
-                    self._model,
-                    batch,
-                    self.model_config,
-                    self.device_label or "cpu",
-                )
+            with GPU_COMPUTE_LOCK:
+                with self._model_lock:
+                    return infer_real_room_layout(
+                        self._model,
+                        batch,
+                        self.model_config,
+                        self.device_label or "cpu",
+                    )
         except Exception as exc:  # pragma: no cover - depends on an external checkpoint
             if isinstance(exc, RealLayoutNeedsRescan):
                 raise RuntimeNeedsRescan(str(exc)) from exc
@@ -257,7 +260,15 @@ class RoomLayoutRuntime:
                 raise
             raise RuntimeInferenceError("the configured real geometry model failed during inference") from exc
 
-    def detect_jpeg(self, jpeg_bytes: bytes, width: int, height: int, candidate_labels: list[str]) -> list[dict[str, Any]]:
+    def detect_jpeg(
+        self,
+        jpeg_bytes: bytes,
+        width: int,
+        height: int,
+        candidate_labels: list[str],
+        *,
+        minimum_confidence: float | None = None,
+    ) -> list[dict[str, Any]]:
         """Run the same local YOLO-World checkpoint for bounded object detection."""
         if not self.ready or self._model is None:
             raise RuntimeUnavailable(self.reason or "vision model is unavailable")
@@ -265,18 +276,25 @@ class RoomLayoutRuntime:
             from .real_vision import decode_jpeg, detections_from_result
 
             image = decode_jpeg(jpeg_bytes, width, height)
-            threshold = float(self.model_config.get("detection_confidence", 0.20))
-            with self._model_lock:
-                self._model.set_classes(candidate_labels)
-                results = self._model.predict(
-                    source=image,
-                    device=self.device_label or "cpu",
-                    imgsz=(int(self.model_config["input"]["height"]), int(self.model_config["input"]["width"])),
-                    conf=threshold,
-                    max_det=100,
-                    verbose=False,
-                )
-                self._model.set_classes(self.model_config["prompts"])
+            # Give the local detector a conservative shadow-lifted view when
+            # the camera is genuinely underexposed. Normal frames are passed
+            # through unchanged, and localization still records the decision
+            # separately in its own feature diagnostics.
+            image, _light_diagnostics = enhance_low_light_image(image)
+            configured_threshold = float(self.model_config.get("detection_confidence", 0.20))
+            threshold = configured_threshold if minimum_confidence is None else max(0.01, min(configured_threshold, float(minimum_confidence)))
+            with GPU_COMPUTE_LOCK:
+                with self._model_lock:
+                    self._model.set_classes(candidate_labels)
+                    results = self._model.predict(
+                        source=image,
+                        device=self.device_label or "cpu",
+                        imgsz=(int(self.model_config["input"]["height"]), int(self.model_config["input"]["width"])),
+                        conf=threshold,
+                        max_det=100,
+                        verbose=False,
+                    )
+                    self._model.set_classes(self.model_config["prompts"])
             if not results:
                 return []
             return detections_from_result(results[0], width=width, height=height, minimum_confidence=threshold)

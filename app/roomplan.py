@@ -125,7 +125,7 @@ class RoomPlanScanMetadata(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    provenance: Literal["native-roomplan"]
+    provenance: Literal["native-roomplan", "native-roomplan-structure"]
     device_model: str = Field(min_length=1, max_length=120)
     lidar: Literal[True]
     roomplan_version: str = Field(min_length=1, max_length=40)
@@ -136,9 +136,29 @@ class RoomPlanScanMetadata(BaseModel):
     visual_missing_frame_count: int | None = Field(default=None, ge=0, le=10_000)
     visual_image_encoding_failure_count: int | None = Field(default=None, ge=0, le=10_000)
     visual_invalid_matrix_count: int | None = Field(default=None, ge=0, le=10_000)
-    visual_sample_count: int | None = Field(default=None, ge=0, le=12)
-    visual_depth_sample_count: int | None = Field(default=None, ge=0, le=12)
+    # Multi-room captures can legitimately contain more than 256 RGB/depth
+    # viewpoints. The per-request landmark endpoint remains bounded, while
+    # this provenance field describes the full merged capture.
+    visual_sample_count: int | None = Field(default=None, ge=0, le=2_048)
+    visual_depth_sample_count: int | None = Field(default=None, ge=0, le=2_048)
     visual_last_tracking_state: Literal["normal", "limited", "unavailable"] | None = None
+    visual_recommended_sample_count: int | None = Field(default=None, ge=0, le=2_048)
+    visual_estimated_area_square_meters: float | None = Field(default=None, ge=0.0, le=10_000.0)
+
+
+class RoomPlanTransform4x4(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    values: list[list[float]] = Field(min_length=4, max_length=4)
+
+    @field_validator("values")
+    @classmethod
+    def finite_rigid_transform(cls, value: list[list[float]]) -> list[list[float]]:
+        if len(value) != 4 or any(len(row) != 4 for row in value):
+            raise ValueError("RoomPlan fragment transform must be a 4x4 matrix")
+        if any(not math.isfinite(float(item)) for row in value for item in row):
+            raise ValueError("RoomPlan fragment transform must contain finite values")
+        return [[float(item) for item in row] for row in value]
 
 
 class RoomPlanMapIn(BaseModel):
@@ -147,6 +167,8 @@ class RoomPlanMapIn(BaseModel):
     room_id: str | None = None
     normalized_scan: RoomPlanNormalizedScan
     scan_metadata: RoomPlanScanMetadata
+    fragment_to_home: RoomPlanTransform4x4 | None = None
+    alignment_status: Literal["aligned", "needs_alignment"] | None = None
 
     @model_validator(mode="after")
     def metadata_matches_scan(self) -> "RoomPlanMapIn":
@@ -154,6 +176,10 @@ class RoomPlanMapIn(BaseModel):
             raise ValueError("RoomPlan metadata units must match the normalized scan")
         if self.scan_metadata.up_axis.upper() != self.normalized_scan.up_axis:
             raise ValueError("RoomPlan metadata up_axis must match the normalized scan")
+        if self.fragment_to_home is not None and self.room_id is None:
+            raise ValueError("fragment_to_home requires a room_id")
+        if self.fragment_to_home is not None and self.alignment_status == "needs_alignment":
+            raise ValueError("An aligned fragment transform cannot be marked needs_alignment")
         return self
 
 

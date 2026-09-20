@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>ONE Camera Positioning Lab</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <p class="eyebrow">LOCAL IRL TOOL</p>
+        <h1>Camera Positioning Lab</h1>
+        <p class="sub">Real Mac camera → existing RoomPlan scan → review-only pose solving.</p>
+      </div>
+      <div id="workerBadge" class="badge">Worker · checking</div>
+    </header>
+
+    <section class="card controls">
+      <label>Email <input id="email" autocomplete="email" placeholder="your local ONE account" /></label>
+      <button id="login">Connect to local ONE</button>
+      <label>Camera <select id="camera" disabled><option>Sign in first</option></select></label>
+      <label>Horizontal FOV <input id="fov" type="number" min="30" max="120" placeholder="Auto" /></label>
+      <button id="refresh" class="secondary" disabled>Refresh room</button>
+    </section>
+
+    <section class="grid two">
+      <article class="card video-card">
+        <div class="card-head"><h2>Mac camera</h2><span id="captureState">idle</span></div>
+        <video id="video" autoplay muted playsinline></video>
+        <canvas id="captureCanvas" hidden></canvas>
+        <div class="actions">
+          <button id="startCamera">Open camera</button>
+          <button id="run" disabled>Run 6-frame localization</button>
+          <button id="continuous" class="secondary" disabled>Start continuous</button>
+        </div>
+      </article>
+
+      <article class="card map-card">
+        <div class="card-head"><h2>RoomPlan position</h2><span id="roomLabel">no room loaded</span></div>
+        <canvas id="map" width="720" height="520"></canvas>
+        <div id="mapMeta" class="map-meta">No accepted camera pose saved for this map</div>
+        <div class="legend"><span><i class="camera-dot"></i> accepted camera + calculated FOV</span><span><i class="candidate-dot"></i> current estimate</span><span><i class="object-dot"></i> RoomPlan furniture</span></div>
+      </article>
+    </section>
+
+    <section class="grid three">
+      <article class="card metric"><span>Status</span><strong id="status">—</strong></article>
+      <article class="card metric"><span>Inliers</span><strong id="inliers">—</strong></article>
+      <article class="card metric"><span>Reprojection</span><strong id="reprojection">—</strong></article>
+    </section>
+
+    <section class="grid two">
+      <article class="card">
+        <div class="card-head"><h2>Current diagnostics</h2><span id="elapsed">—</span></div>
+        <pre id="diagnostics">Sign in and select a camera.</pre>
+      </article>
+      <article class="card">
+        <div class="card-head"><h2>Attempt log</h2><button id="clearLog" class="text">clear</button></div>
+        <div id="log" class="log"></div>
+      </article>
+    </section>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>

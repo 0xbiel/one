@@ -2,9 +2,16 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import binascii
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import asynccontextmanager
+from functools import partial
+import threading
+import time
 from typing import Any
+import uuid
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -53,15 +60,54 @@ def _response_payload(
 def create_app(settings: ServiceSettings | None = None) -> FastAPI:
     service_settings = settings or ServiceSettings.from_env()
     runtime = RoomLayoutRuntime(service_settings)
+    positioning_executor = ThreadPoolExecutor(
+        max_workers=service_settings.positioning_workers,
+        thread_name_prefix="one-positioning",
+    )
+    detector_executor = ThreadPoolExecutor(
+        max_workers=1,
+        thread_name_prefix="one-detector",
+    )
+    # Keep a small bounded admission window in front of the executor. This lets
+    # multiple fixed cameras solve concurrently without allowing an arbitrary
+    # number of large, in-memory localization requests to queue behind them.
+    positioning_slots = asyncio.Semaphore(service_settings.positioning_workers * 2)
+    localization_jobs: dict[str, dict[str, Any]] = {}
+    localization_jobs_lock = threading.Lock()
+    localization_tasks: set[asyncio.Task[Any]] = set()
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        try:
+            yield
+        finally:
+            for task in list(localization_tasks):
+                task.cancel()
+            positioning_executor.shutdown(wait=False, cancel_futures=True)
+            detector_executor.shutdown(wait=False, cancel_futures=True)
+
     api = FastAPI(
         title="ONE local geometry service",
         version="0.1.0",
         description="In-memory camera-room-2d inference; no raw frame persistence.",
+        lifespan=lifespan,
     )
+    api.state.positioning_workers = service_settings.positioning_workers
+
+    async def run_positioning_work(function: Any, *args: Any, **kwargs: Any) -> Any:
+        async with positioning_slots:
+            loop = asyncio.get_running_loop()
+            call = partial(function, *args, **kwargs)
+            return await loop.run_in_executor(positioning_executor, call)
+
+    async def run_detector_work(function: Any, *args: Any, **kwargs: Any) -> Any:
+        loop = asyncio.get_running_loop()
+        call = partial(function, *args, **kwargs)
+        return await loop.run_in_executor(detector_executor, call)
 
     @api.middleware("http")
     async def enforce_request_bound(request: Request, call_next: Any) -> Any:
-        if request.url.path in {"/v1/room-layout", "/v1/vision/detect", "/v1/visual-landmarks", "/v1/camera-localization"}:
+        if request.url.path in {"/v1/room-layout", "/v1/vision/detect", "/v1/visual-landmarks", "/v1/camera-localization"} or request.url.path.startswith("/v1/camera-localization/jobs"):
             content_length = request.headers.get("content-length")
             if content_length:
                 try:
@@ -80,9 +126,277 @@ def create_app(settings: ServiceSettings | None = None) -> FastAPI:
                     )
         return await call_next(request)
 
+    def localization_job_view(job: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "job_id": job["job_id"],
+            "status": job["status"],
+            "progress": job["progress"],
+            "stage": job["stage"],
+            "result": job.get("result"),
+            "error_code": job.get("error_code"),
+            "error": job.get("error"),
+            "raw_frames_persisted": False,
+        }
+
+    def update_localization_job_progress(job_id: str, progress: int, stage: str) -> None:
+        with localization_jobs_lock:
+            job = localization_jobs.get(job_id)
+            if not job or job.get("status") != "running":
+                return
+            next_progress = max(int(job.get("progress") or 0), min(99, int(progress)))
+            if next_progress > int(job.get("progress") or 0):
+                job["progress"] = next_progress
+                job["stage"] = stage
+                job["updated_at"] = time.monotonic()
+
+    async def prepare_localization_feature_masks(
+        payload: CameraLocalizationRequest,
+        *,
+        progress_callback: Any | None = None,
+    ) -> tuple[CameraLocalizationRequest, dict[str, Any]]:
+        """Detect semantic, transient, and reflective regions before localization.
+
+        Guided calibration uses the progress-job endpoint, so run the same kind
+        of local semantic detection used by the synchronous localization path.
+        RoomPlan furniture detections can seed the pose, while people and
+        reflective openings are retained for feature masking.
+        """
+        detect_jpeg = getattr(runtime, "detect_jpeg", None)
+        if not runtime.ready or not callable(detect_jpeg):
+            return payload, {
+                "status": "unavailable",
+                "reason": runtime.reason or "vision runtime is unavailable",
+                "detected_count": 0,
+                "detected_labels": [],
+                "frames": [],
+            }
+
+        prompt_aliases = {
+            "bed": ["bed"],
+            "chair": ["chair"],
+            "table": ["table", "desk", "dining table"],
+            "storage": ["cabinet", "shelf", "bookcase", "wardrobe", "dresser", "nightstand"],
+            "sofa": ["sofa", "couch"],
+        }
+        semantic_labels: list[str] = []
+        for room_object in payload.room_objects:
+            category = room_object.label.strip().lower()
+            semantic_labels.extend(prompt_aliases.get(category, [category]))
+        labels = list(
+            dict.fromkeys(
+                [
+                    "person",
+                    "window",
+                    "mirror",
+                    "glass door",
+                    "sliding glass door",
+                    *(label for label in semantic_labels if label),
+                ]
+            )
+        )[:32]
+        detections: list[CameraLocalizationObjectDetection] = []
+        frame_diagnostics: list[dict[str, Any]] = []
+        frame_count = max(1, len(payload.frames))
+        for frame_index, frame in enumerate(payload.frames):
+            if progress_callback is not None:
+                progress_callback(
+                    2 + int(5 * (frame_index + 1) / frame_count),
+                    f"Masking people and reflective regions in reference frame {frame_index + 1} of {frame_count}",
+                )
+            encoded = frame.frame_base64.strip()
+            if encoded.startswith("data:image/jpeg;base64,"):
+                encoded = encoded.partition(",")[2]
+            try:
+                jpeg = base64.b64decode(encoded, validate=True)
+                raw = await run_detector_work(
+                    detect_jpeg,
+                    jpeg,
+                    frame.width,
+                    frame.height,
+                    labels,
+                    minimum_confidence=0.10,
+                )
+            except (binascii.Error, ValueError, RuntimeInferenceError, RuntimeUnavailable) as exc:
+                frame_diagnostics.append(
+                    {
+                        "frame_index": frame_index,
+                        "status": "unavailable",
+                        "reason": str(exc)[:200],
+                    }
+                )
+                continue
+
+            frame_items = [
+                CameraLocalizationObjectDetection(
+                    frame_index=frame_index,
+                    label=str(item["label"]),
+                    confidence=float(item["confidence"]),
+                    bbox=[float(value) for value in item["bbox"]],
+                )
+                for item in raw
+                if isinstance(item, dict)
+                and isinstance(item.get("label"), str)
+                and isinstance(item.get("confidence"), (int, float))
+                and isinstance(item.get("bbox"), list)
+                and len(item["bbox"]) == 4
+            ]
+            detections.extend(frame_items)
+            frame_diagnostics.append(
+                {
+                    "frame_index": frame_index,
+                    "status": "ready",
+                    "detected_count": len(frame_items),
+                    "detected_labels": sorted({item.label.strip().lower() for item in frame_items}),
+                }
+            )
+
+        merged = [*payload.object_detections, *detections]
+        prepared = payload.model_copy(update={"object_detections": merged})
+        diagnostics = {
+            "status": "ready",
+            "room_object_count": len(payload.room_objects),
+            "candidate_labels": labels,
+            "detected_count": len(detections),
+            "detected_labels": sorted({item.label.strip().lower() for item in detections}),
+            "detections": [
+                {
+                    "frame_index": item.frame_index,
+                    "label": item.label,
+                    "confidence": round(float(item.confidence), 6),
+                    "bbox": [round(float(value), 3) for value in item.bbox],
+                }
+                for item in detections
+            ],
+            "frames": frame_diagnostics,
+        }
+        return prepared, diagnostics
+
+    async def run_localization_job(job_id: str, payload: CameraLocalizationRequest) -> None:
+        try:
+            payload, mask_detection_diagnostics = await prepare_localization_feature_masks(
+                payload,
+                progress_callback=lambda progress, stage: update_localization_job_progress(job_id, progress, stage),
+            )
+            result = await run_positioning_work(
+                localize_camera,
+                payload,
+                progress_callback=lambda progress, stage: update_localization_job_progress(job_id, progress, stage),
+            )
+        except LocalizationInputError as exc:
+            with localization_jobs_lock:
+                job = localization_jobs.get(job_id)
+                if job:
+                    job.update(
+                        status="failed",
+                        stage="Localization input was rejected",
+                        error_code="input_error",
+                        error=str(exc)[:240],
+                        finished_at=time.monotonic(),
+                    )
+            return
+        except Exception as exc:  # pragma: no cover - defensive worker boundary
+            with localization_jobs_lock:
+                job = localization_jobs.get(job_id)
+                if job:
+                    job.update(
+                        status="failed",
+                        stage="Localization solver failed",
+                        error_code="solver_failed",
+                        error=str(exc)[:240],
+                        finished_at=time.monotonic(),
+                    )
+            return
+        if isinstance(result, dict):
+            diagnostics = result.get("diagnostics") if isinstance(result.get("diagnostics"), dict) else {}
+            result["diagnostics"] = {
+                **diagnostics,
+                "semantic_object_detection": mask_detection_diagnostics,
+            }
+        with localization_jobs_lock:
+            job = localization_jobs.get(job_id)
+            if job:
+                job.update(
+                    status="complete",
+                    progress=100,
+                    stage="Camera pose solved" if result.get("status") == "positioned" else "Localization finished without a confident pose",
+                    result=result,
+                    finished_at=time.monotonic(),
+                )
+
+    @api.post("/v1/camera-localization/jobs")
+    async def start_camera_localization_job(payload: CameraLocalizationRequest) -> Any:
+        if service_settings.mode == "model" and not service_settings.allow_cpu and (
+            not runtime.ready or runtime.device_label not in {"mps", "cuda"}
+        ):
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "status": "unavailable",
+                    "code": "gpu_runtime_unavailable",
+                    "message": "Camera localization requires the configured MPS/CUDA runtime.",
+                    "diagnostics": {"device": runtime.device_label, "mode": runtime.mode},
+                    "raw_frames_persisted": False,
+                },
+            )
+        # The progress job is the iPhone-guided path, so it must accept the same
+        # RoomPlan semantic objects as synchronous localization. Legacy guided
+        # person anchors remain unsupported here because fixed-camera
+        # calibration treats people as transient occluders.
+        if payload.person_anchors:
+            return JSONResponse(
+                status_code=409,
+                content={
+                    "status": "failed",
+                    "code": "person_anchors_not_supported_for_progress_job",
+                    "message": "progress jobs do not accept guided person anchors",
+                    "raw_frames_persisted": False,
+                },
+            )
+        now = time.monotonic()
+        with localization_jobs_lock:
+            stale = [
+                job_id
+                for job_id, job in localization_jobs.items()
+                if isinstance(job.get("finished_at"), (int, float)) and now - float(job["finished_at"]) > 600.0
+            ]
+            for stale_job_id in stale:
+                localization_jobs.pop(stale_job_id, None)
+            job_id = str(uuid.uuid4())
+            localization_jobs[job_id] = {
+                "job_id": job_id,
+                "status": "running",
+                "progress": 1,
+                "stage": "Preparing fixed-camera reference frames",
+                "created_at": now,
+                "updated_at": now,
+                "result": None,
+                "error_code": None,
+                "error": None,
+            }
+            response = localization_job_view(localization_jobs[job_id])
+        task = asyncio.create_task(run_localization_job(job_id, payload))
+        localization_tasks.add(task)
+        task.add_done_callback(localization_tasks.discard)
+        return response
+
+    @api.get("/v1/camera-localization/jobs/{job_id}")
+    async def camera_localization_job(job_id: str) -> Any:
+        with localization_jobs_lock:
+            job = localization_jobs.get(job_id)
+            if not job:
+                return JSONResponse(status_code=404, content={"status": "missing", "raw_frames_persisted": False})
+            return localization_job_view(job)
+
     @api.get("/health")
     async def health() -> JSONResponse:
         health_payload = runtime.health()
+        health_payload["positioning"] = {
+            "executor": "thread-pool",
+            "workers": service_settings.positioning_workers,
+            "queue_bound": service_settings.positioning_workers * 2,
+            "detector_workers": 1,
+            "detector_serialized": True,
+        }
         return JSONResponse(
             status_code=200 if runtime.ready else 503,
             content=health_payload,
@@ -276,6 +590,19 @@ def create_app(settings: ServiceSettings | None = None) -> FastAPI:
 
     @api.post("/v1/camera-localization", response_model=CameraLocalizationResponse)
     async def camera_localization(payload: CameraLocalizationRequest) -> Any:
+        if service_settings.mode == "model" and not service_settings.allow_cpu and (
+            not runtime.ready or runtime.device_label not in {"mps", "cuda"}
+        ):
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "status": "unavailable",
+                    "code": "gpu_runtime_unavailable",
+                    "message": "Camera localization requires the configured MPS/CUDA runtime.",
+                    "diagnostics": {"device": runtime.device_label, "mode": runtime.mode},
+                    "raw_frames_persisted": False,
+                },
+            )
         try:
             object_detection_diagnostics: dict[str, Any] = {
                 "status": "skipped",
@@ -299,18 +626,44 @@ def create_app(settings: ServiceSettings | None = None) -> FastAPI:
                 # People are transient occluders during ordinary fixed-camera
                 # localization. In guided calibration the same local detection
                 # becomes a deliberate floor-point correspondence.
-                candidate_labels = list(dict.fromkeys(["person", *(label for label in candidate_labels if label)]))[:32]
+                candidate_labels = list(
+                    dict.fromkeys(
+                        [
+                            "person",
+                            "window",
+                            "mirror",
+                            "glass door",
+                            "sliding glass door",
+                            *(label for label in candidate_labels if label),
+                        ]
+                    )
+                )[:32]
                 if runtime.ready and candidate_labels:
                     object_detections: list[CameraLocalizationObjectDetection] = []
                     frame_diagnostics: list[dict[str, Any]] = []
                     detection_error: str | None = None
+                    dedicated_person_mode = False
+                    dedicated_person_frame_count = 0
                     for frame_index, frame in enumerate(payload.frames):
                         encoded = frame.frame_base64.strip()
                         if encoded.startswith("data:image/jpeg;base64,"):
                             encoded = encoded.partition(",")[2]
                         jpeg = base64.b64decode(encoded, validate=True)
                         try:
-                            raw_detections = runtime.detect_jpeg(jpeg, frame.width, frame.height, candidate_labels)
+                            # A transient person is an occluder, not scene
+                            # geometry. Use a lower detection floor during
+                            # localization so a partially visible person is
+                            # more likely to be masked before ORB matching.
+                            # Furniture still has its own >=0.20 assignment
+                            # gate in localization.py.
+                            raw_detections = await run_detector_work(
+                                runtime.detect_jpeg,
+                                jpeg,
+                                frame.width,
+                                frame.height,
+                                candidate_labels,
+                                minimum_confidence=0.10,
+                            )
                         except (RuntimeInferenceError, RuntimeUnavailable) as exc:
                             detection_error = str(exc) or "object detection failed"
                             frame_diagnostics.append(
@@ -321,6 +674,77 @@ def create_app(settings: ServiceSettings | None = None) -> FastAPI:
                                 }
                             )
                             continue
+                        main_person_detections = [
+                            item
+                            for item in raw_detections
+                            if isinstance(item, dict)
+                            and str(item.get("label") or "").strip().lower() == "person"
+                            and isinstance(item.get("confidence"), (int, float))
+                            and isinstance(item.get("bbox"), list)
+                            and len(item["bbox"]) == 4
+                        ]
+                        main_has_person = bool(main_person_detections)
+                        suspicious_broad_person = any(
+                            float(item["confidence"]) < 0.65
+                            and max(0.0, float(item["bbox"][2]) - float(item["bbox"][0]))
+                            * max(0.0, float(item["bbox"][3]) - float(item["bbox"][1]))
+                            >= 0.55 * float(frame.width * frame.height)
+                            for item in main_person_detections
+                        )
+                        person_fallback_error: str | None = None
+                        # YOLO-World can lose the broad ``person`` prompt when
+                        # it competes with several furniture prompts in the
+                        # same open-vocabulary pass. Probe the first burst frame
+                        # once with a person-only prompt. If that finds an
+                        # occluder, keep the dedicated pass enabled for the
+                        # rest of this short fixed-camera burst so ORB never
+                        # learns features from the moving people.
+                        if dedicated_person_mode or suspicious_broad_person or (frame_index == 0 and not main_has_person):
+                            try:
+                                person_only = await run_detector_work(
+                                    runtime.detect_jpeg,
+                                    jpeg,
+                                    frame.width,
+                                    frame.height,
+                                    ["person"],
+                                    minimum_confidence=0.05,
+                                )
+                            except (RuntimeInferenceError, RuntimeUnavailable) as exc:
+                                person_fallback_error = str(exc) or "person detection failed"
+                                person_only = []
+                            person_only = [
+                                item
+                                for item in person_only
+                                if isinstance(item, dict)
+                                and str(item.get("label") or "").strip().lower() == "person"
+                                and isinstance(item.get("confidence"), (int, float))
+                                and float(item["confidence"]) >= 0.05
+                            ]
+                            if frame_index == 0 and person_only:
+                                dedicated_person_mode = True
+                            if person_only:
+                                dedicated_person_frame_count += 1
+                                raw_detections = [
+                                    item
+                                    for item in raw_detections
+                                    if not (
+                                        isinstance(item, dict)
+                                        and str(item.get("label") or "").strip().lower() == "person"
+                                    )
+                                ] + person_only
+                            elif suspicious_broad_person:
+                                # A broad low-confidence open-vocabulary
+                                # person box is not strong enough evidence to
+                                # erase most of the image when the dedicated
+                                # person prompt cannot reproduce it.
+                                raw_detections = [
+                                    item
+                                    for item in raw_detections
+                                    if not (
+                                        isinstance(item, dict)
+                                        and str(item.get("label") or "").strip().lower() == "person"
+                                    )
+                                ]
                         frame_items = [
                             CameraLocalizationObjectDetection(
                                 frame_index=frame_index,
@@ -342,6 +766,16 @@ def create_app(settings: ServiceSettings | None = None) -> FastAPI:
                                 "status": "ready",
                                 "detected_count": len(frame_items),
                                 "detected_labels": sorted({item.label for item in frame_items}),
+                                "person_detection_mode": (
+                                    "dedicated-fallback"
+                                    if any(item.label.strip().lower() == "person" for item in frame_items) and dedicated_person_mode
+                                    else (
+                                        "dedicated-verification"
+                                        if suspicious_broad_person
+                                        else "candidate-labels"
+                                    )
+                                ),
+                                **({"person_detection_error": person_fallback_error} if person_fallback_error else {}),
                             }
                         )
                     payload = payload.model_copy(update={"object_detections": object_detections})
@@ -362,6 +796,8 @@ def create_app(settings: ServiceSettings | None = None) -> FastAPI:
                         ],
                         "frames": frame_diagnostics,
                         "candidate_labels": candidate_labels,
+                        "dedicated_person_detection": dedicated_person_mode,
+                        "dedicated_person_frame_count": dedicated_person_frame_count,
                     }
                 elif not runtime.ready:
                     object_detection_diagnostics["status"] = "unavailable"
@@ -369,7 +805,12 @@ def create_app(settings: ServiceSettings | None = None) -> FastAPI:
                 else:
                     object_detection_diagnostics["status"] = "skipped"
                     object_detection_diagnostics["reason"] = "roomplan_object_labels_are_not_supported_by_the_detector"
-            result = localize_camera(payload)
+            # PnP/FOV search is CPU-heavy OpenCV work. Run it off the ASGI
+            # event loop so independent camera positioning requests can make
+            # progress in parallel. The shared YOLO model remains protected by
+            # RoomLayoutRuntime's model lock, while each pose solve is isolated
+            # to request-local arrays and transient frames.
+            result = await run_positioning_work(localize_camera, payload)
             if isinstance(result, dict):
                 diagnostics = result.get("diagnostics") if isinstance(result.get("diagnostics"), dict) else {}
                 result["diagnostics"] = {

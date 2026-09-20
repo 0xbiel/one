@@ -70,6 +70,10 @@ def metadata() -> dict:
         "units": "m",
         "up_axis": "Y",
         "geometry_type": "3d",
+        "visual_sample_count": 512,
+        "visual_depth_sample_count": 480,
+        "visual_recommended_sample_count": 512,
+        "visual_estimated_area_square_meters": 42.5,
     }
 
 

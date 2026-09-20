@@ -2,13 +2,20 @@ import base64
 import io
 import json
 import math
+import time
 import zipfile
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 
 from app.config import Settings
-from app.main import _camera_localization_search_prior, _stabilize_camera_localization_diagnostics, make_app
+from app.main import (
+    _camera_localization_search_prior,
+    _roomplan_calibration_timeout_message,
+    _semantic_candidate_search_support,
+    _stabilize_camera_localization_diagnostics,
+    make_app,
+)
 
 
 class FakeRoomLayoutService:
@@ -19,6 +26,11 @@ class FakeRoomLayoutService:
         self.unavailable = unavailable
         self.detect_person_visible: bool | None = None
         self.calls: list[dict] = []
+
+    def health(self):
+        if self.unavailable:
+            return {"status": "unavailable", "runtime": {"device": None}, "model": {"model_version": None}}
+        return {"status": "ready", "runtime": {"device": "mps"}, "model": {"model_version": "fake-camera-room-v1"}}
 
     def infer(self, **kwargs):
         self.calls.append(kwargs)
@@ -126,6 +138,14 @@ class FakeRoomLayoutService:
         }
 
 
+def test_roomplan_calibration_timeout_message_preserves_solver_context():
+    message = _roomplan_calibration_timeout_message(42, "Matching RoomPlan landmarks", 180.0)
+    assert "42%" in message
+    assert "Matching RoomPlan landmarks" in message
+    assert "180 seconds" in message
+    assert "camera position was not changed" in message
+
+
 def test_camera_localization_search_prior_requires_recurring_tight_cluster():
     def row(calibration_id: str, summaries: list[dict]) -> dict:
         return {
@@ -174,6 +194,9 @@ def test_camera_localization_search_prior_prefers_repeated_semantic_basin():
                             {
                                 "camera_center": center,
                                 "selected_fov_degrees": 74.0,
+                                "contradictory_object_count": 0,
+                                "contradictory_group_count": 0,
+                                "contradictions": [],
                                 "matched_object_count": 2,
                                 "semantic_group_count": 2,
                                 "mean_iou": 0.82,
@@ -201,6 +224,97 @@ def test_camera_localization_search_prior_prefers_repeated_semantic_basin():
     assert prior["support_count"] == 3
     assert prior["fov_degrees"] == 74.0
     assert math.dist(prior["center"], [1.16, -0.43, 1.80]) < 0.03
+
+
+def test_semantic_search_support_tolerates_one_open_vocabulary_outlier():
+    candidate = {
+        "contradictory_object_count": 0,
+        "matched_object_count": 3,
+        "semantic_group_count": 2,
+        "mean_iou": 0.496,
+        "minimum_iou": 0.015,
+        "matches": [
+            {"label": "chair", "iou": 0.94, "positive_depth_ratio": 1.0},
+            {"label": "storage", "iou": 0.53, "positive_depth_ratio": 0.5},
+            {"label": "storage", "iou": 0.015, "positive_depth_ratio": 1.0},
+        ],
+    }
+
+    assert _semantic_candidate_search_support(candidate) is True
+
+
+def test_semantic_search_support_rejects_explicit_depth_contradiction():
+    candidate = {
+        "contradictory_object_count": 0,
+        "supported_object_count": 2,
+        "supported_group_count": 2,
+        "supported_mean_iou": 0.85,
+        "supported_minimum_iou": 0.74,
+        "contradictory_object_count": 1,
+        "contradictory_group_count": 1,
+        "contradictions": [
+            {
+                "label": "chair",
+                "detection_confidence": 0.73,
+                "positive_depth_count": 0,
+                "reason": "visible-detection-fully-behind-camera",
+            }
+        ],
+    }
+
+    assert _semantic_candidate_search_support(candidate) is False
+
+
+def test_semantic_search_support_rejects_legacy_fully_behind_visible_object():
+    candidate = {
+        "supported_object_count": 2,
+        "supported_group_count": 2,
+        "supported_mean_iou": 0.85,
+        "supported_minimum_iou": 0.74,
+        "attempts": [
+            {
+                "label": "chair",
+                "detection_confidence": 0.73,
+                "detection_bbox": [600.0, 292.0, 921.0, 720.0],
+                "positive_depth_count": 0,
+                "rejection_reason": "insufficient-positive-depth-corners",
+            }
+        ],
+    }
+
+    assert _semantic_candidate_search_support(candidate) is False
+
+
+def test_semantic_search_support_does_not_reject_partial_near_plane_object():
+    candidate = {
+        "contradictory_object_count": 0,
+        "supported_object_count": 2,
+        "supported_group_count": 2,
+        "supported_mean_iou": 0.75,
+        "supported_minimum_iou": 0.55,
+        "attempts": [
+            {
+                "label": "storage",
+                "detection_confidence": 0.82,
+                "detection_bbox": [820.0, 180.0, 1270.0, 720.0],
+                "positive_depth_count": 3,
+                "rejection_reason": "insufficient-positive-depth-corners",
+            }
+        ],
+    }
+
+    assert _semantic_candidate_search_support(candidate) is True
+
+
+def test_semantic_search_support_rejects_legacy_candidate_without_contradiction_marker():
+    candidate = {
+        "supported_object_count": 2,
+        "supported_group_count": 2,
+        "supported_mean_iou": 0.88,
+        "supported_minimum_iou": 0.75,
+    }
+
+    assert _semantic_candidate_search_support(candidate) is False
 
 
 def test_camera_localization_diagnostics_hold_stable_semantic_prior_during_occlusion():
@@ -439,7 +553,33 @@ def test_roomplan_visual_landmarks_localize_separate_publisher_camera(tmp_path):
     client = make_client(tmp_path, service)
     admin_headers, publisher_headers, home_id, camera_id = make_admin_and_publisher(client)
     roomplan_payload = json.loads((Path(__file__).parent / "fixtures" / "roomplan-lidar-valid.json").read_text())
+    object_transform = [
+        [1.0, 0.0, 0.0, -0.88],
+        [0.0, 1.0, 0.0, 0.30],
+        [0.0, 0.0, 1.0, -0.88],
+        [0.0, 0.0, 0.0, 1.0],
+    ]
+    roomplan_payload["normalized_scan"]["objects"] = [{
+        "id": "bed-legacy-transform",
+        "category": "bed",
+        "confidence": "high",
+        "center": {"x": -0.88, "y": 0.30, "z": -0.88},
+        "dimensions": {"x": 1.20, "y": 0.60, "z": 1.20},
+        "transform": object_transform,
+        "vertices": [],
+        "attributes": [],
+    }]
     room_map = client.post(f"/api/v1/homes/{home_id}/maps/roomplan", headers=admin_headers, json=roomplan_payload).json()
+
+    # Historical RoomPlan rows can have geometry objects without transforms
+    # even though normalized_scan still contains the original RoomPlan matrix.
+    stored_map = client.app.state.db.one("SELECT map_json FROM room_maps WHERE id=?", (room_map["id"],))
+    stored_map_json = json.loads(stored_map["map_json"])
+    assert stored_map_json["geometry"]["objects"][0].pop("transform") == object_transform
+    client.app.state.db.execute(
+        "UPDATE room_maps SET map_json=? WHERE id=?",
+        (json.dumps(stored_map_json), room_map["id"]),
+    )
 
     assert client.get(f"/api/v1/homes/{home_id}/maps/current", headers=publisher_headers).status_code == 403
     readiness = client.get(
@@ -453,6 +593,14 @@ def test_roomplan_visual_landmarks_localize_separate_publisher_camera(tmp_path):
         "source": "roomplan-lidar-3d",
         "dimension": "3d",
         "visual_landmarks_ready": False,
+        "alignment_status": "aligned",
+        "home_frame_id": room_map["id"],
+        "localization_worker": {
+            "status": "ready",
+            "ready": True,
+            "device": "mps",
+            "model_version": "fake-camera-room-v1",
+        },
         "ready": False,
     }
 
@@ -515,7 +663,18 @@ def test_roomplan_visual_landmarks_localize_separate_publisher_camera(tmp_path):
     assert review.json()["status"] == "positioned"
     assert review.json()["review_required"] is True
     assert review.json()["camera_to_world"][0][3] == 1.25
-    assert service.calls[-1]["camera_localization"]["person_anchors"] == [{"frame_index": 0, "x": 0.5, "y": 0.0, "z": -0.5}]
+    direct_progress = client.get(
+        f"/api/v1/homes/{home_id}/cameras/{camera_id}/localize-roomplan/progress",
+        headers=publisher_headers,
+    )
+    assert direct_progress.status_code == 200
+    assert direct_progress.json()["status"] == "complete"
+    assert direct_progress.json()["progress"] == 100
+    assert service.calls[-1]["camera_localization"]["person_anchors"] == []
+    # Review-only/iPhone-guided calibration keeps RoomPlan object semantics so
+    # the progress-job worker can run the same object-detection-assisted pose
+    # path as ordinary localization.
+    assert service.calls[-1]["camera_localization"]["room_objects"][0]["label"] == "bed"
     scene_before_confirmation = client.get(f"/api/v1/homes/{home_id}/scene", headers=admin_headers).json()
     assert scene_before_confirmation["cameraRegistration"]["status"] == "unavailable"
     assert scene_before_confirmation["cameraRegistration"]["cameraToWorld"] is None
@@ -597,7 +756,7 @@ def test_roomplan_visual_landmarks_localize_separate_publisher_camera(tmp_path):
     assert service.calls[-1]["camera_localization"]["landmarks"]
 
 
-def test_remote_roomplan_calibration_session_uses_publisher_frames_and_requires_review(tmp_path):
+def test_remote_roomplan_calibration_session_uses_publisher_scene_references_and_requires_review(tmp_path):
     service = FakeRoomLayoutService()
     client = make_client(tmp_path, service)
     admin_headers, publisher_headers, home_id, camera_id = make_admin_and_publisher(client)
@@ -616,16 +775,6 @@ def test_remote_roomplan_calibration_session_uses_publisher_frames_and_requires_
             {"x": -2.0, "y": 0.0, "z": 2.0},
         ],
         "attributes": ["room-floor"],
-    }]
-    roomplan_payload["normalized_scan"]["objects"] = [{
-        "id": "bed-1",
-        "category": "bed",
-        "confidence": "high",
-        "center": {"x": -0.88, "y": 0.30, "z": -0.88},
-        "dimensions": {"x": 1.20, "y": 0.60, "z": 1.20},
-        "transform": [[1.0, 0.0, 0.0, -0.88], [0.0, 1.0, 0.0, 0.30], [0.0, 0.0, 1.0, -0.88], [0.0, 0.0, 0.0, 1.0]],
-        "vertices": [],
-        "attributes": [],
     }]
     room_map = client.post(f"/api/v1/homes/{home_id}/maps/roomplan", headers=admin_headers, json=roomplan_payload).json()
     visual_frame = {
@@ -646,82 +795,60 @@ def test_remote_roomplan_calibration_session_uses_publisher_frames_and_requires_
         json={"purpose": "video_capture", "policy_version": "2026-09-01"},
     ).status_code == 200
 
-    camera_before = client.get(f"/api/v1/homes/{home_id}/cameras", headers=admin_headers).json()["data"][0]
-    assert camera_before["calibration_needed"] is True
-    assert camera_before["roomplan_registration_status"] == "unavailable"
-
     started = client.post(
         f"/api/v1/homes/{home_id}/cameras/{camera_id}/roomplan-calibration-session",
         headers=admin_headers,
     )
     assert started.status_code == 200
     session = started.json()
-    assert session["status"] == "waiting_for_person"
-    assert session["capture_request_seq"] == 0
-    assert len(session["targets"]) == 6
+    assert session["mode"] == "scene_reference"
+    assert session["status"] == "waiting_for_scene"
+    assert session["capture_round_count"] == 3
+    assert session["targets"] == []
     assert session["raw_frames_persisted"] is False
-    for target in session["targets"]:
-        assert -1.78 <= target["x"] <= 1.78
-        assert -1.78 <= target["z"] <= 1.78
-        assert not (-1.86 <= target["x"] <= 0.10 and -1.86 <= target["z"] <= 0.10)
 
-    fixed_frame = {"frame_base64": base64.b64encode(b"fixed-camera-guided").decode(), "width": 640, "height": 480}
-
-    # A safe RoomPlan point can still fall outside the fixed camera's field of
-    # view. Keep all prior progress and replace only that point when no person
-    # is visible in its capture.
-    original_first_target = dict(session["targets"][0])
-    service.detect_person_visible = False
-    requested = client.post(
-        f"/api/v1/homes/{home_id}/cameras/{camera_id}/roomplan-calibration-session/request-capture",
-        headers=admin_headers,
-        json={"target_index": 0},
-    )
-    assert requested.status_code == 200
-    assert requested.json()["capture_request_seq"] == 1
-    retried = client.post(
-        f"/api/v1/homes/{home_id}/cameras/{camera_id}/roomplan-calibration-session/request-capture",
-        headers=admin_headers,
-        json={"target_index": 0},
-    )
-    assert retried.status_code == 200
-    assert retried.json()["capture_request_seq"] == 2
-    replaced = client.post(
-        f"/api/v1/homes/{home_id}/cameras/{camera_id}/roomplan-calibration-session/frames",
-        headers=publisher_headers,
-        json={"target_index": 0, "frames": [fixed_frame]},
-    )
-    assert replaced.status_code == 200
-    session = replaced.json()
-    assert session["status"] == "waiting_for_person"
-    assert session["current_target_index"] == 0
-    assert session["captured_target_count"] == 0
-    assert (session["targets"][0]["x"], session["targets"][0]["z"]) != (original_first_target["x"], original_first_target["z"])
-    assert "earlier calibration points are still kept" in session["error"]
-
-    service.detect_person_visible = True
-    for target_index in range(6):
+    # One reviewed still may be retained intentionally after confirmation; all
+    # solve frames remain transient. No person/standing-point anchors are sent.
+    fixed_frame = {
+        "frame_base64": base64.b64encode(b"\xff\xd8reference-view\xff\xd9").decode(),
+        "width": 640,
+        "height": 480,
+    }
+    for capture_round in range(3):
         requested = client.post(
             f"/api/v1/homes/{home_id}/cameras/{camera_id}/roomplan-calibration-session/request-capture",
             headers=admin_headers,
-            json={"target_index": target_index},
+            json={"target_index": capture_round},
         )
         assert requested.status_code == 200
         assert requested.json()["status"] == "capture_requested"
         submitted = client.post(
             f"/api/v1/homes/{home_id}/cameras/{camera_id}/roomplan-calibration-session/frames",
             headers=publisher_headers,
-            json={"target_index": target_index, "frames": [fixed_frame]},
+            json={"target_index": capture_round, "frames": [fixed_frame, fixed_frame]},
         )
         assert submitted.status_code == 200
         session = submitted.json()
 
+    assert session["status"] == "solving"
+    assert session["solve_progress"] >= 1
+    assert session["solve_stage"]
+    for _ in range(100):
+        session = client.get(
+            f"/api/v1/homes/{home_id}/cameras/{camera_id}/roomplan-calibration-session",
+            headers=admin_headers,
+        ).json()
+        if session["status"] != "solving":
+            break
+        time.sleep(0.01)
     assert session["status"] == "review"
-    assert session["captured_target_count"] == 6
+    assert session["solve_progress"] == 100
+    assert session["solve_stage"] == "Camera pose solved"
+    assert session["captured_target_count"] == 3
+    assert session["reference_snapshot_pending"] is True
     assert session["proposal"]["camera_to_world"][0][3] == 1.25
-    anchors = service.calls[-1]["camera_localization"]["person_anchors"]
-    assert len(anchors) == 6
-    assert [anchor["frame_index"] for anchor in anchors] == [0, 1, 2, 3, 4, 5]
+    assert service.calls[-1]["camera_localization"]["person_anchors"] == []
+    assert len(service.calls[-1]["camera_localization"]["frames"]) == 6
 
     camera_during_review = client.get(f"/api/v1/homes/{home_id}/cameras", headers=admin_headers).json()["data"][0]
     assert camera_during_review["calibration_needed"] is True
@@ -740,9 +867,60 @@ def test_remote_roomplan_calibration_session_uses_publisher_frames_and_requires_
         },
     )
     assert confirmed.status_code == 200
+    committed = client.post(
+        f"/api/v1/homes/{home_id}/cameras/{camera_id}/roomplan-calibration-session/commit-reference",
+        headers=admin_headers,
+    )
+    assert committed.status_code == 200
+    assert committed.json()["map_id"] == room_map["id"]
+    reference = client.get(
+        f"/api/v1/homes/{home_id}/cameras/{camera_id}/reference-snapshot",
+        headers=admin_headers,
+    )
+    assert reference.status_code == 200
+    assert reference.content == b"\xff\xd8reference-view\xff\xd9"
+
+    scene = client.get(f"/api/v1/homes/{home_id}/scene", headers=admin_headers).json()
+    registration = next(item for item in scene["cameraRegistrations"] if item["cameraId"] == camera_id)
+    assert registration["referenceSnapshot"]["mapId"] == room_map["id"]
     camera_after = client.get(f"/api/v1/homes/{home_id}/cameras", headers=admin_headers).json()["data"][0]
     assert camera_after["calibration_needed"] is False
     assert camera_after["roomplan_registration_status"] == "positioned"
+
+    requested_reference = client.post(
+        f"/api/v1/homes/{home_id}/cameras/{camera_id}/reference-snapshot/request-capture",
+        headers=admin_headers,
+    )
+    assert requested_reference.status_code == 200
+    assert requested_reference.json()["status"] == "capture_requested"
+    publisher_request = client.get(
+        f"/api/v1/homes/{home_id}/cameras/{camera_id}/reference-snapshot/capture-request",
+        headers=publisher_headers,
+    )
+    assert publisher_request.status_code == 200
+    assert publisher_request.json()["request_id"] == requested_reference.json()["request_id"]
+    refreshed_frame = {
+        "frame_base64": base64.b64encode(b"\xff\xd8refreshed-view\xff\xd9").decode(),
+        "width": 1280,
+        "height": 720,
+    }
+    refreshed = client.post(
+        f"/api/v1/homes/{home_id}/cameras/{camera_id}/reference-snapshot",
+        headers=publisher_headers,
+        json=refreshed_frame,
+    )
+    assert refreshed.status_code == 200
+    completed_request = client.get(
+        f"/api/v1/homes/{home_id}/cameras/{camera_id}/reference-snapshot/capture-request",
+        headers=admin_headers,
+    ).json()
+    assert completed_request["status"] == "captured"
+    assert completed_request["captured_at"]
+    refreshed_reference = client.get(
+        f"/api/v1/homes/{home_id}/cameras/{camera_id}/reference-snapshot",
+        headers=admin_headers,
+    )
+    assert refreshed_reference.content == b"\xff\xd8refreshed-view\xff\xd9"
 
 
 def test_roomplan_placement_preview_is_scoped_and_serves_usdz(tmp_path):
@@ -945,3 +1123,56 @@ def test_roomplan_visual_landmarks_accumulate_across_incremental_scan_frames(tmp
     assert second.json()["diagnostics"]["source_frame_count"] == 2
     assert second.json()["diagnostics"]["incremental_batch_count"] == 2
     assert second.json()["diagnostics"]["view_count"] == 2
+
+
+def test_aligned_room_fragment_keeps_home_frame_and_existing_camera_calibration(tmp_path):
+    service = FakeRoomLayoutService()
+    client = make_client(tmp_path, service)
+    admin_headers, _, home_id, camera_id = make_admin_and_publisher(client)
+    payload = json.loads((Path(__file__).parent / "fixtures" / "roomplan-lidar-valid.json").read_text())
+    canonical = client.post(f"/api/v1/homes/{home_id}/maps/roomplan", headers=admin_headers, json=payload).json()
+    camera_to_world = [
+        [1.0, 0.0, 0.0, 0.5],
+        [0.0, 1.0, 0.0, 1.5],
+        [0.0, 0.0, 1.0, -0.5],
+        [0.0, 0.0, 0.0, 1.0],
+    ]
+    registered = client.post(
+        f"/api/v1/homes/{home_id}/camera-registrations/roomplan",
+        headers=admin_headers,
+        json={
+            "camera_id": camera_id,
+            "map_id": canonical["id"],
+            "camera_to_world": camera_to_world,
+            "tracking_state": "normal",
+        },
+    )
+    assert registered.status_code == 200
+
+    fragment_payload = {
+        **payload,
+        "room_id": "bedroom-2",
+        "fragment_to_home": {
+            "values": [
+                [1.0, 0.0, 0.0, 4.0],
+                [0.0, 1.0, 0.0, 0.0],
+                [0.0, 0.0, 1.0, 0.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ]
+        },
+        "alignment_status": "aligned",
+    }
+    fragment = client.post(f"/api/v1/homes/{home_id}/maps/roomplan", headers=admin_headers, json=fragment_payload)
+    assert fragment.status_code == 200
+    assert fragment.json()["coordinate_frame"] == "home-world"
+    assert fragment.json()["metadata"]["map_scope"] == "fragment"
+    assert fragment.json()["metadata"]["canonical_map_id"] == canonical["id"]
+
+    current = client.get(f"/api/v1/homes/{home_id}/maps/current", headers=admin_headers).json()
+    assert current["id"] == canonical["id"]
+    calibration = client.app.state.db.one("SELECT status FROM calibrations WHERE id=?", (registered.json()["id"],))
+    assert calibration["status"] == "active"
+    scene = client.get(f"/api/v1/homes/{home_id}/scene", headers=admin_headers).json()
+    assert scene["cameraRegistrations"][0]["cameraId"] == camera_id
+    assert scene["roomPlanFragments"][0]["mapId"] == fragment.json()["id"]
+    assert scene["roomPlanFragments"][0]["alignmentStatus"] == "aligned"

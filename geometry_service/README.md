@@ -18,10 +18,21 @@ service returns `camera-cv-2d` geometry and `metric_scale_known: false`.
 
 For an existing RoomPlan scene, the worker also supports local visual
 registration of a separate fixed camera. During the native scan, bounded RGB +
-LiDAR depth samples are converted into ORB descriptors tied to metric
-RoomPlan coordinates; the raw RGB/depth samples are discarded. Later, fixed
-camera JPEGs are matched to that derived landmark index and OpenCV
-`solvePnPRansac` estimates the camera's 6-DoF pose in `roomplan-local`.
+LiDAR depth samples are converted into ORB plus optional scale-robust SIFT
+descriptors tied to metric RoomPlan coordinates; the raw RGB/depth samples are
+discarded. Later, fixed camera JPEGs are matched to that derived landmark
+index. CPU OpenCV RANSAC/PnP generates robust pose hypotheses, while the
+learned correspondence scorer and bounded nonlinear pose polish run on the
+selected MPS/CUDA accelerator before a result can pass the strict multi-view
+gate.
+
+Before ORB/SIFT extraction, genuinely underexposed frames receive a bounded
+shadow lift and local-contrast pass; normal frames are left unchanged. The
+same prepared view is used for local object detection, and localization
+diagnostics report the luminance statistics and gamma used per frame. This is
+an illumination aid, not synthetic evidence: the original frame is never
+persisted and geometric reprojection and multi-view agreement still decide
+whether a pose is publishable.
 
 ## Install the real runtime
 
@@ -54,21 +65,56 @@ cd "/path/to/one"
 ONE_GEOMETRY_MODE=model \
 ONE_GEOMETRY_MODEL_PATH="$HOME/.cache/one-geometry/yolov8s-worldv2.pt" \
 ONE_GEOMETRY_MODEL_CONFIG="$PWD/geometry_service/model_config.yolo-world.json" \
-ONE_GEOMETRY_DEVICE=auto \
+ONE_GEOMETRY_DEVICE=mps \
+ONE_GEOMETRY_SOLVER_DEVICE=mps \
 ONE_GEOMETRY_ALLOW_CPU=false \
+ONE_POSITIONING_WORKERS=3 \
 .geometry-venv/bin/python -m geometry_service
 ```
 
-`ONE_GEOMETRY_DEVICE=auto` selects MPS first and CUDA second. CPU inference is
-disabled unless `ONE_GEOMETRY_ALLOW_CPU=1` is explicitly set. The service
+On macOS, the repository launcher performs this setup and verifies the full
+Docker-to-host route for you:
+
+```bash
+./scripts/start_mac_gpu.sh
+```
+
+It starts or reuses the host worker with CPU fallback disabled, starts the
+Compose services, and checks from inside the API container that
+`host.docker.internal:8090` reports an active `mps` or `cuda` runtime. The
+Compose `vision-worker` remains a CPU-only healthy dependency for the default
+stack; camera localization is routed to the host worker and does not use that
+container. If the host worker is unavailable or reports CPU, the launcher
+stops with diagnostics instead of claiming that GPU solving is active.
+
+`ONE_GEOMETRY_DEVICE=auto` selects MPS first and CUDA second; set
+`ONE_GEOMETRY_SOLVER_DEVICE` explicitly when the pose solver must use a known
+accelerator. CPU inference is disabled unless `ONE_GEOMETRY_ALLOW_CPU=1` is
+explicitly set. The service
 reports `mode: "model"`, `runtime.framework: "pytorch-ultralytics"`, the active
 accelerator, and the real `model_version` from `/health`. A missing checkpoint,
 missing dependency, unavailable accelerator, or invalid model configuration
 returns `503`; there is no silent alternate implementation.
 
-The Docker API reaches the host worker through
-`ONE_GEOMETRY_SERVICE_URL=http://host.docker.internal:8090`. The worker should
-remain private to the host; the phone does not connect to it directly.
+The default Docker Compose stack runs this service as `vision-worker` and the
+API reaches it through `http://vision-worker:8090`. The container defaults to
+CPU because Docker Desktop on macOS cannot expose Metal/MPS to Linux
+containers. The checkpoint is bind-mounted from `ONE_GEOMETRY_MODEL_PATH`, and
+Compose waits for `/health` before starting the API. For faster local MPS
+inference, you can still launch the worker on the host and override
+`ONE_GEOMETRY_SERVICE_URL=http://host.docker.internal:8090`. The worker remains
+private to the local stack; the phone does not connect to it directly.
+
+`ONE_POSITIONING_WORKERS` controls the bounded thread pool used for fixed-camera
+positioning. It defaults to `3` and is clamped to `1..8`. CPU-heavy ORB/SIFT
+extraction and OpenCV RANSAC/PnP/FOV hypothesis generation run off the ASGI
+event loop, while the map-specific matcher, YOLO-World detector, and bounded
+differentiable finalist pose polish run on the selected MPS/CUDA accelerator.
+The GPU polish is accepted only when it preserves or improves positive-depth
+inliers and reprojection error; diagnostics expose its device, baseline, and
+result. A shared accelerator lock prevents detector and solver work from racing
+on MPS. The queue admits at most twice the worker count, and `/health` reports
+the active worker count and queue bound.
 
 ## Real model configuration
 
@@ -101,9 +147,16 @@ returns `room-layout-response.v1`.
 
 The worker also exposes `POST /v1/vision/detect`, `POST /v1/visual-landmarks`,
 and `POST /v1/camera-localization`. Vision uses the loaded YOLO-World model;
-visual-landmark construction and camera localization use OpenCV ORB/PnP and do
-not require cloud inference. A weak feature match returns `needs_rescan`
-instead of fabricating a pose.
+visual-landmark construction and robust hypothesis generation remain local
+OpenCV work, while learned matching and pose polish use the same GPU runtime.
+A weak feature match returns `needs_rescan` instead of fabricating a pose.
+
+Camera localization never assumes a 60° lens. When browser intrinsics are not
+known, the solver searches a bounded plausible horizontal FOV range and keeps
+the selected value only when the geometric checks pass. People and movable
+chairs are treated as transient occluders rather than stable scene anchors.
+The active scene-reference flow captures three short fixed-camera rounds and
+uses static RoomPlan/visual landmarks to propose a pose for review.
 
 Raw JPEG bytes and derived tensors are held only for the request and are not
 written to disk, returned, or emitted in logs. A low-confidence or structurally

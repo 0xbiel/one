@@ -2,6 +2,7 @@ import base64
 import io
 import json
 import zipfile
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -24,6 +25,13 @@ class TwoPersonDetector:
             Detection("person", 0.92, (80, 70, 220, 430), frame.captured_at),
             Detection("person", 0.90, (300, 65, 450, 425), frame.captured_at),
         ]
+
+
+class SinglePersonDetector:
+    model_version = "single-person-test-v1"
+
+    def detect(self, frame, candidate_labels):
+        return [Detection("person", 0.93, (180, 70, 330, 430), frame.captured_at)]
 
 
 def auth(c):
@@ -378,6 +386,51 @@ def test_caregiver_can_remove_camera_without_erasing_history(tmp_path):
     assert c.delete(f"/api/v1/homes/{home}/cameras/{camera['id']}", headers=headers).status_code == 200
 
 
+def test_room_lifecycle_renames_and_deletes_without_erasing_camera_or_map(tmp_path):
+    c = client(tmp_path)
+    token, home = auth(c)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    created = c.post(f"/api/v1/homes/{home}/rooms", headers=headers, json={"name": "  Room 1  "})
+    assert created.status_code == 200
+    room = created.json()
+    assert room["home_id"] == home
+    assert room["name"] == "Room 1"
+    assert room["created_at"]
+
+    camera = c.post(
+        f"/api/v1/homes/{home}/cameras",
+        headers=headers,
+        json={"name": "Room camera", "room_id": room["id"]},
+    ).json()
+    room_map = c.post(
+        f"/api/v1/homes/{home}/maps",
+        headers=headers,
+        json={"room_id": room["id"], "map_data": {"objects": []}},
+    ).json()
+
+    renamed = c.patch(
+        f"/api/v1/homes/{home}/rooms/{room['id']}",
+        headers=headers,
+        json={"name": "Kitchen"},
+    )
+    assert renamed.status_code == 200
+    assert renamed.json()["name"] == "Kitchen"
+    assert c.get(f"/api/v1/homes/{home}/rooms", headers=headers).json()["data"][0]["name"] == "Kitchen"
+
+    deleted = c.delete(f"/api/v1/homes/{home}/rooms/{room['id']}", headers=headers)
+    assert deleted.status_code == 200
+    assert deleted.json()["status"] == "deleted"
+    assert deleted.json()["cameras_unassigned"] == 1
+    assert deleted.json()["maps_unassigned"] == 1
+    assert c.get(f"/api/v1/homes/{home}/rooms", headers=headers).json()["data"] == []
+
+    camera_row = c.app.state.db.one("SELECT enabled, room_id FROM cameras WHERE id=?", (camera["id"],))
+    map_row = c.app.state.db.one("SELECT room_id FROM room_maps WHERE id=?", (room_map["id"],))
+    assert camera_row and camera_row["enabled"] == 1 and camera_row["room_id"] is None
+    assert map_row and map_row["room_id"] is None
+
+
 def test_deleted_paired_camera_revokes_reconnect_link(tmp_path):
     c = client(tmp_path)
     admin_token, home = auth(c)
@@ -547,9 +600,46 @@ def test_bounded_vision_persists_multiple_people_as_distinct_live_objects(tmp_pa
     people = [item for item in c.get(f"/api/v1/homes/{home}/objects/last-seen", headers=h).json()["data"] if item["label"] == "Person"]
     assert len(people) == 2
     assert len({item["id"] for item in people}) == 2
+    assert all(item["presenceState"] == "current" for item in people)
 
 
-def test_registered_roomplan_vision_projects_to_zone_and_persists(tmp_path):
+def test_anonymous_person_handoff_moves_latest_presence_to_the_new_camera(tmp_path):
+    c = client(tmp_path, SinglePersonDetector()); token, home = auth(c); h = {"Authorization": f"Bearer {token}"}
+    camera_a = c.post(f"/api/v1/homes/{home}/cameras", headers=h, json={"name": "Room A"}).json()
+    camera_b = c.post(f"/api/v1/homes/{home}/cameras", headers=h, json={"name": "Room B"}).json()
+    assert c.post(
+        f"/api/v1/homes/{home}/consents",
+        headers=h,
+        json={"purpose": "video_capture", "policy_version": "2026-09-01", "granted": True},
+    ).status_code == 200
+    frame = base64.b64encode(b"person-handoff-frame").decode()
+
+    def publish(camera_id):
+        payload = {"camera_id": camera_id, "frame_base64": frame, "width": 640, "height": 480}
+        c.post(f"/api/v1/homes/{home}/vision/frames", headers=h, json=payload)
+        c.post(f"/api/v1/homes/{home}/vision/frames", headers=h, json=payload)
+        return c.post(f"/api/v1/homes/{home}/vision/frames", headers=h, json=payload)
+
+    assert publish(camera_a["id"]).status_code == 200
+    first = [item for item in c.get(f"/api/v1/homes/{home}/objects/last-seen", headers=h).json()["data"] if item["label"] == "Person"]
+    assert len(first) == 1
+    person_id = first[0]["id"]
+    assert first[0]["cameraId"] == camera_a["id"]
+
+    tracks = c.app.state.vision_person_objects
+    for key, (object_id, _last_seen, map_id, x, z) in list(tracks.items()):
+        if key[0] == home and key[1] == camera_a["id"]:
+            tracks[key] = (object_id, datetime.now(timezone.utc) - timedelta(seconds=2), map_id, x, z)
+
+    assert publish(camera_b["id"]).status_code == 200
+    after = [item for item in c.get(f"/api/v1/homes/{home}/objects/last-seen", headers=h).json()["data"] if item["label"] == "Person"]
+    assert len(after) == 1
+    assert after[0]["id"] == person_id
+    assert after[0]["cameraId"] == camera_b["id"]
+    assert after[0]["presenceState"] == "current"
+
+
+def test_pose_only_roomplan_registration_persists_without_inventing_world_ray(tmp_path):
     c = client(tmp_path); token, home = auth(c); h = {"Authorization": f"Bearer {token}"}
     camera = c.post(f"/api/v1/homes/{home}/cameras", headers=h, json={"name": "Living room camera"}).json()
     assert c.post(
@@ -618,20 +708,23 @@ def test_registered_roomplan_vision_projects_to_zone_and_persists(tmp_path):
     stable = c.post(f"/api/v1/homes/{home}/vision/frames", headers=h, json=payload)
     assert stable.status_code == 200
     body = stable.json()
-    assert body["data"][0]["projection"]["quality"] == "calibrated-floor-ray"
-    assert body["data"][0]["projection"]["world_xyz"] is not None
-    assert body["data"][0]["projection"]["room_zone"]["label"] == "Living room"
-    assert body["observations"][0]["zone"] == "Living room"
+    # A pose-only RoomPlan registration has no camera intrinsics. Do not
+    # invent a 60 degree FOV just to produce a precise-looking ray; until a
+    # visual localization/calibration supplies intrinsics, projection is
+    # intentionally zone-level.
+    assert body["data"][0]["projection"]["quality"] == "zone-fallback"
+    assert body["data"][0]["projection"]["world_xyz"] is None
+    assert body["data"][0]["projection"].get("room_zone") is None
+    assert body["observations"][0]["zone"] is None
 
     objects = c.get(f"/api/v1/homes/{home}/objects/last-seen", headers=h).json()["data"]
     detected = next(item for item in objects if item["label"] == "Keys")
     assert detected["observation"]["map_id"] == room_map["id"]
-    assert detected["zone"]["name"] == "Living room"
-    assert detected["worldPoint"] == {
-        "x": detected["observation"]["x"],
-        "y": detected["observation"]["y"],
-        "z": detected["observation"]["z"],
-    }
+    assert detected["zone"] is None
+    assert detected["worldPoint"] is None
+    assert detected["observation"]["x"] is None
+    assert detected["observation"]["y"] is None
+    assert detected["observation"]["z"] is None
 
     # Publisher frames leave candidate_labels empty. Person detection must be
     # part of that default set so calibrated presence can appear on the map.
@@ -644,7 +737,7 @@ def test_registered_roomplan_vision_projects_to_zone_and_persists(tmp_path):
     people = c.get(f"/api/v1/homes/{home}/objects/last-seen", headers=h).json()["data"]
     person = next(item for item in people if item["label"] == "Person")
     assert person["mapId"] == room_map["id"]
-    assert person["worldPoint"] is not None
+    assert person["worldPoint"] is None
 
 
 def test_clip_content_is_encrypted_at_rest_and_requires_home_authorization(tmp_path):
@@ -658,6 +751,39 @@ def test_clip_content_is_encrypted_at_rest_and_requires_home_authorization(tmp_p
     assert downloaded.status_code == 200 and downloaded.content == b"fake-video-bytes"
     stored = list((tmp_path / "objects" / "encrypted-clips" / "clips" / home).glob("*.bin"))[0]
     assert b"fake-video-bytes" not in stored.read_bytes()
+
+
+def test_clip_upload_keeps_only_latest_video_per_home(tmp_path):
+    c = client(tmp_path); token, home = auth(c); h = {"Authorization": f"Bearer {token}"}
+    observation = c.post(f"/api/v1/homes/{home}/observations", headers=h, json={"confidence": 0.7}).json()
+
+    first = c.post(
+        f"/api/v1/homes/{home}/events/{observation['event_id']}/clips",
+        headers=h,
+        json={"object_key": "event/first.mp4", "starts_at": "2026-01-01T00:00:00+00:00", "ends_at": "2026-01-01T00:00:05+00:00"},
+    ).json()
+    assert c.post(
+        f"/api/v1/homes/{home}/clips/{first['id']}/content",
+        headers=h,
+        json={"content_base64": base64.b64encode(b"first-video").decode()},
+    ).status_code == 200
+
+    second = c.post(
+        f"/api/v1/homes/{home}/events/{observation['event_id']}/clips",
+        headers=h,
+        json={"object_key": "event/second.mp4", "starts_at": "2026-01-01T00:01:00+00:00", "ends_at": "2026-01-01T00:01:05+00:00"},
+    ).json()
+    assert c.post(
+        f"/api/v1/homes/{home}/clips/{second['id']}/content",
+        headers=h,
+        json={"content_base64": base64.b64encode(b"second-video").decode()},
+    ).status_code == 200
+
+    clips = c.get(f"/api/v1/homes/{home}/clips", headers=h).json()["data"]
+    assert [item["id"] for item in clips] == [second["id"]]
+    stored = list((tmp_path / "objects" / "encrypted-clips" / "clips" / home).glob("*.bin"))
+    assert [path.stem for path in stored] == [second["id"]]
+    assert c.app.state.db.one("SELECT id FROM clips WHERE id=?", (first["id"],)) is None
 
 
 def test_family_invite_is_hashed_single_use_and_role_safe(tmp_path):

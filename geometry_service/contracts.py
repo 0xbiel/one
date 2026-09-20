@@ -264,12 +264,17 @@ class VisualLandmarkBuildRequest(BaseModel):
 
     schema_version: Literal["roomplan-visual-landmarks.v1"] = "roomplan-visual-landmarks.v1"
     map_id: str = Field(min_length=1, max_length=120)
-    frames: list[VisualLandmarkFrame] = Field(min_length=1, max_length=12)
+    frames: list[VisualLandmarkFrame] = Field(min_length=1, max_length=24)
 
 
 class VisualLandmark(BaseModel):
     point: list[float] = Field(min_length=3, max_length=3)
     descriptor_base64: str = Field(min_length=1, max_length=256)
+    # ORB remains the compact backwards-compatible descriptor. New landmark
+    # batches may also retain a paired SIFT descriptor at the same metric
+    # point; the matcher can use it for cross-device/scale changes without
+    # invalidating existing ORB-only artifacts.
+    sift_descriptor_base64: str | None = Field(default=None, min_length=1, max_length=1024)
     response: float = 0.0
     view_id: str | None = Field(default=None, min_length=1, max_length=64)
 
@@ -277,8 +282,8 @@ class VisualLandmark(BaseModel):
 class VisualLandmarkBuildResponse(BaseModel):
     status: Literal["ready", "needs_rescan", "unavailable", "failed"]
     schema_version: Literal["roomplan-visual-landmarks.v1"] = "roomplan-visual-landmarks.v1"
-    detector: Literal["opencv-orb"] = "opencv-orb"
-    landmarks: list[VisualLandmark] = Field(default_factory=list, max_length=5_000)
+    detector: Literal["opencv-orb", "opencv-orb+sift"] = "opencv-orb"
+    landmarks: list[VisualLandmark] = Field(default_factory=list, max_length=8_000)
     diagnostics: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -355,10 +360,14 @@ class CameraLocalizationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     schema_version: Literal["roomplan-camera-localization.v1"] = "roomplan-camera-localization.v1"
-    landmarks: list[VisualLandmark] = Field(min_length=6, max_length=5_000)
+    landmarks: list[VisualLandmark] = Field(min_length=6, max_length=8_000)
     frames: list[CameraLocalizationFrame] = Field(min_length=1, max_length=16)
     intrinsics: Matrix3x3 | None = None
-    fov_degrees: float = Field(default=60.0, ge=30.0, le=120.0)
+    # Browser camera APIs do not expose a trustworthy horizontal FOV.  Keep
+    # this optional so an omitted value means "solve focal length from the
+    # RoomPlan/image evidence" rather than silently pretending every camera
+    # is a 60 degree camera.
+    fov_degrees: float | None = Field(default=None, ge=30.0, le=120.0)
     room_zones: list[CameraLocalizationRoomZone] = Field(default_factory=list, max_length=16)
     search_prior: CameraLocalizationSearchPrior | None = None
     room_objects: list[CameraLocalizationRoomObject] = Field(default_factory=list, max_length=100)

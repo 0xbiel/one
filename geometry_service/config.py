@@ -48,6 +48,7 @@ class ServiceSettings:
     max_total_frame_bytes: int
     max_request_bytes: int
     minimum_confidence: float
+    positioning_workers: int
 
     @classmethod
     def from_env(cls) -> "ServiceSettings":
@@ -81,6 +82,10 @@ class ServiceSettings:
             max(_env_float("GEOMETRY_MIN_CONFIDENCE", 0.60), 0.0),
             1.0,
         )
+        positioning_workers = min(
+            max(_env_int("ONE_POSITIONING_WORKERS", 3), 1),
+            8,
+        )
 
         return cls(
             mode=mode,
@@ -96,4 +101,5 @@ class ServiceSettings:
             max_total_frame_bytes=max_total_frame_bytes,
             max_request_bytes=max_request_bytes,
             minimum_confidence=minimum_confidence,
+            positioning_workers=positioning_workers,
         )

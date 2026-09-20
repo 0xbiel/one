@@ -17,11 +17,14 @@ from __future__ import annotations
 
 import hashlib
 import math
+import os
 import threading
 from collections import defaultdict
 from typing import Any, Sequence
 
 import numpy as np
+
+from .gpu_runtime import GPU_COMPUTE_LOCK
 
 
 MODEL_VERSION = "tiny-orb-correspondence-v2"
@@ -32,6 +35,7 @@ SCHEMA_VERSION = "roomplan-learned-matcher.v2"
 # image semantics.
 FEATURE_DIM = 260
 _MAX_PAIRS = 6_000
+_MIN_HELD_OUT_AUC = 0.70
 _CACHE_LIMIT = 4
 _CACHE_LOCK = threading.Lock()
 _MATCHER_CACHE: dict[bytes, "LearnedMatcher | None"] = {}
@@ -45,6 +49,31 @@ def _import_torch() -> Any | None:
     except (ImportError, OSError):
         return None
     return torch
+
+
+def _solver_device(torch: Any) -> tuple[Any, str]:
+    """Choose the accelerator used by the learned correspondence solve.
+
+    The detector runtime already fails closed when model mode requires an
+    accelerator. Keep this small map-specific matcher aligned with that
+    choice, while retaining a CPU path for unit tests and non-model callers.
+    ``ONE_GEOMETRY_SOLVER_DEVICE`` is an explicit override; otherwise the
+    service's ``ONE_GEOMETRY_DEVICE`` is reused.
+    """
+
+    requested = (os.getenv("ONE_GEOMETRY_SOLVER_DEVICE") or os.getenv("ONE_GEOMETRY_DEVICE") or "auto").strip().lower()
+    mps_available = bool(getattr(getattr(torch.backends, "mps", None), "is_available", lambda: False)())
+    cuda_available = bool(torch.cuda.is_available())
+    if requested in {"mps", "metal"} and mps_available:
+        return torch.device("mps"), "mps"
+    if requested == "cuda" and cuda_available:
+        return torch.device("cuda"), "cuda"
+    if requested in {"auto", ""}:
+        if mps_available:
+            return torch.device("mps"), "mps"
+        if cuda_available:
+            return torch.device("cuda"), "cuda"
+    return torch.device("cpu"), "cpu"
 
 
 def _response_feature(values: np.ndarray | Sequence[float] | None, count: int) -> np.ndarray:
@@ -250,45 +279,79 @@ def _fit_matcher(
         )
     )
     anchors = np.asarray([pair[0] for pair in all_pairs], dtype=np.int64)
-    validation_mask = anchors % 5 == 0
+    # Validate on deterministic held-out scan viewpoints rather than on a
+    # random row split. A random split leaks near-duplicate descriptors from
+    # the same RoomPlan viewpoint into both partitions. Holding out several
+    # complete views, and requiring each held-out view to clear the gate,
+    # makes this tiny map-specific scorer less likely to look better than it
+    # generalizes to a new view.
+    unique_views = sorted({str(value) for value in view_ids})
+    if len(unique_views) < 2:
+        return None
+    held_out_count = max(1, min(3, len(unique_views) // 4))
+    held_out_views = [
+        unique_views[(seed + offset) % len(unique_views)]
+        for offset in range(held_out_count)
+    ]
+    anchor_views = np.asarray([str(view_ids[int(anchor)]) for anchor in anchors])
+    validation_mask = np.asarray(
+        np.isin(anchor_views, np.asarray(held_out_views, dtype=str)),
+        dtype=bool,
+    )
     if int(np.count_nonzero(validation_mask)) < 8 or int(np.count_nonzero(~validation_mask)) < 16:
         return None
 
-    # This model is intentionally tiny and map-specific. Train on CPU to keep
-    # MPS available for the existing detector and to bound first-request cost.
-    previous_threads = torch.get_num_threads()
-    torch.set_num_threads(1)
-    try:
-        torch.manual_seed(seed)
-        Network = _network_class(torch)
-        model = Network().to(torch.device("cpu"))
-        optimizer = torch.optim.AdamW(model.parameters(), lr=0.003, weight_decay=0.0001)
-        feature_tensor = torch.from_numpy(features)
-        label_tensor = torch.from_numpy(labels)
-        train_indices = np.flatnonzero(~validation_mask)
-        batch_size = 256
-        model.train()
-        for _epoch in range(64):
-            shuffled = train_indices[rng.permutation(len(train_indices))]
-            for start in range(0, len(shuffled), batch_size):
-                batch = torch.from_numpy(shuffled[start : start + batch_size])
-                logits = model(feature_tensor[batch])
-                loss = torch.nn.functional.binary_cross_entropy_with_logits(logits, label_tensor[batch])
-                optimizer.zero_grad(set_to_none=True)
-                loss.backward()
-                optimizer.step()
-        model.eval()
-        with torch.no_grad():
-            validation_scores = torch.sigmoid(model(feature_tensor[torch.from_numpy(np.flatnonzero(validation_mask))])).numpy()
-    finally:
-        torch.set_num_threads(previous_threads)
+    # This model is intentionally tiny and map-specific. Run both fitting and
+    # scoring on the same accelerator as the local detector when one exists.
+    # Do not mutate Torch's process-global thread count here: camera
+    # positioning requests can now run concurrently, and changing that global
+    # setting during one map's first fit would race with another request.
+    torch.manual_seed(seed)
+    Network = _network_class(torch)
+    device, device_label = _solver_device(torch)
+    model = Network().to(device)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=0.003, weight_decay=0.0001)
+    feature_tensor = torch.from_numpy(features).to(device)
+    label_tensor = torch.from_numpy(labels).to(device)
+    train_indices = np.flatnonzero(~validation_mask)
+    batch_size = 256
+    model.train()
+    for _epoch in range(64):
+        shuffled = train_indices[rng.permutation(len(train_indices))]
+        for start in range(0, len(shuffled), batch_size):
+            batch = torch.from_numpy(shuffled[start : start + batch_size]).to(device)
+            logits = model(feature_tensor[batch])
+            loss = torch.nn.functional.binary_cross_entropy_with_logits(logits, label_tensor[batch])
+            optimizer.zero_grad(set_to_none=True)
+            loss.backward()
+            optimizer.step()
+    model.eval()
+    with torch.no_grad():
+        validation_indices = torch.from_numpy(np.flatnonzero(validation_mask)).to(device)
+        validation_scores = torch.sigmoid(model(feature_tensor[validation_indices])).detach().cpu().numpy()
 
     validation_labels = labels[validation_mask]
     validation_auc = _auc(validation_scores, validation_labels)
+    validation_aucs = {
+        view: _auc(
+            validation_scores[anchor_views[validation_mask] == view],
+            validation_labels[anchor_views[validation_mask] == view],
+        )
+        for view in held_out_views
+    }
+    finite_validation_aucs = [value for value in validation_aucs.values() if value is not None and math.isfinite(value)]
+    minimum_validation_auc = min(finite_validation_aucs) if finite_validation_aucs else None
     # A map with no repeatable cross-view appearance must fall back to the
     # geometric matcher. A barely-random learned score is worse than having no
     # learned rescue path at all.
-    if validation_auc is None or not math.isfinite(validation_auc) or validation_auc < 0.60:
+    if (
+        validation_auc is None
+        or not math.isfinite(validation_auc)
+        or validation_auc < _MIN_HELD_OUT_AUC
+        or len(finite_validation_aucs) != len(held_out_views)
+        or minimum_validation_auc is None
+        or minimum_validation_auc < _MIN_HELD_OUT_AUC
+    ):
         return None
     return {
         "schema_version": SCHEMA_VERSION,
@@ -303,6 +366,15 @@ def _fit_matcher(
             "validation_auc": round(float(validation_auc), 6),
             "epochs": 64,
             "source": "roomplan-metric-nearby-landmarks",
+            "validation_strategy": "held-out-scan-views-v2",
+            "held_out_view": held_out_views[0],
+            "held_out_views": held_out_views,
+            "validation_aucs": {
+                view: round(float(value), 6) if value is not None else None
+                for view, value in validation_aucs.items()
+            },
+            "minimum_validation_auc": round(float(minimum_validation_auc), 6),
+            "device": device_label,
         },
     }
 
@@ -319,7 +391,10 @@ class LearnedMatcher:
         if not isinstance(raw_state, dict):
             raise ValueError("learned matcher state is missing")
         Network = _network_class(torch)
-        self.model = Network().to(torch.device("cpu"))
+        device, device_label = _solver_device(torch)
+        self.device = device
+        self.device_label = device_label
+        self.model = Network().to(device)
         current_state = self.model.state_dict()
         tensors: dict[str, Any] = {}
         for name, current in current_state.items():
@@ -343,7 +418,13 @@ class LearnedMatcher:
             "validation_auc": training.get("validation_auc"),
             "positive_pairs": training.get("positive_pairs"),
             "negative_pairs": training.get("negative_pairs"),
+            "validation_strategy": training.get("validation_strategy"),
+            "held_out_view": training.get("held_out_view"),
+            "held_out_views": training.get("held_out_views"),
+            "validation_aucs": training.get("validation_aucs"),
+            "minimum_validation_auc": training.get("minimum_validation_auc"),
             "source": training.get("source"),
+            "device": device_label,
         }
         self._torch = torch
 
@@ -362,11 +443,12 @@ class LearnedMatcher:
         )
         if len(features) == 0:
             return np.empty(0, dtype=np.float32)
-        with self._torch.no_grad():
-            output: list[np.ndarray] = []
-            for start in range(0, len(features), 2048):
-                tensor = self._torch.from_numpy(features[start : start + 2048])
-                output.append(self._torch.sigmoid(self.model(tensor)).numpy())
+        with GPU_COMPUTE_LOCK:
+            with self._torch.no_grad():
+                output: list[np.ndarray] = []
+                for start in range(0, len(features), 2048):
+                    tensor = self._torch.from_numpy(features[start : start + 2048]).to(self.device)
+                    output.append(self._torch.sigmoid(self.model(tensor)).detach().cpu().numpy())
         return np.concatenate(output).astype(np.float32)
 
 
@@ -398,13 +480,14 @@ def get_or_fit_matcher(
     with _CACHE_LOCK:
         if key in _MATCHER_CACHE:
             return _MATCHER_CACHE[key]
-        artifact = _fit_matcher(
-            np.asarray(points, dtype=np.float32),
-            np.asarray(descriptors, dtype=np.uint8),
-            response_array,
-            list(view_ids),
-            seed=seed,
-        )
+        with GPU_COMPUTE_LOCK:
+            artifact = _fit_matcher(
+                np.asarray(points, dtype=np.float32),
+                np.asarray(descriptors, dtype=np.uint8),
+                response_array,
+                list(view_ids),
+                seed=seed,
+            )
         matcher: LearnedMatcher | None = None
         if artifact is not None:
             torch = _import_torch()

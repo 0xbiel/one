@@ -381,11 +381,17 @@
       "CameraLocalizationIn": {
         "properties": {
           "fov_degrees": {
-            "default": 60.0,
-            "maximum": 120.0,
-            "minimum": 30.0,
-            "title": "Fov Degrees",
-            "type": "number"
+            "anyOf": [
+              {
+                "maximum": 120.0,
+                "minimum": 30.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fov Degrees"
           },
           "frames": {
             "items": {
@@ -2152,6 +2158,31 @@
       "RoomPlanMapIn": {
         "additionalProperties": false,
         "properties": {
+          "alignment_status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "aligned",
+                  "needs_alignment"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alignment Status"
+          },
+          "fragment_to_home": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RoomPlanTransform4x4"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "normalized_scan": {
             "$ref": "#/components/schemas/RoomPlanNormalizedScan"
           },
@@ -2354,7 +2385,10 @@
             "type": "boolean"
           },
           "provenance": {
-            "const": "native-roomplan",
+            "enum": [
+              "native-roomplan",
+              "native-roomplan-structure"
+            ],
             "title": "Provenance",
             "type": "string"
           },
@@ -2384,7 +2418,7 @@
           "visual_depth_sample_count": {
             "anyOf": [
               {
-                "maximum": 12.0,
+                "maximum": 2048.0,
                 "minimum": 0.0,
                 "type": "integer"
               },
@@ -2452,7 +2486,7 @@
           "visual_sample_count": {
             "anyOf": [
               {
-                "maximum": 12.0,
+                "maximum": 2048.0,
                 "minimum": 0.0,
                 "type": "integer"
               },
@@ -2461,6 +2495,32 @@
               }
             ],
             "title": "Visual Sample Count"
+          },
+          "visual_recommended_sample_count": {
+            "anyOf": [
+              {
+                "maximum": 2048.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visual Recommended Sample Count"
+          },
+          "visual_estimated_area_square_meters": {
+            "anyOf": [
+              {
+                "maximum": 10000.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visual Estimated Area Square Meters"
           },
           "visual_sampling_attempts": {
             "anyOf": [
@@ -2520,6 +2580,28 @@
           "story"
         ],
         "title": "RoomPlanSection",
+        "type": "object"
+      },
+      "RoomPlanTransform4x4": {
+        "additionalProperties": false,
+        "properties": {
+          "values": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "maxItems": 4,
+            "minItems": 4,
+            "title": "Values",
+            "type": "array"
+          }
+        },
+        "required": [
+          "values"
+        ],
+        "title": "RoomPlanTransform4x4",
         "type": "object"
       },
       "RoomPlanVisualFrameIn": {
@@ -2623,7 +2705,7 @@
             "items": {
               "$ref": "#/components/schemas/RoomPlanVisualFrameIn"
             },
-            "maxItems": 12,
+            "maxItems": 24,
             "minItems": 1,
             "title": "Frames",
             "type": "array"
@@ -2633,6 +2715,21 @@
           "frames"
         ],
         "title": "RoomPlanVisualLandmarksIn",
+        "type": "object"
+      },
+      "RoomUpdate": {
+        "properties": {
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "RoomUpdate",
         "type": "object"
       },
       "ValidationError": {
@@ -3772,6 +3869,198 @@
         "summary": "Map Generation Frames"
       }
     },
+    "/api/v1/homes/{home_id}/cameras/{camera_id}/reference-snapshot": {
+      "get": {
+        "operationId": "camera_reference_snapshot_api_v1_homes__home_id__cameras__camera_id__reference_snapshot_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "camera_id",
+            "required": true,
+            "schema": {
+              "title": "Camera Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Camera Reference Snapshot"
+      },
+      "post": {
+        "operationId": "save_camera_reference_snapshot_api_v1_homes__home_id__cameras__camera_id__reference_snapshot_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "camera_id",
+            "required": true,
+            "schema": {
+              "title": "Camera Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CameraLocalizationFrameIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Save Camera Reference Snapshot"
+      }
+    },
+    "/api/v1/homes/{home_id}/cameras/{camera_id}/reference-snapshot/capture-request": {
+      "get": {
+        "operationId": "get_camera_reference_snapshot_capture_request_api_v1_homes__home_id__cameras__camera_id__reference_snapshot_capture_request_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "camera_id",
+            "required": true,
+            "schema": {
+              "title": "Camera Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Camera Reference Snapshot Capture Request"
+      }
+    },
+    "/api/v1/homes/{home_id}/cameras/{camera_id}/reference-snapshot/request-capture": {
+      "post": {
+        "operationId": "request_camera_reference_snapshot_capture_api_v1_homes__home_id__cameras__camera_id__reference_snapshot_request_capture_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "camera_id",
+            "required": true,
+            "schema": {
+              "title": "Camera Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Request Camera Reference Snapshot Capture"
+      }
+    },
     "/api/v1/homes/{home_id}/cameras/{camera_id}/roomplan-calibration-session": {
       "delete": {
         "operationId": "cancel_roomplan_calibration_session_api_v1_homes__home_id__cameras__camera_id__roomplan_calibration_session_delete",
@@ -3862,7 +4151,7 @@
         "summary": "Get Roomplan Calibration Session"
       },
       "post": {
-        "description": "Start a transient caregiver-guided calibration for a fixed publisher camera.",
+        "description": "Start a transient fixed-scene reference calibration session.\n\nThe caregiver no longer has to stand on floor targets. The paired\npublisher camera supplies several short, stationary scene captures and\nordinary RoomPlan visual localization decides the pose. People and\nmovable furniture are treated as transient evidence by the geometry\nworker.",
         "operationId": "start_roomplan_calibration_session_api_v1_homes__home_id__cameras__camera_id__roomplan_calibration_session_post",
         "parameters": [
           {
@@ -3905,6 +4194,52 @@
           }
         },
         "summary": "Start Roomplan Calibration Session"
+      }
+    },
+    "/api/v1/homes/{home_id}/cameras/{camera_id}/roomplan-calibration-session/commit-reference": {
+      "post": {
+        "operationId": "commit_roomplan_calibration_reference_api_v1_homes__home_id__cameras__camera_id__roomplan_calibration_session_commit_reference_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "camera_id",
+            "required": true,
+            "schema": {
+              "title": "Camera Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Commit Roomplan Calibration Reference"
       }
     },
     "/api/v1/homes/{home_id}/cameras/{camera_id}/roomplan-calibration-session/frames": {
@@ -4109,7 +4444,7 @@
     },
     "/api/v1/homes/{home_id}/cameras/{camera_id}/roomplan-readiness": {
       "get": {
-        "description": "Expose only the RoomPlan state a camera needs for automatic localization.",
+        "description": "Expose only the RoomPlan state needed for explicitly requested positioning.",
         "operationId": "camera_roomplan_readiness_api_v1_homes__home_id__cameras__camera_id__roomplan_readiness_get",
         "parameters": [
           {
@@ -6456,6 +6791,106 @@
           }
         },
         "summary": "Room"
+      }
+    },
+    "/api/v1/homes/{home_id}/rooms/{room_id}": {
+      "delete": {
+        "operationId": "room_delete_api_v1_homes__home_id__rooms__room_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "room_id",
+            "required": true,
+            "schema": {
+              "title": "Room Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Room Delete"
+      },
+      "patch": {
+        "operationId": "room_update_api_v1_homes__home_id__rooms__room_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "room_id",
+            "required": true,
+            "schema": {
+              "title": "Room Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoomUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Room Update"
       }
     },
     "/api/v1/homes/{home_id}/runtime": {

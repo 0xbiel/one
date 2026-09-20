@@ -1,4 +1,32 @@
 services:
+  vision-worker:
+    build:
+      context: .
+      dockerfile: geometry_service/Dockerfile
+    environment:
+      ONE_GEOMETRY_MODE: model
+      ONE_GEOMETRY_MODEL_PATH: /models/yolov8s-worldv2.pt
+      ONE_GEOMETRY_MODEL_CONFIG: /app/geometry_service/model_config.yolo-world.json
+      # Docker Desktop on macOS cannot expose Metal/MPS to Linux containers.
+      # Keep the Compose-managed worker on CPU so it is always available with
+      # the API. The host-side worker can still be run manually for MPS speed.
+      ONE_GEOMETRY_DEVICE: ${ONE_GEOMETRY_DOCKER_DEVICE:-cpu}
+      ONE_GEOMETRY_ALLOW_CPU: ${ONE_GEOMETRY_DOCKER_ALLOW_CPU:-true}
+      ONE_POSITIONING_WORKERS: ${ONE_POSITIONING_WORKERS:-3}
+    volumes:
+      - "${ONE_GEOMETRY_MODEL_PATH:?ONE_GEOMETRY_MODEL_PATH must point to the YOLO-World checkpoint}:/models/yolov8s-worldv2.pt:ro"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/health', timeout=5).read()"
+      interval: 10s
+      timeout: 6s
+      retries: 30
+      start_period: 60s
+    restart: unless-stopped
+
   api:
     build: .
     env_file:
@@ -17,11 +45,10 @@ services:
       ONE_LM_STUDIO_URL: ${ONE_LM_STUDIO_URL:-http://host.docker.internal:1234/v1}
       ONE_LM_STUDIO_MODEL: ${ONE_LM_STUDIO_MODEL:-qwen3.6-35b-a3b}
       ONE_LM_STUDIO_API_KEY: ${ONE_LM_STUDIO_API_KEY:-}
-      # Room geometry inference stays on the Mac host so Apple Metal/MPS is
-      # available; Docker Desktop cannot pass the host GPU through reliably.
-      ONE_GEOMETRY_SERVICE_URL: ${ONE_GEOMETRY_SERVICE_URL:-http://host.docker.internal:8090}
+      ONE_GEOMETRY_SERVICE_URL: ${ONE_GEOMETRY_SERVICE_URL:-http://vision-worker:8090}
       ONE_GEOMETRY_TIMEOUT_SECONDS: ${ONE_GEOMETRY_TIMEOUT_SECONDS:-45}
-      ONE_GEOMETRY_REQUIRE_GPU: ${ONE_GEOMETRY_REQUIRE_GPU:-true}
+      ONE_GEOMETRY_LOCALIZATION_STALL_TIMEOUT_SECONDS: ${ONE_GEOMETRY_LOCALIZATION_STALL_TIMEOUT_SECONDS:-180}
+      ONE_GEOMETRY_REQUIRE_GPU: ${ONE_GEOMETRY_REQUIRE_GPU:-false}
       ONE_CORS_ORIGINS: ${ONE_CORS_ORIGINS:-http://localhost:4173,http://localhost:4174,http://localhost:4175,http://127.0.0.1:4173,http://127.0.0.1:4174,http://127.0.0.1:4175}
     depends_on:
       postgres:
@@ -32,6 +59,8 @@ services:
         condition: service_started
       livekit:
         condition: service_started
+      vision-worker:
+        condition: service_healthy
     ports: ["127.0.0.1:8000:8000"]
     volumes: ["one_objects:/app/data/objects"]
   frontend:
@@ -39,12 +68,17 @@ services:
       context: ../one-frontend
       args:
         VITE_API_BASE_URL: ${ONE_FRONTEND_API_BASE_URL:-/api/v1}
-        VITE_DEMO_MODE: ${ONE_FRONTEND_DEMO_MODE:-false}
     depends_on: [api]
     # Keep the default private to this Mac. Set ONE_FRONTEND_BIND=0.0.0.0
     # only for a controlled LAN test; Tailscale Serve can proxy the loopback
     # default without exposing the container on the whole LAN.
     ports: ["${ONE_FRONTEND_BIND:-127.0.0.1}:${ONE_FRONTEND_PORT:-4175}:80"]
+  demo-service:
+    build:
+      context: ../one-demo-service
+    ports: ["127.0.0.1:8100:8100"]
+    # Demo data and sessions are isolated from the production API service.
+
   postgres:
     image: postgres:16-alpine
     environment:

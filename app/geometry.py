@@ -8,12 +8,39 @@ privacy boundary around temporary RGB frames.
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+from contextvars import ContextVar
 import json
+import time
 import urllib.error
 import urllib.request
-from typing import Protocol, Sequence
+from typing import Callable, Iterator, Protocol, Sequence
 
 from .config import Settings
+
+
+LocalizationProgressCallback = Callable[[int, str], None]
+_localization_progress_callback: ContextVar[LocalizationProgressCallback | None] = ContextVar(
+    "one_localization_progress_callback",
+    default=None,
+)
+
+
+@contextmanager
+def localization_progress(callback: LocalizationProgressCallback) -> Iterator[None]:
+    """Expose progress from a calibration solve without changing public route signatures."""
+
+    token = _localization_progress_callback.set(callback)
+    try:
+        yield
+    finally:
+        _localization_progress_callback.reset(token)
+
+
+def current_localization_progress_callback() -> LocalizationProgressCallback | None:
+    """Return the progress callback active in this request, if any."""
+
+    return _localization_progress_callback.get()
 
 
 class RoomLayoutServiceError(RuntimeError):
@@ -29,6 +56,9 @@ class RoomLayoutServiceUnavailable(RoomLayoutServiceError):
 
 
 class RoomLayoutService(Protocol):
+    def health(self) -> object:
+        """Return the local worker health payload without running inference."""
+
     def infer(
         self,
         *,
@@ -53,7 +83,7 @@ class RoomLayoutService(Protocol):
         landmarks: Sequence[dict],
         frames: Sequence[dict],
         intrinsics: list[list[float]] | None,
-        fov_degrees: float,
+        fov_degrees: float | None,
         room_zones: Sequence[dict] = (),
         search_prior: dict | None = None,
         room_objects: Sequence[dict] = (),
@@ -72,19 +102,53 @@ class HttpRoomLayoutService:
     """
 
     _MAX_RESPONSE_BYTES = 4_000_000
+    _LOCALIZATION_RETRYABLE_CODES = frozenset({
+        "connection_error",
+        "http_408",
+        "http_425",
+        "http_429",
+        "http_503",
+        "http_504",
+    })
+    _LOCALIZATION_RETRY_DELAYS_SECONDS = (0.5, 1.5)
 
     def __init__(self, settings: Settings):
         self.settings = settings
 
-    def _endpoint(self, path: str = "room-layout") -> str:
+    def _base_url(self) -> str:
         base = (self.settings.geometry_service_url or "").strip().rstrip("/")
         if not base:
             raise RoomLayoutServiceUnavailable("not_configured")
         if base.endswith("/v1/room-layout"):
-            base = base.removesuffix("/room-layout")
-        if base.endswith("/v1"):
-            return f"{base}/{path}"
-        return f"{base}/v1/{path}"
+            base = base.removesuffix("/v1/room-layout")
+        elif base.endswith("/v1"):
+            base = base.removesuffix("/v1")
+        return base
+
+    def _endpoint(self, path: str = "room-layout") -> str:
+        return f"{self._base_url()}/v1/{path}"
+
+    def health(self) -> object:
+        request = urllib.request.Request(
+            f"{self._base_url()}/health",
+            headers={"Accept": "application/json"},
+            method="GET",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=min(3.0, self.settings.geometry_timeout_seconds)) as response:
+                raw = response.read(self._MAX_RESPONSE_BYTES + 1)
+            if len(raw) > self._MAX_RESPONSE_BYTES:
+                raise RoomLayoutServiceError("response_too_large")
+            result = json.loads(raw)
+            if not isinstance(result, dict):
+                raise RoomLayoutServiceError("invalid_response")
+            return result
+        except urllib.error.HTTPError as exc:
+            raise RoomLayoutServiceUnavailable(f"http_{exc.code}") from exc
+        except (TimeoutError, urllib.error.URLError, OSError) as exc:
+            raise RoomLayoutServiceUnavailable("connection_error") from exc
+        except json.JSONDecodeError as exc:
+            raise RoomLayoutServiceError("invalid_response") from exc
 
     def _post(self, path: str, payload: dict) -> object:
         request = urllib.request.Request(
@@ -106,10 +170,104 @@ class HttpRoomLayoutService:
             if exc.code in {408, 425, 429, 503, 504}:
                 raise RoomLayoutServiceUnavailable(f"http_{exc.code}") from exc
             raise RoomLayoutServiceError(f"http_{exc.code}") from exc
-        except (TimeoutError, urllib.error.URLError, OSError) as exc:
+        except TimeoutError as exc:
+            raise RoomLayoutServiceUnavailable("timeout") from exc
+        except urllib.error.URLError as exc:
+            reason = getattr(exc, "reason", None)
+            code = "timeout" if isinstance(reason, TimeoutError) else "connection_error"
+            raise RoomLayoutServiceUnavailable(code) from exc
+        except OSError as exc:
             raise RoomLayoutServiceUnavailable("connection_error") from exc
         except json.JSONDecodeError as exc:
             raise RoomLayoutServiceError("invalid_response") from exc
+
+    def _get(self, path: str, *, timeout: float | None = None) -> object:
+        request = urllib.request.Request(
+            self._endpoint(path),
+            headers={"Accept": "application/json"},
+            method="GET",
+        )
+        try:
+            with urllib.request.urlopen(
+                request,
+                timeout=timeout if timeout is not None else self.settings.geometry_timeout_seconds,
+            ) as response:
+                raw = response.read(self._MAX_RESPONSE_BYTES + 1)
+            if len(raw) > self._MAX_RESPONSE_BYTES:
+                raise RoomLayoutServiceError("response_too_large")
+            result = json.loads(raw)
+            if not isinstance(result, dict):
+                raise RoomLayoutServiceError("invalid_response")
+            return result
+        except urllib.error.HTTPError as exc:
+            if exc.code in {408, 425, 429, 503, 504}:
+                raise RoomLayoutServiceUnavailable(f"http_{exc.code}") from exc
+            raise RoomLayoutServiceError(f"http_{exc.code}") from exc
+        except TimeoutError as exc:
+            raise RoomLayoutServiceUnavailable("timeout") from exc
+        except urllib.error.URLError as exc:
+            reason = getattr(exc, "reason", None)
+            code = "timeout" if isinstance(reason, TimeoutError) else "connection_error"
+            raise RoomLayoutServiceUnavailable(code) from exc
+        except OSError as exc:
+            raise RoomLayoutServiceUnavailable("connection_error") from exc
+        except json.JSONDecodeError as exc:
+            raise RoomLayoutServiceError("invalid_response") from exc
+
+    def _localize_camera_job(self, payload: dict, callback: LocalizationProgressCallback) -> object:
+        started: object | None = None
+        for attempt, delay in enumerate((0.0, *self._LOCALIZATION_RETRY_DELAYS_SECONDS)):
+            if delay:
+                time.sleep(delay)
+            try:
+                started = self._post("camera-localization/jobs", payload)
+                break
+            except RoomLayoutServiceUnavailable as exc:
+                if exc.code not in self._LOCALIZATION_RETRYABLE_CODES or attempt == len(self._LOCALIZATION_RETRY_DELAYS_SECONDS):
+                    raise
+        if started is None:  # pragma: no cover - the loop either returns or raises
+            raise RoomLayoutServiceUnavailable("connection_error")
+        if not isinstance(started, dict) or not isinstance(started.get("job_id"), str):
+            raise RoomLayoutServiceError("invalid_response")
+        job_id = started["job_id"]
+        last_progress = -1
+        last_growth_at = time.monotonic()
+        poll_timeout = min(5.0, self.settings.geometry_timeout_seconds)
+        stall_timeout = self.settings.geometry_localization_stall_timeout_seconds
+
+        while True:
+            try:
+                state = self._get(f"camera-localization/jobs/{job_id}", timeout=poll_timeout)
+            except RoomLayoutServiceUnavailable as exc:
+                if time.monotonic() - last_growth_at >= stall_timeout:
+                    raise RoomLayoutServiceUnavailable("timeout") from exc
+                time.sleep(0.5)
+                continue
+
+            progress = state.get("progress")
+            if isinstance(progress, (int, float)):
+                progress_value = max(0, min(100, int(progress)))
+                if progress_value > last_progress:
+                    last_progress = progress_value
+                    last_growth_at = time.monotonic()
+                    callback(progress_value, str(state.get("stage") or "Solving camera pose"))
+
+            status = state.get("status")
+            if status == "complete":
+                result = state.get("result")
+                if not isinstance(result, dict):
+                    raise RoomLayoutServiceError("invalid_response")
+                if last_progress < 100:
+                    callback(100, "Camera pose solved")
+                return result
+            if status == "failed":
+                code = str(state.get("error_code") or "solver_failed")
+                if code == "input_error":
+                    raise RoomLayoutServiceError("http_422")
+                raise RoomLayoutServiceError(code)
+            if time.monotonic() - last_growth_at >= stall_timeout:
+                raise RoomLayoutServiceUnavailable("timeout")
+            time.sleep(0.5)
 
     def infer(
         self,
@@ -174,7 +332,7 @@ class HttpRoomLayoutService:
         landmarks: Sequence[dict],
         frames: Sequence[dict],
         intrinsics: list[list[float]] | None,
-        fov_degrees: float,
+        fov_degrees: float | None,
         room_zones: Sequence[dict] = (),
         search_prior: dict | None = None,
         room_objects: Sequence[dict] = (),
@@ -184,13 +342,25 @@ class HttpRoomLayoutService:
             "schema_version": "roomplan-camera-localization.v1",
             "landmarks": list(landmarks),
             "frames": list(frames),
-            "fov_degrees": fov_degrees,
             "room_zones": list(room_zones),
             "room_objects": list(room_objects),
             "person_anchors": list(person_anchors),
         }
+        if fov_degrees is not None:
+            payload["fov_degrees"] = fov_degrees
         if intrinsics is not None:
             payload["intrinsics"] = {"values": intrinsics}
         if search_prior is not None:
             payload["search_prior"] = search_prior
-        return self._post("camera-localization", payload)
+        progress_callback = _localization_progress_callback.get()
+        if progress_callback is not None:
+            return self._localize_camera_job(payload, progress_callback)
+        for attempt, delay in enumerate((0.0, *self._LOCALIZATION_RETRY_DELAYS_SECONDS)):
+            if delay:
+                time.sleep(delay)
+            try:
+                return self._post("camera-localization", payload)
+            except RoomLayoutServiceUnavailable as exc:
+                if exc.code not in self._LOCALIZATION_RETRYABLE_CODES or attempt == len(self._LOCALIZATION_RETRY_DELAYS_SECONDS):
+                    raise
+        raise AssertionError("camera localization retry loop did not return or raise")

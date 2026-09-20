@@ -60,6 +60,13 @@ class LearnedMatcherTests(unittest.TestCase):
         )
         self.assertGreater(float(np.mean(positive_scores)), float(np.mean(negative_scores)))
         self.assertEqual(matcher.diagnostics["model_version"], MODEL_VERSION)
+        self.assertEqual(matcher.diagnostics["validation_strategy"], "held-out-scan-views-v2")
+        self.assertIn(matcher.diagnostics["held_out_view"], {"scan-view-0", "scan-view-1", "scan-view-2"})
+        self.assertEqual(
+            set(matcher.diagnostics["held_out_views"]),
+            {matcher.diagnostics["held_out_view"]},
+        )
+        self.assertGreaterEqual(float(matcher.diagnostics["minimum_validation_auc"]), 0.70)
 
 
 if __name__ == "__main__":

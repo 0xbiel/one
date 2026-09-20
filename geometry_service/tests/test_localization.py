@@ -1,6 +1,7 @@
 import base64
 import unittest
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import cv2
 import numpy as np
@@ -10,26 +11,45 @@ from geometry_service.contracts import (
     CameraLocalizationRequest,
     CameraLocalizationRoomObject,
     CameraLocalizationRoomZone,
+    VisualLandmarkBuildRequest,
 )
 from geometry_service.localization import (
+    _camera_matrix_candidates,
     _camera_to_world,
     _candidate_is_positioned,
     _consensus_stats,
+    _descriptor_matches,
     _guided_person_calibration,
+    _merge_descriptor_matches,
     _pose_from_fixed_center_matches,
     _pose_from_matches,
+    _pose_scene_prior,
     _pose_with_camera_center,
+    _person_feature_mask,
+    _pose_guided_matches,
+    _provisional_pose_from_guided_matches,
     _project_room_object_bbox,
     _refine_pose_with_guided_matches,
     _refine_semantic_cuboid_pose,
+    _room_bounded_landmark_indices,
     _room_perimeter_search_centers,
+    _support_surface_search_centers,
+    _semantic_cuboid_has_robust_support,
+    _semantic_cuboid_consensus,
     _semantic_cuboid_rank,
+    _semantic_cuboid_score,
+    _semantic_object_assignments,
     _poses_agree,
     _project_point,
     _semantic_object_pose_seeds,
+    _stable_movable_object_detection,
+    _temporal_consensus_matches,
     _world_point,
     _world_to_cv,
+    build_visual_landmarks,
+    localize_camera,
 )
+from geometry_service.low_light import enhance_low_light_image
 
 
 def _request(landmark_count: int, width: int, height: int) -> CameraLocalizationRequest:
@@ -65,7 +85,355 @@ def _candidate(frame_index: int, view_id: str, *, fov: float = 60.0, inliers: in
     }
 
 
+def _semantic_candidate(
+    frame_index: int,
+    center: tuple[float, float, float],
+    *,
+    yaw_degrees: float = 0.0,
+    fov: float = 96.0,
+    guided_matches: int = 7,
+    labels: tuple[str, ...] = ("bed", "storage"),
+    mean_iou: float = 0.82,
+) -> dict:
+    yaw = np.deg2rad(yaw_degrees)
+    c, s = float(np.cos(yaw)), float(np.sin(yaw))
+    matrix = np.eye(4, dtype=np.float64)
+    matrix[:3, :3] = np.asarray(
+        [[c, 0.0, s], [0.0, 1.0, 0.0], [-s, 0.0, c]],
+        dtype=np.float64,
+    )
+    matrix[:3, 3] = center
+    return {
+        "kind": "semantic-cuboid",
+        "frame_index": frame_index,
+        "camera_center": list(center),
+        "candidate_camera_to_world": matrix.tolist(),
+        "selected_fov_degrees": fov,
+        "supported_object_count": len(labels),
+        "supported_group_count": len(labels),
+        "supported_mean_iou": mean_iou,
+        "supported_minimum_iou": 0.62,
+        "matched_object_count": len(labels),
+        "semantic_group_count": len(labels),
+        "guided_match_count": guided_matches,
+        "matches": [
+            {
+                "label": label,
+                "iou": mean_iou,
+                "positive_depth_ratio": 1.0,
+            }
+            for label in labels
+        ],
+    }
+
+
 class LocalizationTests(unittest.TestCase):
+    def test_low_light_preprocessing_is_bounded_and_observable(self) -> None:
+        image = np.full((120, 160, 3), 24, dtype=np.uint8)
+        cv2.rectangle(image, (20, 20), (135, 95), (52, 52, 52), 2)
+        cv2.line(image, (25, 80), (130, 30), (78, 78, 78), 2)
+
+        enhanced, diagnostics = enhance_low_light_image(image)
+
+        self.assertTrue(bool(diagnostics["low_light"]))
+        self.assertGreater(float(np.mean(enhanced)), float(np.mean(image)))
+        self.assertLessEqual(float(np.max(enhanced)), 255.0)
+        self.assertGreaterEqual(float(np.min(enhanced)), 0.0)
+        self.assertGreaterEqual(float(diagnostics["gamma"]), 0.55)
+        self.assertLessEqual(float(diagnostics["gamma"]), 0.88)
+
+    def test_visual_landmark_batch_attaches_scale_robust_sift_descriptors(self) -> None:
+        rng = np.random.default_rng(91)
+        image = rng.integers(0, 256, size=(240, 320, 3), dtype=np.uint8)
+        for index in range(18):
+            center = (20 + (index * 37) % 280, 20 + (index * 53) % 200)
+            cv2.circle(image, center, 7 + index % 5, (255, 255, 255), 2)
+            cv2.putText(image, str(index), (center[0] - 6, center[1] + 4), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (0, 0, 0), 1)
+        encoded_ok, encoded = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, 95])
+        self.assertTrue(encoded_ok)
+        depth = np.full((60, 80), 3.0, dtype="<f4")
+        intrinsics = [[260.0, 0.0, 160.0], [0.0, 260.0, 120.0], [0.0, 0.0, 1.0]]
+        payload = VisualLandmarkBuildRequest.model_validate({
+            "map_id": "sift-test-map",
+            "frames": [{
+                "frame_base64": base64.b64encode(encoded.tobytes()).decode("ascii"),
+                "width": 320,
+                "height": 240,
+                "depth_base64": base64.b64encode(depth.tobytes()).decode("ascii"),
+                "depth_width": 80,
+                "depth_height": 60,
+                "intrinsics": {"values": intrinsics},
+                "camera_to_world": {"values": np.eye(4).tolist()},
+            }],
+        })
+
+        result = build_visual_landmarks(payload)
+
+        self.assertEqual(result["status"], "ready")
+        self.assertEqual(result["detector"], "opencv-orb+sift")
+        self.assertGreater(int(result["diagnostics"]["sift_depth_feature_counts"][0]), 0)
+        self.assertGreater(int(result["diagnostics"]["sift_attached_count"]), 0)
+        self.assertTrue(any(item.get("sift_descriptor_base64") for item in result["landmarks"]))
+
+    def test_orb_and_sift_matches_are_merged_without_duplicate_correspondences(self) -> None:
+        orb_matches = [cv2.DMatch(_queryIdx=0, _trainIdx=0, _distance=40.0)]
+        sift_matches = [
+            cv2.DMatch(_queryIdx=0, _trainIdx=0, _distance=2.0),
+            cv2.DMatch(_queryIdx=1, _trainIdx=1, _distance=20.0),
+        ]
+
+        merged = _merge_descriptor_matches(orb_matches, sift_matches, sift_query_offset=4)
+
+        self.assertEqual([(match.queryIdx, match.trainIdx) for match in merged], [(4, 0), (5, 1)])
+
+    def test_fresh_scale_robust_index_reaches_high_confidence_only_with_independent_evidence(self) -> None:
+        rng = np.random.default_rng(19)
+        image = rng.integers(0, 256, size=(360, 640, 3), dtype=np.uint8)
+        for index in range(120):
+            x = int(rng.integers(20, 620))
+            y = int(rng.integers(20, 340))
+            cv2.circle(image, (x, y), int(rng.integers(2, 9)), tuple(int(value) for value in rng.integers(0, 256, 3)), -1)
+            cv2.putText(image, str(index), (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (255, 255, 255), 1)
+        encoded_ok, encoded = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, 95])
+        self.assertTrue(encoded_ok)
+        depth = np.full((90, 160), 3.0, dtype="<f4")
+        frame = {
+            "frame_base64": base64.b64encode(encoded.tobytes()).decode("ascii"),
+            "width": 640,
+            "height": 360,
+            "depth_base64": base64.b64encode(depth.tobytes()).decode("ascii"),
+            "depth_width": 160,
+            "depth_height": 90,
+            "intrinsics": {"values": [[520.0, 0.0, 320.0], [0.0, 520.0, 180.0], [0.0, 0.0, 1.0]]},
+            "camera_to_world": {"values": np.eye(4).tolist()},
+        }
+        built = build_visual_landmarks(
+            VisualLandmarkBuildRequest.model_validate({"map_id": "confidence-test", "frames": [frame]})
+        )
+        self.assertEqual(built["detector"], "opencv-orb+sift")
+        self.assertGreater(int(built["diagnostics"]["sift_attached_count"]), 100)
+        landmarks = [
+            {**landmark, "view_id": view_id}
+            for view_id in ("scan-view-a", "scan-view-b")
+            for landmark in built["landmarks"]
+        ]
+        request = CameraLocalizationRequest.model_validate({
+            "landmarks": landmarks,
+            "frames": [
+                {"frame_base64": frame["frame_base64"], "width": 640, "height": 360},
+                {"frame_base64": frame["frame_base64"], "width": 640, "height": 360},
+            ],
+            "fov_degrees": 60.0,
+            "room_zones": [{
+                "id": "synthetic-room",
+                "floor_y": -1.5,
+                "polygon": [
+                    {"x": -10.0, "z": -10.0},
+                    {"x": 10.0, "z": -10.0},
+                    {"x": 10.0, "z": 10.0},
+                    {"x": -10.0, "z": 10.0},
+                ],
+            }],
+        })
+
+        result = localize_camera(request)
+
+        self.assertEqual(result["status"], "positioned")
+        self.assertGreaterEqual(float(result["confidence"]), 0.90)
+        self.assertGreaterEqual(int(result["inlier_count"]), 12)
+        self.assertEqual(result["diagnostics"]["consensus_scan_view_count"], 2)
+
+    def test_room_bounded_landmark_filter_removes_far_background_but_keeps_room_margin(self) -> None:
+        request = _request(60, 640, 480)
+        request.room_zones = [
+            CameraLocalizationRoomZone.model_validate({
+                "id": "room",
+                "floor_y": 0.0,
+                "polygon": [
+                    {"x": -2.0, "z": -2.0},
+                    {"x": 2.0, "z": -2.0},
+                    {"x": 2.0, "z": 2.0},
+                    {"x": -2.0, "z": 2.0},
+                ],
+            })
+        ]
+        points = np.asarray(
+            [[-1.5 + (index % 9) * 0.35, 1.2, -1.5 + (index // 9) * 0.5] for index in range(45)]
+            + [[5.0 + index * 0.1, 1.1, 5.0] for index in range(15)],
+            dtype=np.float32,
+        )
+
+        indices, diagnostics = _room_bounded_landmark_indices(request, points)
+
+        self.assertTrue(diagnostics["applied"])
+        self.assertEqual(len(indices), 45)
+        self.assertEqual(diagnostics["filtered_landmark_count"], 15)
+        self.assertAlmostEqual(float(diagnostics["retained_ratio"]), 0.75, places=3)
+
+    def test_room_bounded_landmark_filter_falls_back_when_room_bounds_remove_most_points(self) -> None:
+        request = _request(60, 640, 480)
+        request.room_zones = [
+            CameraLocalizationRoomZone.model_validate({
+                "id": "room",
+                "floor_y": 0.0,
+                "polygon": [
+                    {"x": -1.0, "z": -1.0},
+                    {"x": 1.0, "z": -1.0},
+                    {"x": 1.0, "z": 1.0},
+                    {"x": -1.0, "z": 1.0},
+                ],
+            })
+        ]
+        points = np.asarray(
+            [[0.0, 1.0, 0.0] for _ in range(10)]
+            + [[8.0 + index * 0.1, 1.0, 8.0] for index in range(50)],
+            dtype=np.float32,
+        )
+
+        indices, diagnostics = _room_bounded_landmark_indices(request, points)
+
+        self.assertFalse(diagnostics["applied"])
+        self.assertEqual(len(indices), 60)
+        self.assertEqual(diagnostics["reason"], "fallback_preserved_full_landmark_set")
+
+    def test_temporal_consensus_matches_keeps_stationary_landmarks_and_rejects_wandering_matches(self) -> None:
+        observations = {
+            index: [
+                (0, 100.0 + index * 12.0, 150.0 + index * 5.0, 28.0 + index),
+                (1, 100.8 + index * 12.0, 149.4 + index * 5.0, 29.0 + index),
+                (2, 99.5 + index * 12.0, 150.6 + index * 5.0, 27.0 + index),
+            ]
+            for index in range(6)
+        }
+        observations[99] = [
+            (0, 80.0, 80.0, 24.0),
+            (1, 130.0, 120.0, 25.0),
+            (2, 180.0, 160.0, 23.0),
+        ]
+        observations[100] = [(0, 220.0, 200.0, 20.0)]
+
+        keypoints, matches, diagnostics = _temporal_consensus_matches(observations)
+
+        self.assertEqual(len(keypoints), 6)
+        self.assertEqual(len(matches), 6)
+        self.assertEqual({match.trainIdx for match in matches}, set(range(6)))
+        self.assertEqual(diagnostics["support_frame_count"], 3)
+        self.assertEqual(diagnostics["stable_landmark_count"], 6)
+        self.assertLess(float(diagnostics["maximum_pixel_jitter"]), 2.0)
+
+    def test_unknown_fov_uses_camera_model_sweep_without_implicit_default(self) -> None:
+        request = _request(8, 1280, 720)
+        request.fov_degrees = None
+
+        candidates = _camera_matrix_candidates(request, 1280, 720)
+
+        self.assertGreater(len(candidates), 3)
+        self.assertTrue(all(source == "estimated-fov-sweep" for _matrix, source, _fov in candidates))
+        self.assertGreater(len({round(float(matrix[0, 0]), 3) for matrix, _source, _fov in candidates}), 3)
+
+    def test_person_feature_mask_accepts_low_confidence_occluder_and_rejects_blocked_frame(self) -> None:
+        request = _request(8, 640, 480)
+        request.object_detections = [
+            CameraLocalizationObjectDetection(
+                frame_index=0,
+                label="person",
+                confidence=0.06,
+                bbox=[220.0, 80.0, 420.0, 470.0],
+            )
+        ]
+
+        mask, ratio, occluded = _person_feature_mask(request, frame_index=0, width=640, height=480)
+
+        self.assertIsNotNone(mask)
+        self.assertIsNotNone(ratio)
+        self.assertFalse(occluded)
+        assert mask is not None
+        self.assertEqual(int(mask[250, 320]), 0)
+
+        request.object_detections = [
+            CameraLocalizationObjectDetection(
+                frame_index=0,
+                label="person",
+                confidence=0.06,
+                bbox=[0.0, 0.0, 430.0, 480.0],
+            )
+        ]
+        mask, ratio, occluded = _person_feature_mask(request, frame_index=0, width=640, height=480)
+        self.assertIsNotNone(mask)
+        self.assertIsNotNone(ratio)
+        self.assertGreater(float(ratio), 0.68)
+        self.assertFalse(occluded)
+
+        # A close person can cover well over 92% once padding is applied while
+        # still leaving a narrow strip of static room. Keep that strip usable
+        # and let feature extraction decide whether it has enough evidence.
+        request.object_detections = [
+            CameraLocalizationObjectDetection(
+                frame_index=0,
+                label="person",
+                confidence=0.39,
+                bbox=[10.0, 1.0, 570.0, 480.0],
+            )
+        ]
+        mask, ratio, occluded = _person_feature_mask(request, frame_index=0, width=640, height=480)
+        self.assertIsNotNone(mask)
+        self.assertIsNotNone(ratio)
+        self.assertGreater(float(ratio), 0.92)
+        self.assertFalse(occluded)
+
+        request.object_detections = [
+            CameraLocalizationObjectDetection(
+                frame_index=0,
+                label="person",
+                confidence=0.06,
+                bbox=[0.0, 0.0, 640.0, 480.0],
+            )
+        ]
+        mask, ratio, occluded = _person_feature_mask(request, frame_index=0, width=640, height=480)
+        self.assertIsNone(mask)
+        self.assertIsNotNone(ratio)
+        self.assertTrue(occluded)
+
+    def test_reflective_window_is_masked_from_static_feature_matching(self) -> None:
+        request = _request(8, 640, 480)
+        request.object_detections = [
+            CameraLocalizationObjectDetection(
+                frame_index=0,
+                label="window",
+                confidence=0.82,
+                bbox=[0.0, 20.0, 260.0, 460.0],
+            )
+        ]
+
+        mask, ratio, occluded = _person_feature_mask(request, frame_index=0, width=640, height=480)
+
+        self.assertIsNotNone(mask)
+        self.assertIsNotNone(ratio)
+        self.assertFalse(occluded)
+        assert mask is not None
+        self.assertEqual(int(mask[240, 120]), 0)
+        self.assertEqual(int(mask[240, 500]), 255)
+        self.assertGreater(float(ratio), 0.30)
+
+    def test_movable_chair_is_masked_from_static_feature_matching(self) -> None:
+        request = _request(8, 640, 480)
+        request.object_detections = [
+            CameraLocalizationObjectDetection(
+                frame_index=0,
+                label="chair",
+                confidence=0.76,
+                bbox=[180.0, 190.0, 430.0, 478.0],
+            )
+        ]
+
+        mask, ratio, occluded = _person_feature_mask(request, frame_index=0, width=640, height=480)
+
+        self.assertIsNotNone(mask)
+        self.assertIsNotNone(ratio)
+        self.assertFalse(occluded)
+        assert mask is not None
+        self.assertEqual(int(mask[300, 300]), 0)
+
     def test_guided_person_calibration_recovers_pose_with_bystander(self) -> None:
         request = _request(8, 640, 480)
         camera_to_world = np.eye(4, dtype=np.float64)
@@ -117,6 +485,7 @@ class LocalizationTests(unittest.TestCase):
 
     def test_guided_person_calibration_sweeps_unknown_fov_with_six_targets(self) -> None:
         request = _request(8, 640, 480)
+        request.fov_degrees = None
         camera_to_world = np.eye(4, dtype=np.float64)
         camera_to_world[:3, 3] = [0.15, 1.45, 3.1]
         world_to_cv = _world_to_cv(camera_to_world)
@@ -192,6 +561,167 @@ class LocalizationTests(unittest.TestCase):
 
         self.assertGreater(_semantic_cuboid_rank(strong_two_object), _semantic_cuboid_rank(weak_three_object))
 
+    def test_semantic_cuboid_search_hint_keeps_two_good_groups_with_one_bad_outlier(self) -> None:
+        live_style_candidate = {
+            "supported_object_count": 2,
+            "supported_group_count": 2,
+            "supported_mean_iou": 0.735,
+            "supported_minimum_iou": 0.53,
+            "matched_object_count": 3,
+            "semantic_group_count": 2,
+            "mean_iou": 0.495,
+            "minimum_iou": 0.015,
+        }
+
+        self.assertTrue(_semantic_cuboid_has_robust_support(live_style_candidate))
+
+    def test_semantic_cuboid_rejects_visible_assigned_object_fully_behind_camera(self) -> None:
+        width, height, fov = 960, 540, 90.0
+        focal = 0.5 * width / np.tan(np.radians(fov) / 2.0)
+        camera_matrix = np.asarray(
+            [[focal, 0.0, width / 2.0], [0.0, focal, height / 2.0], [0.0, 0.0, 1.0]],
+            dtype=np.float64,
+        )
+        request = _request(8, width, height)
+        request.room_objects = [
+            CameraLocalizationRoomObject(
+                id="bed-visible",
+                label="bed",
+                center={"x": -0.8, "y": 0.0, "z": 4.0},
+                dimensions={"x": 1.2, "y": 0.8, "z": 1.6},
+                confidence=0.95,
+            ),
+            CameraLocalizationRoomObject(
+                id="storage-visible",
+                label="storage",
+                center={"x": 1.0, "y": 0.0, "z": 4.5},
+                dimensions={"x": 1.0, "y": 1.8, "z": 0.8},
+                confidence=0.95,
+            ),
+            CameraLocalizationRoomObject(
+                id="chair-behind",
+                label="chair",
+                center={"x": 0.2, "y": 0.0, "z": -2.0},
+                dimensions={"x": 0.8, "y": 1.2, "z": 0.8},
+                # RoomPlan can report low semantic confidence for furniture
+                # whose metric cuboid is still useful. A strong live chair
+                # detection fully behind the camera must remain contradictory.
+                confidence=0.45,
+            ),
+        ]
+        rvec = np.zeros((3, 1), dtype=np.float64)
+        tvec = np.zeros((3, 1), dtype=np.float64)
+        detections: list[CameraLocalizationObjectDetection] = []
+        for room_object in request.room_objects[:2]:
+            projected = _project_room_object_bbox(
+                room_object,
+                rvec=rvec,
+                tvec=tvec,
+                camera_matrix=camera_matrix,
+                frame_width=width,
+                frame_height=height,
+            )
+            self.assertIsNotNone(projected)
+            assert projected is not None
+            bbox, _ = projected
+            detections.append(
+                CameraLocalizationObjectDetection(
+                    frame_index=0,
+                    label=room_object.label,
+                    confidence=0.92,
+                    bbox=bbox,
+                )
+            )
+        detections.append(
+            CameraLocalizationObjectDetection(
+                frame_index=0,
+                label="chair",
+                confidence=0.86,
+                bbox=[420.0, 220.0, 760.0, 535.0],
+            )
+        )
+        request.object_detections = detections
+
+        contradiction_free = _semantic_cuboid_score(
+            request,
+            frame_index=0,
+            assignment=[(0, 0), (1, 1)],
+            rvec=rvec,
+            tvec=tvec,
+            camera_matrix=camera_matrix,
+            frame_width=width,
+            frame_height=height,
+        )
+        contradicted = _semantic_cuboid_score(
+            request,
+            frame_index=0,
+            assignment=[(0, 0), (1, 1), (2, 2)],
+            rvec=rvec,
+            tvec=tvec,
+            camera_matrix=camera_matrix,
+            frame_width=width,
+            frame_height=height,
+        )
+
+        self.assertTrue(_semantic_cuboid_has_robust_support(contradiction_free))
+        self.assertEqual(contradicted["supported_object_count"], 2)
+        self.assertEqual(contradicted["contradictory_object_count"], 1)
+        self.assertEqual(contradicted["contradictory_group_count"], 1)
+        self.assertEqual(contradicted["contradictions"][0]["label"], "chair")
+        self.assertFalse(_semantic_cuboid_has_robust_support(contradicted))
+        self.assertGreater(_semantic_cuboid_rank(contradiction_free), _semantic_cuboid_rank(contradicted))
+
+    def test_semantic_cuboid_does_not_mark_near_plane_partial_visibility_as_contradiction(self) -> None:
+        width, height, fov = 640, 360, 60.0
+        focal = 0.5 * width / np.tan(np.radians(fov) / 2.0)
+        camera_matrix = np.asarray(
+            [[focal, 0.0, width / 2.0], [0.0, focal, height / 2.0], [0.0, 0.0, 1.0]],
+            dtype=np.float64,
+        )
+        request = _request(8, width, height)
+        room_object = CameraLocalizationRoomObject(
+            id="storage-near-camera",
+            label="storage",
+            center={"x": 0.0, "y": 0.0, "z": 0.1},
+            dimensions={"x": 0.4, "y": 0.4, "z": 0.6},
+            confidence=1.0,
+        )
+        request.room_objects = [room_object]
+        projected = _project_room_object_bbox(
+            room_object,
+            rvec=np.zeros((3, 1), dtype=np.float64),
+            tvec=np.zeros((3, 1), dtype=np.float64),
+            camera_matrix=camera_matrix,
+            frame_width=width,
+            frame_height=height,
+        )
+        self.assertIsNotNone(projected)
+        assert projected is not None
+        bbox, positive_ratio = projected
+        self.assertEqual(positive_ratio, 0.5)
+        request.object_detections = [
+            CameraLocalizationObjectDetection(
+                frame_index=0,
+                label="storage",
+                confidence=0.9,
+                bbox=bbox,
+            )
+        ]
+
+        score = _semantic_cuboid_score(
+            request,
+            frame_index=0,
+            assignment=[(0, 0)],
+            rvec=np.zeros((3, 1), dtype=np.float64),
+            tvec=np.zeros((3, 1), dtype=np.float64),
+            camera_matrix=camera_matrix,
+            frame_width=width,
+            frame_height=height,
+        )
+
+        self.assertEqual(score["contradictory_object_count"], 0)
+        self.assertEqual(score["contradictions"], [])
+
     def test_semantic_cuboid_rank_prefers_multi_object_evidence_over_single_perfect_box(self) -> None:
         strong_two_object = {
             "matched_object_count": 2,
@@ -211,6 +741,123 @@ class LocalizationTests(unittest.TestCase):
         }
 
         self.assertGreater(_semantic_cuboid_rank(strong_two_object), _semantic_cuboid_rank(perfect_single_object))
+
+    def test_semantic_cuboid_consensus_accepts_tight_four_frame_cluster(self) -> None:
+        candidates = [
+            _semantic_candidate(0, (1.1385, -0.7725, 1.2027), yaw_degrees=0.0, guided_matches=7),
+            _semantic_candidate(1, (1.0760, -0.8066, 1.2214), yaw_degrees=0.4, guided_matches=6),
+            _semantic_candidate(2, (1.0722, -0.8054, 1.2386), yaw_degrees=-0.3, guided_matches=5),
+            _semantic_candidate(3, (1.0846, -0.7800, 1.1846), yaw_degrees=0.7, guided_matches=4),
+        ]
+
+        consensus = _semantic_cuboid_consensus(candidates, burst_frame_count=6)
+
+        self.assertIsNotNone(consensus)
+        assert consensus is not None
+        self.assertEqual(consensus["frame_count"], 4)
+        self.assertEqual(consensus["visual_support_frame_count"], 2)
+        self.assertEqual(consensus["common_labels"], ["bed", "storage"])
+        self.assertEqual(consensus["fov_degrees"], 96.0)
+        self.assertLess(consensus["max_center_residual_m"], 0.12)
+        self.assertLess(consensus["max_rotation_residual_degrees"], 1.1)
+
+    def test_semantic_cuboid_consensus_rejects_only_three_frames_in_six_frame_burst(self) -> None:
+        candidates = [
+            _semantic_candidate(index, (1.0 + 0.02 * index, -0.8, 1.2), guided_matches=7)
+            for index in range(3)
+        ]
+
+        self.assertIsNone(_semantic_cuboid_consensus(candidates, burst_frame_count=6))
+
+    def test_semantic_cuboid_consensus_accepts_three_strong_frames_when_dynamic_occlusion_is_high(self) -> None:
+        candidates = [
+            _semantic_candidate(index, (0.885 + 0.003 * index, -0.73, 0.65), guided_matches=7)
+            for index in range(3)
+        ]
+
+        consensus = _semantic_cuboid_consensus(
+            candidates,
+            burst_frame_count=6,
+            dynamic_mask_max_ratio=0.65,
+        )
+
+        self.assertIsNotNone(consensus)
+        assert consensus is not None
+        self.assertEqual(consensus["frame_count"], 3)
+        self.assertEqual(consensus["visual_support_frame_count"], 3)
+        self.assertTrue(consensus["occlusion_relaxed_frame_requirement"])
+
+    def test_semantic_cuboid_consensus_high_occlusion_still_rejects_weak_three_frame_visual_support(self) -> None:
+        candidates = [
+            _semantic_candidate(index, (0.885 + 0.003 * index, -0.73, 0.65), guided_matches=5)
+            for index in range(3)
+        ]
+
+        self.assertIsNone(
+            _semantic_cuboid_consensus(
+                candidates,
+                burst_frame_count=6,
+                dynamic_mask_max_ratio=0.65,
+            )
+        )
+
+    def test_semantic_cuboid_consensus_rejects_single_shared_label(self) -> None:
+        candidates = [
+            _semantic_candidate(
+                index,
+                (1.0 + 0.01 * index, -0.8, 1.2),
+                labels=("bed", "storage") if index < 2 else ("bed", "desk"),
+                guided_matches=7,
+            )
+            for index in range(4)
+        ]
+
+        self.assertIsNone(_semantic_cuboid_consensus(candidates, burst_frame_count=6))
+
+    def test_semantic_cuboid_consensus_rejects_inconsistent_fov(self) -> None:
+        candidates = [
+            _semantic_candidate(0, (1.00, -0.8, 1.20), fov=92.0),
+            _semantic_candidate(1, (1.01, -0.8, 1.20), fov=92.0),
+            _semantic_candidate(2, (1.02, -0.8, 1.20), fov=100.0),
+            _semantic_candidate(3, (1.03, -0.8, 1.20), fov=100.0),
+        ]
+
+        self.assertIsNone(_semantic_cuboid_consensus(candidates, burst_frame_count=6))
+
+    def test_semantic_cuboid_consensus_rejects_pose_scatter(self) -> None:
+        candidates = [
+            _semantic_candidate(0, (0.78, -0.8, 1.20), yaw_degrees=-4.0),
+            _semantic_candidate(1, (0.93, -0.8, 1.20), yaw_degrees=-1.0),
+            _semantic_candidate(2, (1.07, -0.8, 1.20), yaw_degrees=1.0),
+            _semantic_candidate(3, (1.22, -0.8, 1.20), yaw_degrees=4.0),
+        ]
+
+        self.assertIsNone(_semantic_cuboid_consensus(candidates, burst_frame_count=6))
+
+    def test_semantic_cuboid_consensus_requires_fresh_orb_support_in_two_frames(self) -> None:
+        candidates = [
+            _semantic_candidate(index, (1.0 + 0.01 * index, -0.8, 1.2), guided_matches=5)
+            for index in range(4)
+        ]
+
+        self.assertIsNone(_semantic_cuboid_consensus(candidates, burst_frame_count=6))
+
+    def test_semantic_cuboid_consensus_prefers_larger_competing_cluster(self) -> None:
+        strong_cluster = [
+            _semantic_candidate(index, (1.0 + 0.01 * index, -0.8, 1.2), guided_matches=7)
+            for index in range(5)
+        ]
+        smaller_cluster = [
+            _semantic_candidate(index + 5, (-0.6 + 0.01 * index, -0.8, -0.4), guided_matches=8, mean_iou=0.92)
+            for index in range(4)
+        ]
+
+        consensus = _semantic_cuboid_consensus(strong_cluster + smaller_cluster, burst_frame_count=9)
+
+        self.assertIsNotNone(consensus)
+        assert consensus is not None
+        self.assertEqual(consensus["frame_count"], 5)
+        self.assertEqual(consensus["frame_indices"], [0, 1, 2, 3, 4])
 
     def test_room_perimeter_search_centers_are_bounded_and_inset(self) -> None:
         request = _request(8, 640, 360)
@@ -234,6 +881,105 @@ class LocalizationTests(unittest.TestCase):
         # Samples are inset from a wall rather than fixed to the polygon edge.
         self.assertTrue(any(1.15 <= abs(float(center[0])) <= 1.85 for center in centers))
         self.assertTrue(any(0.65 <= abs(float(center[2])) <= 1.35 for center in centers))
+
+    def test_support_surface_search_centers_follow_rotated_roomplan_desk(self) -> None:
+        request = _request(8, 640, 360)
+        yaw = np.radians(30.0)
+        c, s = float(np.cos(yaw)), float(np.sin(yaw))
+        request.room_objects = [
+            CameraLocalizationRoomObject(
+                id="desk-1",
+                label="desk",
+                center={"x": 3.0, "y": -1.0, "z": 5.0},
+                dimensions={"x": 2.0, "y": 0.8, "z": 1.0},
+                transform={
+                    "values": [
+                        [c, 0.0, s, 3.0],
+                        [0.0, 1.0, 0.0, -1.0],
+                        [-s, 0.0, c, 5.0],
+                        [0.0, 0.0, 0.0, 1.0],
+                    ]
+                },
+                confidence=0.95,
+            )
+        ]
+
+        centers = _support_surface_search_centers(request, max_centers=15)
+
+        self.assertEqual(len(centers), 15)
+        self.assertEqual(
+            {round(float(center[1]), 2) for center in centers},
+            {-0.52, -0.36, -0.18},
+        )
+        self.assertTrue(all(np.isfinite(center).all() for center in centers))
+        self.assertGreater(
+            max(float(np.linalg.norm(center[[0, 2]] - np.asarray([3.0, 5.0]))) for center in centers),
+            0.30,
+        )
+        self.assertLessEqual(
+            max(float(np.linalg.norm(center[[0, 2]] - np.asarray([3.0, 5.0]))) for center in centers),
+            1.05,
+        )
+
+    def test_support_surface_search_is_scene_derived_and_rejects_weak_or_non_support_objects(self) -> None:
+        placements = (
+            ("table", (-4.2, -0.9, 1.7), (1.4, 0.72, 0.8), 0.0),
+            ("dining table", (2.6, -0.4, -3.8), (2.2, 0.76, 1.1), 45.0),
+            ("desk", (8.0, 1.2, 6.5), (1.0, 0.7, 0.55), -25.0),
+        )
+        for label, location, size, yaw_degrees in placements:
+            request = _request(8, 640, 360)
+            yaw = np.radians(yaw_degrees)
+            c, s = float(np.cos(yaw)), float(np.sin(yaw))
+            request.room_objects = [
+                CameraLocalizationRoomObject(
+                    id=f"{label}-1",
+                    label=label,
+                    center={"x": location[0], "y": location[1], "z": location[2]},
+                    dimensions={"x": size[0], "y": size[1], "z": size[2]},
+                    transform={
+                        "values": [
+                            [c, 0.0, s, location[0]],
+                            [0.0, 1.0, 0.0, location[1]],
+                            [-s, 0.0, c, location[2]],
+                            [0.0, 0.0, 0.0, 1.0],
+                        ]
+                    },
+                    confidence=0.90,
+                )
+            ]
+            centers = _support_surface_search_centers(request, max_centers=15)
+            self.assertTrue(centers)
+            self.assertEqual({round(float(center[1]), 2) for center in centers}, {
+                round(location[1] + size[1] / 2.0 + height, 2)
+                for height in (0.08, 0.24, 0.42)
+            })
+            self.assertTrue(all(np.isfinite(center).all() for center in centers))
+            # No center may depend on the prior room's coordinates or leave
+            # the actual rotated support-surface footprint by a large margin.
+            self.assertLessEqual(
+                max(float(np.linalg.norm(center - np.asarray([*location[:1], location[1], location[2]]))) for center in centers),
+                max(size[0], size[2]) * 0.65 + 0.50,
+            )
+
+        weak = _request(8, 640, 360)
+        weak.room_objects = [
+            CameraLocalizationRoomObject(
+                id="weak-table",
+                label="table",
+                center={"x": 100.0, "y": 0.0, "z": -100.0},
+                dimensions={"x": 2.0, "y": 0.8, "z": 1.0},
+                confidence=0.44,
+            ),
+            CameraLocalizationRoomObject(
+                id="cabinet",
+                label="storage",
+                center={"x": 0.0, "y": 0.0, "z": 0.0},
+                dimensions={"x": 2.0, "y": 1.0, "z": 1.0},
+                confidence=1.0,
+            ),
+        ]
+        self.assertEqual(_support_surface_search_centers(weak), [])
 
     def test_duplicate_webcam_frames_do_not_promote_one_scan_view(self) -> None:
         first = _candidate(0, "scan-view-4", fov=54.0, inliers=6)
@@ -442,9 +1188,165 @@ class LocalizationTests(unittest.TestCase):
         self.assertTrue(seeds)
         best = seeds[0]
         estimated = np.asarray(_camera_to_world(best["rvec"], best["tvec"]), dtype=np.float64)
-        np.testing.assert_allclose(estimated[:3, 3], true_center, atol=0.05)
-        self.assertEqual(best["semantic_object_match_count"], 4)
+        np.testing.assert_allclose(estimated[:3, 3], true_center, atol=0.30)
+        self.assertEqual(best["semantic_object_match_count"], 3)
+        self.assertNotIn("chair", best["semantic_object_labels"])
         self.assertEqual(best["semantic_object_anchor"], "center")
+
+    def test_stable_movable_detection_can_seed_but_not_publish_semantic_pose(self) -> None:
+        request = CameraLocalizationRequest.model_validate(
+            {
+                "landmarks": [
+                    {
+                        "point": [float(index), 0.0, 1.0],
+                        "descriptor_base64": base64.b64encode(bytes(32)).decode("ascii"),
+                    }
+                    for index in range(8)
+                ],
+                "frames": [
+                    {"frame_base64": "x", "width": 640, "height": 360}
+                    for _ in range(4)
+                ],
+                "fov_degrees": 60.0,
+                "room_objects": [
+                    {
+                        "id": "chair-1",
+                        "label": "chair",
+                        "center": {"x": 0.0, "y": -0.8, "z": 1.0},
+                        "dimensions": {"x": 0.6, "y": 1.0, "z": 0.6},
+                        "confidence": 0.45,
+                    },
+                    {
+                        "id": "storage-1",
+                        "label": "storage",
+                        "center": {"x": 1.0, "y": -0.4, "z": 1.5},
+                        "dimensions": {"x": 0.8, "y": 1.2, "z": 0.5},
+                        "confidence": 0.95,
+                    },
+                ],
+                "object_detections": [
+                    {
+                        "frame_index": frame_index,
+                        "label": label,
+                        "confidence": 0.90,
+                        "bbox": bbox,
+                    }
+                    for frame_index in range(4)
+                    for label, bbox in (
+                        ("chair", [100.0, 120.0, 220.0, 300.0]),
+                        ("shelf", [340.0, 80.0, 620.0, 350.0]),
+                    )
+                ],
+            }
+        )
+
+        self.assertTrue(_stable_movable_object_detection(request))
+        self.assertFalse(_semantic_object_assignments(request, 0))
+        assignments = _semantic_object_assignments(request, 0, allow_movable_seed=True)
+        self.assertTrue(assignments)
+        self.assertTrue(any(0 in {index for index, _ in pairs} for pairs in assignments))
+
+        score = _semantic_cuboid_score(
+            request,
+            frame_index=0,
+            assignment=[(0, 0), (1, 1)],
+            rvec=np.zeros((3, 1), dtype=np.float64),
+            tvec=np.asarray([[0.0], [0.0], [3.0]], dtype=np.float64),
+            camera_matrix=np.asarray([[500.0, 0.0, 320.0], [0.0, 500.0, 180.0], [0.0, 0.0, 1.0]]),
+            frame_width=640,
+            frame_height=360,
+        )
+        self.assertTrue(score["contains_movable_semantic_group"])
+        self.assertFalse(_semantic_cuboid_has_robust_support(score))
+
+    def test_stable_movable_detection_tracks_cluster_with_per_frame_distractor(self) -> None:
+        request = CameraLocalizationRequest.model_validate(
+            {
+                "landmarks": [
+                    {
+                        "point": [float(index), 0.0, 1.0],
+                        "descriptor_base64": base64.b64encode(bytes(32)).decode("ascii"),
+                    }
+                    for index in range(8)
+                ],
+                "frames": [
+                    {"frame_base64": "x", "width": 640, "height": 360}
+                    for _ in range(4)
+                ],
+                "room_objects": [
+                    {
+                        "id": "chair-1",
+                        "label": "chair",
+                        "center": {"x": 0.0, "y": -0.8, "z": 1.0},
+                        "dimensions": {"x": 0.6, "y": 1.0, "z": 0.6},
+                        "confidence": 0.45,
+                    }
+                ],
+                "object_detections": [
+                    {
+                        "frame_index": frame_index,
+                        "label": "chair",
+                        "confidence": 0.80,
+                        "bbox": [100.0, 120.0, 180.0, 300.0],
+                    }
+                    for frame_index in range(4)
+                ]
+                + [
+                    {
+                        "frame_index": 0,
+                        "label": "chair",
+                        "confidence": 0.90,
+                        "bbox": [0.0, 40.0, 500.0, 350.0],
+                    }
+                ],
+            }
+        )
+
+        self.assertTrue(_stable_movable_object_detection(request))
+
+    def test_stable_movable_detection_handles_partial_low_confidence_burst(self) -> None:
+        request = CameraLocalizationRequest.model_validate(
+            {
+                "landmarks": [
+                    {
+                        "point": [float(index), 0.0, 1.0],
+                        "descriptor_base64": base64.b64encode(bytes(32)).decode("ascii"),
+                    }
+                    for index in range(8)
+                ],
+                "frames": [
+                    {"frame_base64": "x", "width": 640, "height": 360}
+                    for _ in range(6)
+                ],
+                "room_objects": [
+                    {
+                        "id": "chair-1",
+                        "label": "chair",
+                        "center": {"x": 0.0, "y": -0.8, "z": 1.0},
+                        "dimensions": {"x": 0.6, "y": 1.0, "z": 0.6},
+                        "confidence": 0.45,
+                    }
+                ],
+                "object_detections": [
+                    {
+                        "frame_index": frame_index,
+                        "label": "chair",
+                        "confidence": confidence,
+                        "bbox": bbox,
+                    }
+                    for frame_index, confidence, bbox in (
+                        (0, 0.18, [104.0, 248.0, 149.0, 358.0]),
+                        (1, 0.22, [105.0, 248.0, 149.0, 355.0]),
+                        (2, 0.20, [102.0, 248.0, 149.0, 356.0]),
+                        (3, 0.352, [106.0, 248.0, 149.0, 311.0]),
+                        (4, 0.389, [105.0, 248.0, 149.0, 311.0]),
+                        (5, 0.407, [105.0, 248.0, 149.0, 326.0]),
+                    )
+                ],
+            }
+        )
+
+        self.assertTrue(_stable_movable_object_detection(request))
 
     def test_rotated_roomplan_cuboids_refine_semantic_camera_center(self) -> None:
         width, height, fov = 960, 540, 74.0
@@ -564,6 +1466,38 @@ class LocalizationTests(unittest.TestCase):
         self.assertEqual(refined["semantic_cuboid"]["matched_object_count"], 4)
         self.assertGreaterEqual(refined["semantic_cuboid"]["semantic_group_count"], 3)
 
+    def test_room_object_projection_keeps_partially_visible_near_plane_cuboid(self) -> None:
+        width, height, fov = 640, 360, 60.0
+        focal = 0.5 * width / np.tan(np.radians(fov) / 2.0)
+        camera_matrix = np.asarray(
+            [[focal, 0.0, width / 2.0], [0.0, focal, height / 2.0], [0.0, 0.0, 1.0]],
+            dtype=np.float64,
+        )
+        room_object = CameraLocalizationRoomObject(
+            id="storage-near-camera",
+            label="storage",
+            center={"x": 0.0, "y": 0.0, "z": 0.1},
+            dimensions={"x": 0.4, "y": 0.4, "z": 0.6},
+            transform={"values": np.eye(4, dtype=np.float64).tolist()},
+            confidence=1.0,
+        )
+
+        projected = _project_room_object_bbox(
+            room_object,
+            rvec=np.zeros((3, 1), dtype=np.float64),
+            tvec=np.zeros((3, 1), dtype=np.float64),
+            camera_matrix=camera_matrix,
+            frame_width=width,
+            frame_height=height,
+        )
+
+        self.assertIsNotNone(projected)
+        assert projected is not None
+        bbox, positive_ratio = projected
+        self.assertEqual(positive_ratio, 0.5)
+        self.assertGreater(bbox[2] - bbox[0], 2.0)
+        self.assertGreater(bbox[3] - bbox[1], 2.0)
+
     def test_pose_search_recovers_unknown_webcam_fov_with_ranked_outliers(self) -> None:
         rng = np.random.default_rng(42)
         width, height = 960, 540
@@ -617,6 +1551,89 @@ class LocalizationTests(unittest.TestCase):
         self.assertGreaterEqual(pose["inlier_count"], 16)
         self.assertLess(pose["mean_error"], 1.0)
         self.assertGreater(pose["coverage_ratio"], 0.02)
+
+    def test_pose_search_prefers_physically_plausible_seed_over_tighter_upside_down_fit(self) -> None:
+        width, height = 640, 480
+        payload = _request(6, width, height).model_dump()
+        payload["room_zones"] = [{
+            "id": "room",
+            "floor_y": 0.0,
+            "polygon": [
+                {"x": -2.0, "z": -2.0},
+                {"x": 2.0, "z": -2.0},
+                {"x": 2.0, "z": 2.0},
+                {"x": -2.0, "z": 2.0},
+            ],
+        }]
+        request = CameraLocalizationRequest.model_validate(payload)
+
+        landmark_points = np.asarray([
+            [-0.9, 0.7, -3.0],
+            [-0.5, 1.8, -3.2],
+            [0.0, 0.9, -2.8],
+            [0.4, 1.6, -3.3],
+            [0.8, 0.8, -3.1],
+            [1.0, 1.9, -2.9],
+        ], dtype=np.float32)
+        image_points = np.asarray([
+            [120.0, 120.0],
+            [180.0, 165.0],
+            [250.0, 210.0],
+            [330.0, 250.0],
+            [410.0, 290.0],
+            [500.0, 330.0],
+        ], dtype=np.float32)
+        keypoints = [SimpleNamespace(pt=tuple(point)) for point in image_points]
+        matches = [SimpleNamespace(queryIdx=index, trainIdx=index, distance=18.0 + index) for index in range(6)]
+
+        upright_camera = np.eye(4, dtype=np.float64)
+        upright_camera[:3, 3] = [0.0, 1.5, 0.0]
+        upside_down_camera = np.eye(4, dtype=np.float64)
+        upside_down_camera[:3, :3] = np.diag([-1.0, -1.0, 1.0])
+        upside_down_camera[:3, 3] = [0.0, 1.5, 0.0]
+
+        upright_world_to_cv = _world_to_cv(upright_camera)
+        upside_down_world_to_cv = _world_to_cv(upside_down_camera)
+        upright_rvec, _ = cv2.Rodrigues(upright_world_to_cv[:3, :3])
+        upside_down_rvec, _ = cv2.Rodrigues(upside_down_world_to_cv[:3, :3])
+        upright_tvec = upright_world_to_cv[:3, 3].reshape(3, 1)
+        upside_down_tvec = upside_down_world_to_cv[:3, 3].reshape(3, 1)
+
+        def fake_solve_pnp(_objects, _images, camera_matrix, *_args, **_kwargs):
+            # The narrowest FOV receives a deceptively tighter upside-down
+            # solution; all later FOVs expose the physically valid basin.
+            if float(camera_matrix[0, 0]) > 800.0:
+                return True, upside_down_rvec.copy(), upside_down_tvec.copy(), None
+            return True, upright_rvec.copy(), upright_tvec.copy(), None
+
+        def fake_refine(_objects, _images, _camera_matrix, _distortion, rvec, tvec):
+            return rvec, tvec
+
+        def fake_project(_objects, rvec, _tvec, _camera_matrix, _distortion):
+            upside_down = float(np.linalg.norm(np.asarray(rvec) - upside_down_rvec)) < 1e-5
+            offset = 0.25 if upside_down else 2.0
+            projected = image_points + np.asarray([offset, 0.0], dtype=np.float32)
+            return projected.reshape(-1, 1, 2), None
+
+        with (
+            patch("geometry_service.localization.cv2.solvePnPRansac", side_effect=fake_solve_pnp),
+            patch("geometry_service.localization.cv2.solvePnPRefineLM", side_effect=fake_refine),
+            patch("geometry_service.localization.cv2.projectPoints", side_effect=fake_project),
+        ):
+            pose = _pose_from_matches(
+                payload=request,
+                frame_width=width,
+                frame_height=height,
+                keypoints=keypoints,
+                matches=matches,
+                landmark_points=landmark_points,
+            )
+
+        self.assertIsNotNone(pose)
+        assert pose is not None
+        scene_prior = _pose_scene_prior(np.asarray(_camera_to_world(pose["rvec"], pose["tvec"])), request)
+        self.assertTrue(scene_prior["accepted"])
+        self.assertTrue(pose["seed_scene_prior"]["accepted"])
 
     def test_pose_guided_refinement_recovers_cross_view_correspondences(self) -> None:
         rng = np.random.default_rng(7)
@@ -677,6 +1694,208 @@ class LocalizationTests(unittest.TestCase):
         self.assertGreaterEqual(len(matches), 16)
         self.assertGreaterEqual(refined["inlier_count"], 16)
         self.assertLess(refined["mean_error"], 1.0)
+
+    def test_pose_guided_matching_keeps_near_duplicate_roomplan_landmarks(self) -> None:
+        width, height = 640, 360
+        camera_matrix = np.asarray(
+            [[500.0, 0.0, width / 2.0], [0.0, 500.0, height / 2.0], [0.0, 0.0, 1.0]],
+            dtype=np.float64,
+        )
+        # Two physical features, each recorded twice by overlapping RoomPlan
+        # scan views. The duplicate records are only a few centimetres apart.
+        landmark_points = np.asarray(
+            [
+                [-0.40, 0.00, 0.00],
+                [-0.36, 0.01, 0.01],
+                [0.45, 0.05, 0.10],
+                [0.49, 0.04, 0.11],
+            ],
+            dtype=np.float32,
+        )
+        descriptor_a = np.zeros(32, dtype=np.uint8)
+        descriptor_b = np.full(32, 255, dtype=np.uint8)
+        landmark_descriptors = np.asarray(
+            [descriptor_a, descriptor_a, descriptor_b, descriptor_b],
+            dtype=np.uint8,
+        )
+        pose = {
+            "rvec": np.zeros((3, 1), dtype=np.float64),
+            "tvec": np.asarray([[0.0], [0.0], [4.0]], dtype=np.float64),
+            "camera_matrix": camera_matrix,
+        }
+        projected, _ = cv2.projectPoints(
+            landmark_points[[0, 2]], pose["rvec"], pose["tvec"], camera_matrix, None
+        )
+        keypoints = [SimpleNamespace(pt=tuple(point)) for point in projected.reshape(-1, 2)]
+        descriptors = np.asarray([descriptor_a, descriptor_b], dtype=np.uint8)
+
+        matches = _pose_guided_matches(
+            frame_width=width,
+            frame_height=height,
+            keypoints=keypoints,
+            descriptors=descriptors,
+            landmark_points=landmark_points,
+            landmark_descriptors=landmark_descriptors,
+            pose=pose,
+            radius_px=24.0,
+        )
+
+        self.assertEqual(len(matches), 2)
+        self.assertEqual({match.queryIdx for match in matches}, {0, 1})
+
+    def test_pose_guided_matching_uses_learned_score_to_resolve_repeated_texture(self) -> None:
+        width, height = 640, 360
+        camera_matrix = np.asarray(
+            [[500.0, 0.0, width / 2.0], [0.0, 500.0, height / 2.0], [0.0, 0.0, 1.0]],
+            dtype=np.float64,
+        )
+        landmark_points = np.asarray(
+            [
+                [0.00, 0.00, 0.00],
+                [0.12, 0.00, 0.00],
+                [0.70, 0.00, 0.00],
+            ],
+            dtype=np.float32,
+        )
+        correct_descriptor = np.asarray([255] * 5 + [0] * 27, dtype=np.uint8)
+        repeated_texture_descriptor = np.asarray([255] * 4 + [0] * 28, dtype=np.uint8)
+        other_descriptor = np.full(32, 255, dtype=np.uint8)
+        landmark_descriptors = np.asarray(
+            [correct_descriptor, repeated_texture_descriptor, other_descriptor],
+            dtype=np.uint8,
+        )
+        pose = {
+            "rvec": np.zeros((3, 1), dtype=np.float64),
+            "tvec": np.asarray([[0.0], [0.0], [4.0]], dtype=np.float64),
+            "camera_matrix": camera_matrix,
+        }
+        projected, _ = cv2.projectPoints(
+            landmark_points[[0, 2]], pose["rvec"], pose["tvec"], camera_matrix, None
+        )
+        keypoints = [SimpleNamespace(pt=tuple(point)) for point in projected.reshape(-1, 2)]
+        descriptors = np.asarray(
+            [np.zeros(32, dtype=np.uint8), other_descriptor],
+            dtype=np.uint8,
+        )
+
+        baseline = _pose_guided_matches(
+            frame_width=width,
+            frame_height=height,
+            keypoints=keypoints,
+            descriptors=descriptors,
+            landmark_points=landmark_points,
+            landmark_descriptors=landmark_descriptors,
+            pose=pose,
+            radius_px=32.0,
+        )
+        baseline_query_zero = next(match for match in baseline if match.queryIdx == 0)
+        self.assertEqual(baseline_query_zero.trainIdx, 1)
+
+        class FakeLearnedMatcher:
+            threshold = 0.55
+
+            def score_pairs(self, query, landmarks, query_responses=None, landmark_responses=None):
+                del query, query_responses, landmark_responses
+                nonzero_bytes = np.count_nonzero(landmarks, axis=1)
+                return np.asarray(
+                    [0.92 if count == 5 else 0.10 for count in nonzero_bytes],
+                    dtype=np.float32,
+                )
+
+        learned = _pose_guided_matches(
+            frame_width=width,
+            frame_height=height,
+            keypoints=keypoints,
+            descriptors=descriptors,
+            landmark_points=landmark_points,
+            landmark_descriptors=landmark_descriptors,
+            pose=pose,
+            radius_px=32.0,
+            learned_matcher=FakeLearnedMatcher(),
+            query_responses=np.asarray([0.01, 0.01], dtype=np.float32),
+            landmark_responses=np.asarray([0.01, 0.01, 0.01], dtype=np.float32),
+        )
+        learned_query_zero = next(match for match in learned if match.queryIdx == 0)
+        self.assertEqual(learned_query_zero.trainIdx, 0)
+
+    def test_descriptor_matching_keeps_ratio_pass_when_learned_score_disagrees(self) -> None:
+        query = np.zeros((2, 32), dtype=np.uint8)
+        query[1] = 255
+        wrong = np.asarray([255] * 2 + [0] * 30, dtype=np.uint8)
+        correct = np.asarray([255] * 3 + [0] * 29, dtype=np.uint8)
+        far = np.full(32, 255, dtype=np.uint8)
+        landmarks = np.asarray([wrong, correct, far], dtype=np.uint8)
+        indices = np.arange(3, dtype=np.int32)
+        matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=False)
+
+        baseline = _descriptor_matches(query, landmarks, indices, matcher)
+        query_zero = next(match for match in baseline if match.queryIdx == 0)
+        self.assertEqual(query_zero.trainIdx, 0)
+
+        class FakeLearnedMatcher:
+            threshold = 0.55
+
+            def score_pairs(self, query_descriptors, landmark_descriptors, query_responses=None, landmark_responses=None):
+                del query_descriptors, query_responses, landmark_responses
+                nonzero_bytes = np.count_nonzero(landmark_descriptors, axis=1)
+                return np.asarray(
+                    [0.94 if count == 3 else 0.12 for count in nonzero_bytes],
+                    dtype=np.float32,
+                )
+
+        learned = _descriptor_matches(
+            query,
+            landmarks,
+            indices,
+            matcher,
+            learned_matcher=FakeLearnedMatcher(),
+        )
+        learned_query_zero = next(match for match in learned if match.queryIdx == 0)
+        self.assertEqual(learned_query_zero.trainIdx, 0)
+
+    def test_provisional_guided_pose_recovers_six_good_matches_with_one_outlier(self) -> None:
+        rng = np.random.default_rng(23)
+        width, height = 640, 360
+        camera_matrix = np.asarray(
+            [[510.0, 0.0, width / 2.0], [0.0, 510.0, height / 2.0], [0.0, 0.0, 1.0]],
+            dtype=np.float64,
+        )
+        landmark_points = np.column_stack(
+            [
+                rng.uniform(-1.0, 1.0, 7),
+                rng.uniform(-0.7, 0.7, 7),
+                rng.uniform(-0.3, 0.3, 7),
+            ]
+        ).astype(np.float32)
+        true_rvec = np.asarray([[0.02], [-0.06], [0.01]], dtype=np.float64)
+        true_tvec = np.asarray([[0.05], [-0.03], [4.4]], dtype=np.float64)
+        projected, _ = cv2.projectPoints(landmark_points, true_rvec, true_tvec, camera_matrix, None)
+        pixels = projected.reshape(-1, 2)
+        pixels[:6] += rng.normal(0.0, 0.35, (6, 2))
+        pixels[6] += np.asarray([95.0, -70.0])
+        keypoints = [SimpleNamespace(pt=tuple(pixel)) for pixel in pixels]
+        matches = [cv2.DMatch(_queryIdx=index, _trainIdx=index, _distance=8.0) for index in range(7)]
+        seed_pose = {
+            "rvec": true_rvec + np.asarray([[0.01], [-0.01], [0.008]]),
+            "tvec": true_tvec + np.asarray([[0.04], [-0.02], [0.06]]),
+            "camera_matrix": camera_matrix,
+            "fov_degrees": 64.0,
+        }
+
+        provisional = _provisional_pose_from_guided_matches(
+            frame_width=width,
+            frame_height=height,
+            keypoints=keypoints,
+            landmark_points=landmark_points,
+            pose=seed_pose,
+            matches=matches,
+        )
+
+        self.assertIsNotNone(provisional)
+        assert provisional is not None
+        self.assertGreaterEqual(provisional["inlier_count"], 6)
+        self.assertEqual(provisional["provisional_subset_size"], 6)
+        self.assertLess(provisional["mean_error"], 2.0)
 
 
 if __name__ == "__main__":

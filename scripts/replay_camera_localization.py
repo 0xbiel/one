@@ -207,10 +207,18 @@ def main() -> None:
         "selected_estimate_source": diagnostics.get("selected_estimate_source"),
         "selected_camera_center": selected_center,
         "horizontal_error_m": _horizontal_error(selected_center, args.ground_truth_x, args.ground_truth_z),
+        "confidence": result.get("confidence"),
         "inlier_count": result.get("inlier_count"),
         "match_count": result.get("match_count"),
         "reprojection_error_px": result.get("reprojection_error_px"),
         "reason": diagnostics.get("reason"),
+        "descriptor_families": diagnostics.get("descriptor_families"),
+        "learned_matcher": diagnostics.get("learned_matcher"),
+        "gpu_pose_refinement_attempts": diagnostics.get("gpu_pose_refinement_attempts"),
+        "consensus": {
+            key: diagnostics.get(key)
+            for key in ("consensus_frame_count", "consensus_scan_view_count", "inlier_landmark_view_count")
+        },
         "semantic_cuboid_candidates": semantic_with_error,
         "semantic_object_detection": {
             "status": detection.get("status"),

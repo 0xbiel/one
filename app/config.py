@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     llm_timeout_seconds: float = Field(default=15.0, gt=0, validation_alias=AliasChoices("ONE_LLM_TIMEOUT_SECONDS", "LLM_TIMEOUT_SECONDS"))
     geometry_service_url: str = Field(default="http://host.docker.internal:8090", validation_alias=AliasChoices("ONE_GEOMETRY_SERVICE_URL", "GEOMETRY_SERVICE_URL"))
     geometry_timeout_seconds: float = Field(default=45.0, gt=0, le=120, validation_alias=AliasChoices("ONE_GEOMETRY_TIMEOUT_SECONDS", "GEOMETRY_TIMEOUT_SECONDS"))
+    geometry_localization_stall_timeout_seconds: float = Field(default=180.0, gt=10, le=600, validation_alias=AliasChoices("ONE_GEOMETRY_LOCALIZATION_STALL_TIMEOUT_SECONDS", "GEOMETRY_LOCALIZATION_STALL_TIMEOUT_SECONDS"))
     geometry_require_gpu: bool = Field(default=True, validation_alias=AliasChoices("ONE_GEOMETRY_REQUIRE_GPU", "GEOMETRY_REQUIRE_GPU"))
     geometry_min_confidence: float = Field(default=0.65, ge=0, le=1, validation_alias=AliasChoices("ONE_GEOMETRY_MIN_CONFIDENCE", "GEOMETRY_MIN_CONFIDENCE"))
     geometry_max_reprojection_error_px: float = Field(default=20.0, gt=0, le=1000, validation_alias=AliasChoices("ONE_GEOMETRY_MAX_REPROJECTION_ERROR_PX", "GEOMETRY_MAX_REPROJECTION_ERROR_PX"))
