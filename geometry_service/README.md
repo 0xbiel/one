@@ -106,15 +106,25 @@ inference, you can still launch the worker on the host and override
 private to the local stack; the phone does not connect to it directly.
 
 `ONE_POSITIONING_WORKERS` controls the bounded thread pool used for fixed-camera
-positioning. It defaults to `3` and is clamped to `1..8`. CPU-heavy ORB/SIFT
-extraction and OpenCV RANSAC/PnP/FOV hypothesis generation run off the ASGI
-event loop, while the map-specific matcher, YOLO-World detector, and bounded
-differentiable finalist pose polish run on the selected MPS/CUDA accelerator.
-The GPU polish is accepted only when it preserves or improves positive-depth
-inliers and reprojection error; diagnostics expose its device, baseline, and
-result. A shared accelerator lock prevents detector and solver work from racing
-on MPS. The queue admits at most twice the worker count, and `/health` reports
-the active worker count and queue bound.
+positioning and visual-landmark construction. It defaults to `3` and is clamped
+to `1..8`. CPU-heavy ORB/SIFT extraction and OpenCV RANSAC/PnP/FOV hypothesis
+generation run off the ASGI event loop, so independent cameras in the same room
+or different homes/maps can make progress together. The map-specific matcher,
+YOLO-World detector, and bounded differentiable finalist pose polish run on the
+selected MPS/CUDA accelerator. The GPU polish is accepted only when it preserves
+or improves positive-depth inliers and reprojection error; diagnostics expose
+its device, baseline, and result. A shared accelerator lock prevents detector
+and solver work from racing on MPS, while the CPU solve pool remains parallel.
+The positioning queue admits at most twice the worker count. The single-worker
+detector has its own bounded waiter queue, and `/health` reports both bounds.
+
+The `POST /v1/visual-landmarks`, `POST /v1/room-layout`, and
+`POST /v1/vision/detect` handlers also move their blocking work onto bounded
+executors. A long scan or live detection therefore does not hold the ASGI event
+loop hostage while another camera localization request is being submitted or
+polled. GPU model calls are intentionally serialized; increasing
+`ONE_POSITIONING_WORKERS` increases CPU overlap and request capacity, not the
+number of simultaneous Metal command streams.
 
 ## Real model configuration
 

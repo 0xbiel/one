@@ -72,6 +72,11 @@ def create_app(settings: ServiceSettings | None = None) -> FastAPI:
     # multiple fixed cameras solve concurrently without allowing an arbitrary
     # number of large, in-memory localization requests to queue behind them.
     positioning_slots = asyncio.Semaphore(service_settings.positioning_workers * 2)
+    # The YOLO runtime is process-shared and its active prompt vocabulary is
+    # request-specific, so the executor itself remains single-worker. Bound
+    # the waiters as well: a burst of multi-frame requests must not create an
+    # unbounded in-memory detector queue while CPU PnP jobs continue.
+    detector_slots = asyncio.Semaphore(max(2, service_settings.positioning_workers * 2))
     localization_jobs: dict[str, dict[str, Any]] = {}
     localization_jobs_lock = threading.Lock()
     localization_tasks: set[asyncio.Task[Any]] = set()
@@ -101,9 +106,10 @@ def create_app(settings: ServiceSettings | None = None) -> FastAPI:
             return await loop.run_in_executor(positioning_executor, call)
 
     async def run_detector_work(function: Any, *args: Any, **kwargs: Any) -> Any:
-        loop = asyncio.get_running_loop()
-        call = partial(function, *args, **kwargs)
-        return await loop.run_in_executor(detector_executor, call)
+        async with detector_slots:
+            loop = asyncio.get_running_loop()
+            call = partial(function, *args, **kwargs)
+            return await loop.run_in_executor(detector_executor, call)
 
     @api.middleware("http")
     async def enforce_request_bound(request: Request, call_next: Any) -> Any:
@@ -394,7 +400,9 @@ def create_app(settings: ServiceSettings | None = None) -> FastAPI:
             "executor": "thread-pool",
             "workers": service_settings.positioning_workers,
             "queue_bound": service_settings.positioning_workers * 2,
+            "work_types": ["camera-localization", "visual-landmarks"],
             "detector_workers": 1,
+            "detector_queue_bound": max(2, service_settings.positioning_workers * 2),
             "detector_serialized": True,
         }
         return JSONResponse(
@@ -450,13 +458,16 @@ def create_app(settings: ServiceSettings | None = None) -> FastAPI:
                 "raw_frames_persisted": False,
             }
 
-            batch, preprocess_diagnostics = build_torch_batch(
-                samples,
-                runtime.model_config,
-                runtime.device_label,
-            )
+            def build_and_predict() -> tuple[Any, dict[str, Any], Any]:
+                model_batch, preprocess = build_torch_batch(
+                    samples,
+                    runtime.model_config,
+                    runtime.device_label,
+                )
+                return model_batch, preprocess, runtime.predict(model_batch)
+
+            batch, preprocess_diagnostics, raw_output = await run_detector_work(build_and_predict)
             base_diagnostics.update(preprocess_diagnostics)
-            raw_output = runtime.predict(batch)
 
             return normalize_model_output(
                 raw_output,
@@ -549,7 +560,13 @@ def create_app(settings: ServiceSettings | None = None) -> FastAPI:
             )
         try:
             jpeg = decode_jpeg(payload.frame_base64, service_settings)
-            detections = runtime.detect_jpeg(jpeg, payload.width, payload.height, payload.candidate_labels)
+            detections = await run_detector_work(
+                runtime.detect_jpeg,
+                jpeg,
+                payload.width,
+                payload.height,
+                payload.candidate_labels,
+            )
             return {
                 "status": "ready",
                 "model_version": runtime.model_version,
@@ -564,7 +581,10 @@ def create_app(settings: ServiceSettings | None = None) -> FastAPI:
     @api.post("/v1/visual-landmarks", response_model=VisualLandmarkBuildResponse)
     async def visual_landmarks(payload: VisualLandmarkBuildRequest) -> Any:
         try:
-            return build_visual_landmarks(payload)
+            # ORB/SIFT extraction and map-specific matcher fitting are CPU/GPU
+            # work. Keep them off the event loop so independent scans from the
+            # same room or another home can make progress concurrently.
+            return await run_positioning_work(build_visual_landmarks, payload)
         except LocalizationInputError as exc:
             return JSONResponse(
                 status_code=422,

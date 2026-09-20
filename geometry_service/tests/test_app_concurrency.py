@@ -61,7 +61,64 @@ def _payload() -> dict:
     }
 
 
+def _landmark_payload(map_id: str) -> dict:
+    return {
+        "schema_version": "roomplan-visual-landmarks.v1",
+        "map_id": map_id,
+        "frames": [
+            {
+                "frame_base64": "AA==",
+                "width": 10,
+                "height": 10,
+                "intrinsics": {
+                    "values": [
+                        [10.0, 0.0, 5.0],
+                        [0.0, 10.0, 5.0],
+                        [0.0, 0.0, 1.0],
+                    ]
+                },
+                "camera_to_world": {
+                    "values": [
+                        [1.0, 0.0, 0.0, 0.0],
+                        [0.0, 1.0, 0.0, 0.0],
+                        [0.0, 0.0, 1.0, 0.0],
+                        [0.0, 0.0, 0.0, 1.0],
+                    ]
+                },
+            }
+        ],
+    }
+
+
 class PositioningConcurrencyTests(unittest.IsolatedAsyncioTestCase):
+    async def test_visual_landmark_builds_for_independent_maps_run_in_parallel(self) -> None:
+        barrier = threading.Barrier(2, timeout=1.0)
+
+        def fake_build(payload) -> dict:
+            barrier.wait()
+            return {
+                "status": "needs_rescan",
+                "schema_version": "roomplan-visual-landmarks.v1",
+                "detector": "opencv-orb",
+                "landmarks": [],
+                "diagnostics": {"map_id": payload.map_id, "test": "parallel"},
+            }
+
+        with patch("geometry_service.app.RoomLayoutRuntime", _FakeRuntime), patch("geometry_service.app.build_visual_landmarks", fake_build):
+            app = create_app(_settings(2))
+            transport = httpx.ASGITransport(app=app)
+            async with app.router.lifespan_context(app):
+                async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+                    first, second = await asyncio.gather(
+                        client.post("/v1/visual-landmarks", json=_landmark_payload("room-a")),
+                        client.post("/v1/visual-landmarks", json=_landmark_payload("room-b")),
+                    )
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(first.json()["diagnostics"]["map_id"], "room-a")
+        self.assertEqual(second.json()["diagnostics"]["map_id"], "room-b")
+
     async def test_camera_localization_solves_can_enter_two_positioning_workers(self) -> None:
         barrier = threading.Barrier(2, timeout=1.0)
 

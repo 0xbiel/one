@@ -44,6 +44,13 @@ discarded. On Apple Silicon, run the host-side service from
 `geometry_service/` on port `8090` with Metal/MPS selected. Docker reaches it
 through `host.docker.internal` using `ONE_GEOMETRY_SERVICE_URL`.
 
+The host worker accepts independent camera-localization and visual-landmark
+requests concurrently. `ONE_POSITIONING_WORKERS` defaults to `3` (bounded to
+`1..8`): CPU ORB/SIFT/PnP work overlaps for cameras in the same room or on
+different home maps, while shared YOLO/MPS/CUDA calls stay serialized and
+bounded for stability. The service's `/health` response reports the positioning
+and detector queue limits.
+
 The service is required for live camera map generation. If it is unavailable or
 the model confidence is too low, the API returns a rescan/unavailable state and
 does not create a fabricated map. RGB maps are relative and never report fake
