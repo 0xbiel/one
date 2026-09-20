@@ -30,6 +30,7 @@ class Detection:
     bbox: tuple[float, float, float, float]
     frame_at: datetime
     track_id: int | None = None
+    face_observations: tuple[dict, ...] = ()
 
     @property
     def center(self) -> tuple[float, float]:
@@ -40,7 +41,7 @@ class Detection:
 class Detector(Protocol):
     model_version: str
 
-    def detect(self, frame: Frame, candidate_labels: Sequence[str]) -> list[Detection]: ...
+    def detect(self, frame: Frame, candidate_labels: Sequence[str], *, include_faces: bool = False) -> list[Detection]: ...
 
 
 class DeterministicDemoDetector:
@@ -53,7 +54,7 @@ class DeterministicDemoDetector:
 
     model_version = "demo-deterministic-v1"
 
-    def detect(self, frame: Frame, candidate_labels: Sequence[str]) -> list[Detection]:
+    def detect(self, frame: Frame, candidate_labels: Sequence[str], *, include_faces: bool = False) -> list[Detection]:
         if not candidate_labels or not frame.data:
             return []
         offset = int(hashlib.sha256(frame.data).hexdigest()[:2], 16) / 2550 - 0.05
@@ -71,7 +72,7 @@ class OWLv2Detector:
     def __init__(self, infer=None):
         self._infer = infer
 
-    def detect(self, frame: Frame, candidate_labels: Sequence[str]) -> list[Detection]:
+    def detect(self, frame: Frame, candidate_labels: Sequence[str], *, include_faces: bool = False) -> list[Detection]:
         if self._infer is None:
             raise RuntimeError("OWLv2 is not configured; use DeterministicDemoDetector for offline demos")
         return list(self._infer(frame, candidate_labels))
@@ -85,7 +86,7 @@ class LocalServiceDetector:
     def __init__(self, service: object):
         self._service = service
 
-    def detect(self, frame: Frame, candidate_labels: Sequence[str]) -> list[Detection]:
+    def detect(self, frame: Frame, candidate_labels: Sequence[str], *, include_faces: bool = False) -> list[Detection]:
         detect = getattr(self._service, "detect", None)
         if not callable(detect):
             raise RuntimeError("real local vision service is not configured")
@@ -94,6 +95,7 @@ class LocalServiceDetector:
             width=frame.width,
             height=frame.height,
             candidate_labels=list(candidate_labels),
+            include_faces=include_faces,
         )
         if not isinstance(result, dict) or result.get("status") != "ready":
             raise RuntimeError("real local vision service is unavailable")
@@ -103,6 +105,7 @@ class LocalServiceDetector:
         raw_detections = result.get("detections")
         if not isinstance(raw_detections, list):
             raise RuntimeError("real local vision service returned an invalid response")
+        raw_faces = result.get("faces") if include_faces and isinstance(result.get("faces"), list) else []
         detections: list[Detection] = []
         for item in raw_detections:
             if not isinstance(item, dict):
@@ -120,7 +123,16 @@ class LocalServiceDetector:
             values = tuple(float(value) for value in bbox)
             if not all(math.isfinite(value) for value in values):
                 continue
-            detections.append(Detection(label, float(confidence), values, frame.captured_at))
+            associated_faces: list[dict] = []
+            if label == "person":
+                for face in raw_faces:
+                    if not isinstance(face, dict) or not isinstance(face.get("bbox"), list) or len(face["bbox"]) != 4:
+                        continue
+                    fx1, fy1, fx2, fy2 = (float(value) for value in face["bbox"])
+                    face_cx, face_cy = (fx1 + fx2) / 2, (fy1 + fy2) / 2
+                    if values[0] <= face_cx <= values[2] and values[1] <= face_cy <= values[3]:
+                        associated_faces.append(face)
+            detections.append(Detection(label, float(confidence), values, frame.captured_at, face_observations=tuple(associated_faces)))
         return detections
 
 
@@ -170,7 +182,7 @@ class TemporalStabilityTracker:
                 self._tracks.append(match)
             used_track_ids.add(match.track_id)
             if match.hits >= self.min_hits:
-                stable.append(Detection(detection.label, detection.confidence, detection.bbox, detection.frame_at, match.track_id))
+                stable.append(Detection(detection.label, detection.confidence, detection.bbox, detection.frame_at, match.track_id, detection.face_observations))
         self._tracks = [track for track in self._tracks if (datetime.now(timezone.utc) - track.last_at).total_seconds() <= self.window_seconds]
         return stable
 
@@ -256,8 +268,24 @@ class CameraVisionPipeline:
         self._seed_tracker = tracker
         self._trackers: dict[str, TemporalStabilityTracker] = {}
 
-    def ingest(self, frame: Frame, candidate_labels: Sequence[str], calibration: Calibration | None = None, depth_m: float | None = None) -> list[dict]:
-        detections = self.detector.detect(frame, candidate_labels)
+    def ingest(
+        self,
+        frame: Frame,
+        candidate_labels: Sequence[str],
+        calibration: Calibration | None = None,
+        depth_m: float | None = None,
+        *,
+        include_faces: bool = False,
+    ) -> list[dict]:
+        if include_faces:
+            try:
+                detections = self.detector.detect(frame, candidate_labels, include_faces=True)
+            except TypeError:
+                # Test and legacy detectors can continue to provide anonymous
+                # person detection while the face capability is unavailable.
+                detections = self.detector.detect(frame, candidate_labels)
+        else:
+            detections = self.detector.detect(frame, candidate_labels)
         tracker = self._trackers.get(frame.camera_id)
         if tracker is None:
             if self._seed_tracker is not None and not self._trackers:
@@ -266,4 +294,14 @@ class CameraVisionPipeline:
                 tracker = TemporalStabilityTracker()
             self._trackers[frame.camera_id] = tracker
         stable = tracker.update(detections)
-        return [{"label": item.label, "confidence": item.confidence, "bbox": item.bbox, "track_id": item.track_id, "projection": project_detection(item, frame, calibration, depth_m).__dict__} for item in stable]
+        return [
+            {
+                "label": item.label,
+                "confidence": item.confidence,
+                "bbox": item.bbox,
+                "track_id": item.track_id,
+                "faces": list(item.face_observations),
+                "projection": project_detection(item, frame, calibration, depth_m).__dict__,
+            }
+            for item in stable
+        ]

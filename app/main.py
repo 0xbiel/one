@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import binascii
 from contextlib import nullcontext
 import hashlib
 import ipaddress
@@ -19,8 +20,10 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 from .config import Settings, get_settings
+from .analytics import care_analytics
 from .db import Database, now_iso
 from .events import EventBus, sse
+from .fall import FallDetectionTracker, FallSignal
 from .geometry import (
     HttpRoomLayoutService,
     RoomLayoutService,
@@ -30,7 +33,8 @@ from .geometry import (
     localization_progress,
 )
 from .integrations import LMStudioAdapter, livekit_jwt, verify_livekit_webhook
-from .media import EncryptedLocalClipStore
+from .media import EncryptedLocalClipStore, EncryptedLocalTemplateStore, image_content_type
+from .face import best_profile_match, normalize_embedding, stable_identity, validate_embeddings
 from .roomplan import (
     ARVideoMapIn,
     RoomPlanMapIn,
@@ -456,7 +460,10 @@ class CameraLocalizationReferenceIn(BaseModel):
 
 class ObjectIn(BaseModel): label: str = Field(min_length=1, max_length=80); display_name: str | None = Field(default=None, max_length=120)
 class ObservationIn(BaseModel): object_id: str | None = None; camera_id: str | None = None; map_id: str | None = None; x: float | None = None; y: float | None = None; z: float | None = None; uncertainty_m: float | None = Field(default=None, ge=0, le=100); confidence: float = Field(default=0.0, ge=0, le=1); detector_version: str = "local-cv-v1"
-class CheckInIn(BaseModel): subject_user_id: str | None = None; transcript: str = Field(default="", max_length=4000)
+class CheckInIn(BaseModel):
+    subject_user_id: str | None = None
+    care_recipient_id: str | None = None
+    transcript: str = Field(default="", max_length=4000)
 class VisionIn(BaseModel):
     camera_id: str
     frame_base64: str = Field(min_length=1, max_length=4_000_000)
@@ -558,6 +565,8 @@ class CareRecipientOut(BaseModel):
     relationship: str | None = None
     room_label: str | None = None
     medication_reminders_enabled: bool = False
+    face_recognition_status: Literal["not_enrolled", "ready", "unavailable", "revoked"] = "not_enrolled"
+    face_profile_updated_at: str | None = None
     created_at: str
 
 
@@ -567,6 +576,25 @@ class CareRecipientMutationResponse(BaseModel):
 
 class CareRecipientListResponse(BaseModel):
     data: list[CareRecipientOut]
+
+
+class FaceEnrollmentFrameIn(BaseModel):
+    frame_base64: str = Field(min_length=1, max_length=4_000_000)
+    width: int = Field(gt=0, le=7680)
+    height: int = Field(gt=0, le=4320)
+    camera_position: Literal["front", "back"] = "front"
+
+
+class FaceEnrollmentIn(BaseModel):
+    frames: list[FaceEnrollmentFrameIn] = Field(min_length=3, max_length=8)
+
+
+class FaceProfileOut(BaseModel):
+    care_recipient_id: str
+    status: Literal["not_enrolled", "ready", "unavailable", "revoked"]
+    model_version: str | None = None
+    sample_count: int = 0
+    updated_at: str | None = None
 
 
 class MedicationPlanIn(BaseModel):
@@ -908,9 +936,18 @@ def make_app(
     if settings.clip_encryption_key_b64:
         try:
             clip_key = base64.b64decode(settings.clip_encryption_key_b64, validate=True)
-        except ValueError as exc:
+        except (ValueError, binascii.Error) as exc:
             raise RuntimeError("ONE_CLIP_ENCRYPTION_KEY_B64 must be valid base64") from exc
     clip_store = EncryptedLocalClipStore(settings.object_store_path / "encrypted-clips", clip_key)
+    biometric_key = None
+    if settings.biometric_encryption_key_b64:
+        try:
+            biometric_key = base64.b64decode(settings.biometric_encryption_key_b64, validate=True)
+        except (ValueError, binascii.Error) as exc:
+            raise RuntimeError("ONE_BIOMETRIC_ENCRYPTION_KEY_B64 must be valid base64") from exc
+    if biometric_key is not None and len(biometric_key) != 32:
+        raise RuntimeError("ONE_BIOMETRIC_ENCRYPTION_KEY_B64 must decode to exactly 32 bytes")
+    template_store = EncryptedLocalTemplateStore(settings.object_store_path, biometric_key)
     bus = EventBus()
     lm = LMStudioAdapter(settings)
     geometry = geometry_service or HttpRoomLayoutService(settings)
@@ -994,8 +1031,10 @@ def make_app(
         response.headers["X-Request-ID"] = correlation_id
         return response
 
-    app.state.db, app.state.store, app.state.clip_store, app.state.bus, app.state.settings, app.state.vision = db, store, clip_store, bus, settings, vision
+    app.state.db, app.state.store, app.state.clip_store, app.state.template_store, app.state.bus, app.state.settings, app.state.vision = db, store, clip_store, template_store, bus, settings, vision
     app.state.vision_person_objects = {}
+    app.state.vision_person_identity = {}
+    app.state.fall_detector = FallDetectionTracker()
     app.state.geometry_service = geometry
     app.add_middleware(CORSMiddleware, allow_origins=settings.cors_list, allow_credentials=True, allow_methods=["GET", "POST", "PATCH", "DELETE"], allow_headers=["Authorization", "Content-Type", "X-Bootstrap-Secret"])
 
@@ -4083,7 +4122,7 @@ def make_app(
 
     @app.post("/api/v1/homes/{home_id}/objects")
     def object_create(home_id: str, body: ObjectIn, actor: Current):
-        home_check(actor, home_id); publisher_block(actor); oid = str(uuid.uuid4()); db.execute("INSERT INTO objects VALUES (?,?,?,?,?,?)", (oid, home_id, body.label, body.display_name, 1, now_iso())); return {"id": oid, **body.model_dump(), "enabled": True}
+        home_check(actor, home_id); publisher_block(actor); oid = str(uuid.uuid4()); db.execute("INSERT INTO objects(id,home_id,label,display_name,enabled,created_at,care_recipient_id) VALUES (?,?,?,?,?,?,NULL)", (oid, home_id, body.label, body.display_name, 1, now_iso())); return {"id": oid, **body.model_dump(), "enabled": True}
 
     def point_in_zone(x: float, z: float, polygon: list[dict]) -> bool:
         points = [
@@ -4129,6 +4168,18 @@ def make_app(
         event = db.one("SELECT id FROM events WHERE home_id=? AND evidence_json LIKE ? ORDER BY last_seen_at DESC LIMIT 1", (row["home_id"], f"%{observation_id}%")) if observation_id else None
         zone = roomplan_zone_for_point(row.get("map_id"), row["home_id"], x, z)
         presence_state = None
+        identity_status = "anonymous"
+        identity_name = None
+        identity_confidence = row.get("identity_confidence")
+        recipient_id = row.get("care_recipient_id")
+        if str(row.get("label") or "").strip().lower() == "person":
+            identity_status = "unknown"
+            identity_name = "Unknown person"
+            if recipient_id:
+                recipient = db.one("SELECT display_name FROM care_recipients WHERE id=? AND home_id=?", (recipient_id, row["home_id"]))
+                if recipient:
+                    identity_status = "matched"
+                    identity_name = recipient["display_name"]
         if str(row.get("label") or "").strip().lower() == "person" and observed_at:
             try:
                 observed_dt = datetime.fromisoformat(str(observed_at).replace("Z", "+00:00"))
@@ -4148,6 +4199,7 @@ def make_app(
             "cameraId": row.get("camera_id"),
             "roomId": zone.get("id") if zone else None,
             "presenceState": presence_state,
+            "identity": {"status": identity_status, "displayName": identity_name, "careRecipientId": recipient_id, "confidence": identity_confidence} if str(row.get("label") or "").strip().lower() == "person" else None,
             "confidenceRadiusM": row.get("uncertainty_m") if row.get("uncertainty_m") is not None else 0.0,
             "confidence": row.get("confidence") if row.get("confidence") is not None else 0.0,
             "zone": ({"id": zone.get("id"), "name": zone.get("label") or zone.get("id"), "confidence": zone.get("confidence", 1.0)} if zone else None),
@@ -4160,6 +4212,7 @@ def make_app(
             SELECT o.*, latest.id observation_id, latest.camera_id, latest.map_id,
                    latest.x, latest.y, latest.z, latest.uncertainty_m,
                    latest.confidence, latest.detector_version, latest.observed_at
+                   ,latest.care_recipient_id, latest.identity_confidence
             FROM objects o
             LEFT JOIN observations latest ON latest.id = (
                 SELECT ob.id FROM observations ob
@@ -4228,6 +4281,102 @@ def make_app(
             accuracy,
             floor_y,
         ), row.get("map_id")
+
+    def active_face_profiles(home_id: str) -> list[dict]:
+        """Load only decryptable, consented face templates into memory."""
+        if not template_store.available:
+            return []
+        rows = db.many(
+            """
+            SELECT fp.id, fp.home_id, fp.care_recipient_id, fp.model_version,
+                   cr.display_name, fp.sample_count
+            FROM face_profiles fp
+            JOIN care_recipients cr ON cr.id=fp.care_recipient_id AND cr.home_id=fp.home_id
+            WHERE fp.home_id=? AND fp.status='ready'
+              AND EXISTS (
+                  SELECT 1 FROM consents c
+                  WHERE c.home_id=fp.home_id AND c.care_recipient_id=fp.care_recipient_id
+                    AND c.purpose='face_recognition'
+                    AND c.id = (
+                        SELECT c2.id FROM consents c2
+                        WHERE c2.home_id=c.home_id
+                          AND c2.care_recipient_id=c.care_recipient_id
+                          AND c2.purpose=c.purpose
+                        ORDER BY c2.granted_at DESC LIMIT 1
+                    )
+                    AND c.revoked_at IS NULL
+              )
+            ORDER BY fp.updated_at DESC
+            """,
+            (home_id,),
+        )
+        profiles: list[dict] = []
+        for row in rows:
+            try:
+                payload = json.loads(template_store.get(home_id, row["id"]))
+                embeddings = validate_embeddings(payload, minimum=3, maximum=8)
+            except (FileNotFoundError, OSError, RuntimeError, ValueError, json.JSONDecodeError):
+                continue
+            profiles.append(
+                {
+                    "profile_id": row["id"],
+                    "care_recipient_id": row["care_recipient_id"],
+                    "display_name": row["display_name"],
+                    "model_version": row["model_version"],
+                    "sample_count": row["sample_count"],
+                    "embeddings": embeddings,
+                }
+            )
+        return profiles
+
+    def identify_person(home_id: str, camera_id: str, item: dict, profiles: list[dict]) -> dict:
+        if not profiles:
+            return {"status": "anonymous"}
+        faces = item.get("faces") if isinstance(item.get("faces"), list) else []
+        candidate = None
+        # Do not guess when more than one face is visible. The enrolled
+        # identity must be the only visible face before it can be associated
+        # with a care recipient.
+        if len(faces) == 1:
+            face = faces[0]
+            try:
+                candidate = best_profile_match(normalize_embedding(face.get("embedding")), profiles)
+            except (TypeError, ValueError):
+                candidate = None
+        track_id = item.get("track_id")
+        if not isinstance(track_id, int):
+            return {"status": "unknown"}
+        stable = stable_identity(
+            app.state.vision_person_identity,
+            (home_id, camera_id, track_id),
+            candidate,
+        )
+        if not stable:
+            return {"status": "unknown"}
+        return {
+            "status": "matched",
+            "profile_id": stable["profile_id"],
+            "care_recipient_id": stable["care_recipient_id"],
+            "display_name": stable["display_name"],
+            "confidence": stable.get("score"),
+            "stability_hits": stable.get("stability_hits"),
+        }
+
+    def bind_person_identity(home_id: str, anonymous_object_id: str, identity: dict) -> str:
+        recipient_id = identity.get("care_recipient_id")
+        if not recipient_id:
+            return anonymous_object_id
+        linked = db.one(
+            "SELECT id FROM objects WHERE home_id=? AND label='person' AND care_recipient_id=? AND enabled=1 ORDER BY created_at LIMIT 1",
+            (home_id, recipient_id),
+        )
+        if linked and linked["id"] != anonymous_object_id:
+            return linked["id"]
+        db.execute(
+            "UPDATE objects SET care_recipient_id=?, display_name=? WHERE id=? AND home_id=?",
+            (recipient_id, identity.get("display_name") or "Person", anonymous_object_id, home_id),
+        )
+        return anonymous_object_id
 
     def live_person_object_id(
         home_id: str,
@@ -4323,9 +4472,66 @@ def make_app(
         )
         if object_id is None:
             object_id = str(uuid.uuid4())
-            db.execute("INSERT INTO objects VALUES (?,?,?,?,?,?)", (object_id, home_id, "person", "Person", 1, now_iso()))
+            db.execute("INSERT INTO objects(id,home_id,label,display_name,enabled,created_at,care_recipient_id) VALUES (?,?,?,?,?,?,NULL)", (object_id, home_id, "person", "Person", 1, now_iso()))
         tracks[key] = (object_id, now, map_id, x, z)
         return object_id
+
+    async def persist_fall_event(home_id: str, camera_id: str, item: dict, signal: FallSignal, snapshot: bytes) -> dict:
+        track = app.state.vision_person_objects.get((home_id, camera_id, signal.track_id))
+        object_id = item.get("_object_id") if isinstance(item.get("_object_id"), str) else (track[0] if track else None)
+        observation = db.one(
+            "SELECT id FROM observations WHERE home_id=? AND object_id=? ORDER BY observed_at DESC LIMIT 1",
+            (home_id, object_id),
+        ) if object_id else None
+        evidence = [observation["id"]] if observation else []
+        identity = item.get("identity") if isinstance(item.get("identity"), dict) else {}
+        care_recipient_id = identity.get("care_recipient_id") if identity.get("status") == "matched" else None
+        projection = item.get("projection") if isinstance(item.get("projection"), dict) else {}
+        room_zone = projection.get("room_zone") if isinstance(projection.get("room_zone"), dict) else None
+        explanation = signal.explanation
+        if room_zone and room_zone.get("label"):
+            explanation = f"{explanation} Approximate location: {room_zone['label']}."
+        timestamp = signal.observed_at.isoformat()
+        event_id = str(uuid.uuid4())
+        expires = (datetime.now(timezone.utc) + timedelta(days=30)).replace(microsecond=0).isoformat()
+        db.execute(
+            "INSERT INTO events(id,home_id,event_type,status,explanation,confidence,evidence_json,first_seen_at,last_seen_at,expires_at,care_recipient_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (event_id, home_id, "fall_suspected", "needs_review", explanation, signal.confidence, json.dumps(evidence), timestamp, timestamp, expires, care_recipient_id),
+        )
+        snapshot_path = None
+        snapshot_content_type = image_content_type(snapshot)
+        if snapshot_content_type:
+            object_key = None
+            try:
+                object_key = app.state.clip_store.put_snapshot(home_id, event_id, snapshot)
+                db.execute(
+                    "INSERT INTO event_snapshots(event_id,home_id,object_key,content_type,created_at,expires_at) VALUES (?,?,?,?,?,?)",
+                    (event_id, home_id, object_key, snapshot_content_type, timestamp, expires),
+                )
+                snapshot_path = f"/api/v1/homes/{home_id}/events/{event_id}/snapshot"
+            except Exception:
+                # The event is still useful if the optional evidence image
+                # cannot be written. Never leave an unreferenced encrypted
+                # object behind after a metadata write failure.
+                if object_key:
+                    app.state.clip_store.delete_snapshot(home_id, event_id)
+                snapshot_content_type = None
+        await bus.publish(
+            home_id,
+            {
+                "event_id": event_id,
+                "home_id": home_id,
+                "type": "fall_suspected",
+                "event_type": "fall_suspected",
+                "status": "needs_review",
+                "confidence": signal.confidence,
+                "care_recipient_id": care_recipient_id,
+                "observed_at": timestamp,
+                "snapshot_path": snapshot_path,
+                "snapshot_content_type": snapshot_content_type,
+            },
+        )
+        return {"event_id": event_id, "type": "fall_suspected", "status": "needs_review", "confidence": signal.confidence, "observation_id": observation["id"] if observation else None, "snapshot_path": snapshot_path, "snapshot_content_type": snapshot_content_type}
 
     async def persist_vision_observation(home_id: str, camera_id: str, map_id: str | None, item: dict, detector_version: str) -> dict | None:
         label = str(item.get("label") or "").strip().lower()
@@ -4338,15 +4544,19 @@ def make_app(
         else:
             x = y = z = None
         track_id = item.get("track_id")
+        identity = item.get("identity") if isinstance(item.get("identity"), dict) else {"status": "anonymous"}
         if label == "person" and isinstance(track_id, int):
             object_id = live_person_object_id(home_id, camera_id, track_id, map_id=map_id, x=x, z=z)
+            if identity.get("status") == "matched":
+                object_id = bind_person_identity(home_id, object_id, identity)
         else:
             object_row = db.one("SELECT * FROM objects WHERE home_id=? AND lower(label)=? AND enabled=1 ORDER BY created_at LIMIT 1", (home_id, label))
             if object_row is None:
                 object_id = str(uuid.uuid4())
-                db.execute("INSERT INTO objects VALUES (?,?,?,?,?,?)", (object_id, home_id, label, label.replace("_", " ").title(), 1, now_iso()))
+                db.execute("INSERT INTO objects(id,home_id,label,display_name,enabled,created_at,care_recipient_id) VALUES (?,?,?,?,?,?,NULL)", (object_id, home_id, label, label.replace("_", " ").title(), 1, now_iso()))
             else:
                 object_id = object_row["id"]
+        item["_object_id"] = object_id
         persistence_window = 1 if label == "person" else 5
         cutoff = (datetime.now(timezone.utc) - timedelta(seconds=persistence_window)).replace(microsecond=0).isoformat()
         if db.one("SELECT id FROM observations WHERE home_id=? AND object_id=? AND camera_id=? AND observed_at>=? ORDER BY observed_at DESC LIMIT 1", (home_id, object_id, camera_id, cutoff)):
@@ -4358,13 +4568,21 @@ def make_app(
         observed = datetime.now(timezone.utc).isoformat(timespec="microseconds")
         uncertainty = projection.get("uncertainty_m") if isinstance(projection.get("uncertainty_m"), (int, float)) else None
         confidence = float(item.get("confidence") or 0.0)
-        db.execute("INSERT INTO observations VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", (observation_id, home_id, object_id, camera_id, map_id, x, y, z, uncertainty, confidence, detector_version, observed))
+        identity_confidence = identity.get("confidence") if identity.get("status") == "matched" and isinstance(identity.get("confidence"), (int, float)) else None
+        recipient_id = identity.get("care_recipient_id") if identity.get("status") == "matched" else None
+        db.execute(
+            "INSERT INTO observations(id,home_id,object_id,camera_id,map_id,x,y,z,uncertainty_m,confidence,detector_version,observed_at,care_recipient_id,identity_confidence) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (observation_id, home_id, object_id, camera_id, map_id, x, y, z, uncertainty, confidence, detector_version, observed, recipient_id, identity_confidence),
+        )
         event_id = str(uuid.uuid4())
         expires = (datetime.now(timezone.utc) + timedelta(days=30)).replace(microsecond=0).isoformat()
-        db.execute("INSERT INTO events VALUES (?,?,?,?,?,?,?,?,?,?)", (event_id, home_id, "object_observed", "new", "Approximate household observation; not a diagnosis.", confidence, json.dumps([observation_id]), observed, observed, expires))
+        db.execute(
+            "INSERT INTO events(id,home_id,event_type,status,explanation,confidence,evidence_json,first_seen_at,last_seen_at,expires_at,care_recipient_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (event_id, home_id, "object_observed", "new", "Approximate household observation; not a diagnosis.", confidence, json.dumps([observation_id]), observed, observed, expires, recipient_id),
+        )
         await bus.publish(home_id, {"event_id": event_id, "observation_id": observation_id, "home_id": home_id, "type": "object_observed", "observed_at": observed})
         zone = roomplan_zone_for_point(map_id, home_id, x, z)
-        return {"observation_id": observation_id, "event_id": event_id, "object_id": object_id, "zone": zone.get("label") if zone else None}
+        return {"observation_id": observation_id, "event_id": event_id, "object_id": object_id, "track_id": track_id, "zone": zone.get("label") if zone else None, "identity": identity}
 
     @app.get("/api/v1/homes/{home_id}/objects")
     def objects(home_id: str, actor: Current):
@@ -4402,11 +4620,21 @@ def make_app(
             raise HTTPException(413, "frame is empty or exceeds the 3 MB in-memory limit")
         captured = body.captured_at or datetime.now(timezone.utc)
         calibration, map_id = vision_calibration(home_id, body.camera_id, body.width, body.height)
+        face_profiles = active_face_profiles(home_id)
         try:
-            result = app.state.vision.ingest(Frame(body.camera_id, frame_bytes, body.width, body.height, captured), labels, calibration=calibration, depth_m=body.depth_m)
+            result = app.state.vision.ingest(
+                Frame(body.camera_id, frame_bytes, body.width, body.height, captured),
+                labels,
+                calibration=calibration,
+                depth_m=body.depth_m,
+                include_faces=bool(face_profiles),
+            )
         except (RoomLayoutServiceUnavailable, RoomLayoutServiceError, RuntimeError) as exc:
             raise HTTPException(503, "Local real vision model is unavailable") from exc
         detector_version = app.state.vision.detector.model_version
+        for item in result:
+            if str(item.get("label") or "").strip().lower() == "person":
+                item["identity"] = identify_person(home_id, body.camera_id, item, face_profiles)
         persisted = [saved for item in result if (saved := await persist_vision_observation(home_id, body.camera_id, map_id, item, detector_version)) is not None]
         for item in result:
             projection = item.get("projection") if isinstance(item.get("projection"), dict) else None
@@ -4414,14 +4642,112 @@ def make_app(
                 world = projection["world_xyz"]
                 zone = roomplan_zone_for_point(map_id, home_id, float(world[0]), float(world[2]))
                 projection["room_zone"] = {"id": zone.get("id"), "label": zone.get("label")} if zone else None
-        return {"data": result, "detector_version": detector_version, "observations": persisted, "frames_persisted": False, "privacy": "frame bytes were processed in memory by the local real model and were not stored"}
+        safety_events: list[dict] = []
+        for item in result:
+            if str(item.get("label") or "").strip().lower() != "person":
+                continue
+            signal = app.state.fall_detector.update(
+                body.camera_id,
+                item,
+                frame_width=body.width,
+                frame_height=body.height,
+                observed_at=captured,
+            )
+            if signal:
+                safety_events.append(await persist_fall_event(home_id, body.camera_id, item, signal, frame_bytes))
+
+        def public_identity(value: object) -> dict:
+            if not isinstance(value, dict):
+                return {"status": "unknown"}
+            return {
+                key: value[key]
+                for key in ("status", "care_recipient_id", "display_name", "confidence", "stability_hits")
+                if key in value
+            }
+
+        def public_item(value: dict) -> dict:
+            sanitized = dict(value)
+            sanitized.pop("_object_id", None)
+            if isinstance(sanitized.get("faces"), list):
+                sanitized["faces"] = [
+                    {key: item[key] for key in ("bbox", "confidence", "landmarks") if key in item}
+                    for item in sanitized["faces"]
+                    if isinstance(item, dict)
+                ]
+            if "identity" in sanitized:
+                sanitized["identity"] = public_identity(sanitized.get("identity"))
+            return sanitized
+
+        public_persisted = [
+            {**item, "identity": public_identity(item.get("identity"))}
+            for item in persisted
+        ]
+        return {
+            "data": [public_item(item) for item in result],
+            "detector_version": detector_version,
+            "observations": public_persisted,
+            "safety_events": safety_events,
+            "frames_persisted": False,
+            "event_snapshots_persisted": sum(1 for event in safety_events if event.get("snapshot_path")),
+            "privacy": "frame bytes and biometric embeddings were processed in memory by the local real model; only a confirmed fall-safety event may store one encrypted event snapshot",
+        }
 
     @app.post("/api/v1/homes/{home_id}/observations")
     async def observation(home_id: str, body: ObservationIn, actor: Current):
-        home_check(actor, home_id); publisher_block(actor); oid = str(uuid.uuid4()); observed = now_iso(); db.execute("INSERT INTO observations VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", (oid, home_id, body.object_id, body.camera_id, body.map_id, body.x, body.y, body.z, body.uncertainty_m, body.confidence, body.detector_version, observed)); event_id = str(uuid.uuid4()); expires = (datetime.now(timezone.utc) + timedelta(days=30)).replace(microsecond=0).isoformat(); db.execute("INSERT INTO events VALUES (?,?,?,?,?,?,?,?,?,?)", (event_id, home_id, "object_observed", "new", "Approximate household observation; not a diagnosis.", body.confidence, json.dumps([oid]), observed, observed, expires)); payload = {"event_id": event_id, "observation_id": oid, "home_id": home_id, "type": "object_observed", "observed_at": observed}; await bus.publish(home_id, payload); return {"observation_id": oid, "event_id": event_id, "approximate_location": {"x": body.x, "y": body.y, "z": body.z, "uncertainty_m": body.uncertainty_m}}
+        home_check(actor, home_id); publisher_block(actor); oid = str(uuid.uuid4()); observed = now_iso()
+        db.execute(
+            "INSERT INTO observations(id,home_id,object_id,camera_id,map_id,x,y,z,uncertainty_m,confidence,detector_version,observed_at,care_recipient_id,identity_confidence) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (oid, home_id, body.object_id, body.camera_id, body.map_id, body.x, body.y, body.z, body.uncertainty_m, body.confidence, body.detector_version, observed, None, None),
+        )
+        event_id = str(uuid.uuid4()); expires = (datetime.now(timezone.utc) + timedelta(days=30)).replace(microsecond=0).isoformat()
+        db.execute(
+            "INSERT INTO events(id,home_id,event_type,status,explanation,confidence,evidence_json,first_seen_at,last_seen_at,expires_at,care_recipient_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (event_id, home_id, "object_observed", "new", "Approximate household observation; not a diagnosis.", body.confidence, json.dumps([oid]), observed, observed, expires, None),
+        )
+        payload = {"event_id": event_id, "observation_id": oid, "home_id": home_id, "type": "object_observed", "observed_at": observed}; await bus.publish(home_id, payload); return {"observation_id": oid, "event_id": event_id, "approximate_location": {"x": body.x, "y": body.y, "z": body.z, "uncertainty_m": body.uncertainty_m}}
+
+    def event_rows(home_id: str, limit: int) -> list[dict]:
+        rows = db.many("SELECT * FROM events WHERE home_id=? ORDER BY last_seen_at DESC LIMIT ?", (home_id, limit))
+        for row in rows:
+            snapshot = db.one(
+                "SELECT content_type FROM event_snapshots WHERE event_id=? AND home_id=? AND expires_at>?",
+                (row["id"], home_id, now_iso()),
+            )
+            row["snapshot_path"] = f"/api/v1/homes/{home_id}/events/{row['id']}/snapshot" if snapshot else None
+            row["snapshot_content_type"] = snapshot["content_type"] if snapshot else None
+        return rows
 
     @app.get("/api/v1/homes/{home_id}/events")
-    def events(home_id: str, actor: Current, limit: int = 50): home_check(actor, home_id); publisher_block(actor); limit = min(max(limit, 1), 100); return {"data": db.many("SELECT * FROM events WHERE home_id=? ORDER BY last_seen_at DESC LIMIT ?", (home_id, limit))}
+    def events(home_id: str, actor: Current, limit: int = 50):
+        home_check(actor, home_id); publisher_block(actor)
+        limit = min(max(limit, 1), 100)
+        return {"data": event_rows(home_id, limit)}
+
+    @app.get(
+        "/api/v1/homes/{home_id}/events/{event_id}/snapshot",
+        response_class=Response,
+        responses={200: {"content": {"image/jpeg": {}, "image/png": {}}}},
+    )
+    def event_snapshot(home_id: str, event_id: str, actor: Current):
+        home_check(actor, home_id); publisher_block(actor)
+        snapshot = db.one(
+            "SELECT content_type, expires_at FROM event_snapshots WHERE event_id=? AND home_id=?",
+            (event_id, home_id),
+        )
+        if not snapshot:
+            raise HTTPException(404, "Event snapshot not found")
+        if expired(snapshot["expires_at"]):
+            app.state.clip_store.delete_snapshot(home_id, event_id)
+            db.execute("DELETE FROM event_snapshots WHERE event_id=? AND home_id=?", (event_id, home_id))
+            raise HTTPException(410, "Event snapshot expired")
+        try:
+            content = app.state.clip_store.get_snapshot(home_id, event_id)
+        except FileNotFoundError as exc:
+            raise HTTPException(404, "Encrypted event snapshot content not found") from exc
+        except Exception as exc:
+            raise HTTPException(503, "Encrypted event snapshot could not be verified") from exc
+        audit(actor, "event.snapshot.view", "event", event_id, home_id)
+        return Response(content=content, media_type=snapshot["content_type"], headers={"Cache-Control": "private, no-store"})
 
     @app.post("/api/v1/homes/{home_id}/events/{event_id}/clips")
     def clip_create(home_id: str, event_id: str, body: ClipIn, actor: Current):
@@ -4474,12 +4800,23 @@ def make_app(
     # Care recipients are people receiving care in this home/residence. They
     # intentionally do not create a login, membership, session, or permission.
     def care_recipient_view(row: dict) -> dict:
+        face_profile = db.one(
+            "SELECT status, updated_at FROM face_profiles WHERE home_id=? AND care_recipient_id=?",
+            (row["home_id"], row["id"]),
+        )
+        face_status = "not_enrolled"
+        face_updated_at = None
+        if face_profile:
+            face_status = face_profile["status"] if face_profile["status"] == "revoked" or template_store.available else "unavailable"
+            face_updated_at = face_profile.get("updated_at")
         return {
             "id": row["id"],
             "display_name": row["display_name"],
             "relationship": row.get("relationship"),
             "room_label": row.get("room_label"),
             "medication_reminders_enabled": active_care_recipient_consent(row["home_id"], row["id"], "medication_management"),
+            "face_recognition_status": face_status,
+            "face_profile_updated_at": face_updated_at,
             "created_at": row["created_at"],
         }
 
@@ -4530,10 +4867,119 @@ def make_app(
     @app.delete("/api/v1/homes/{home_id}/care-recipients/{recipient_id}", response_model=CareRecipientMutationResponse)
     def care_recipient_delete(home_id: str, recipient_id: str, actor: Current):
         home_check(actor, home_id); family_actor(actor)
-        deleted = care_recipient_view(care_recipient_row(home_id, recipient_id))
+        deleted_row = care_recipient_row(home_id, recipient_id)
+        deleted = care_recipient_view(deleted_row)
+        face_profile = db.one(
+            "SELECT id FROM face_profiles WHERE home_id=? AND care_recipient_id=?",
+            (home_id, recipient_id),
+        )
+        if face_profile:
+            # The database row is cascaded below, but the encrypted artifact
+            # lives outside SQLite and must be removed explicitly as well.
+            app.state.template_store.delete(home_id, face_profile["id"])
         db.execute("DELETE FROM care_recipients WHERE id=? AND home_id=?", (recipient_id, home_id))
         audit(actor, "care_recipient.delete", "care_recipient", recipient_id, home_id)
         return {"data": deleted}
+
+    def face_profile_view(home_id: str, recipient_id: str) -> dict:
+        row = db.one(
+            "SELECT care_recipient_id,status,model_version,sample_count,updated_at FROM face_profiles WHERE home_id=? AND care_recipient_id=?",
+            (home_id, recipient_id),
+        )
+        if not row:
+            return {"care_recipient_id": recipient_id, "status": "not_enrolled", "model_version": None, "sample_count": 0, "updated_at": None}
+        return {
+            "care_recipient_id": recipient_id,
+            "status": row["status"] if row["status"] == "revoked" or template_store.available else "unavailable",
+            "model_version": row["model_version"],
+            "sample_count": row["sample_count"],
+            "updated_at": row["updated_at"],
+        }
+
+    @app.get("/api/v1/homes/{home_id}/care-recipients/{recipient_id}/face-profile", response_model=FaceProfileOut)
+    def face_profile_get(home_id: str, recipient_id: str, actor: Current):
+        home_check(actor, home_id); publisher_block(actor)
+        recipient_id = canonical_uuid(recipient_id, "recipient_id")
+        care_recipient_row(home_id, recipient_id)
+        return face_profile_view(home_id, recipient_id)
+
+    @app.post("/api/v1/homes/{home_id}/care-recipients/{recipient_id}/face-profile/enroll", response_model=FaceProfileOut)
+    def face_profile_enroll(home_id: str, recipient_id: str, body: FaceEnrollmentIn, actor: Current):
+        home_check(actor, home_id); family_actor(actor)
+        recipient_id = canonical_uuid(recipient_id, "recipient_id")
+        care_recipient_row(home_id, recipient_id)
+        require_care_recipient_consent(home_id, recipient_id, "face_recognition")
+        if not template_store.available:
+            raise HTTPException(503, "Biometric encryption is not configured on this local service")
+        if sum(len(frame.frame_base64) for frame in body.frames) > 18_000_000:
+            raise HTTPException(413, "Face enrollment samples exceed the in-memory limit")
+        enroll = getattr(geometry, "enroll_faces", None)
+        if not callable(enroll):
+            raise HTTPException(503, "Local face recognition model is unavailable")
+        try:
+            result = enroll(
+                frames=[
+                    {"frame_base64": frame.frame_base64, "width": frame.width, "height": frame.height}
+                    for frame in body.frames
+                ]
+            )
+        except (RoomLayoutServiceUnavailable, RoomLayoutServiceError) as exc:
+            raise HTTPException(503, "Local face recognition model is unavailable") from exc
+        if not isinstance(result, dict) or result.get("status") != "ready":
+            raise HTTPException(503, "Local face recognition model is unavailable")
+        try:
+            embeddings = validate_embeddings(result.get("embeddings"), minimum=3, maximum=8)
+        except ValueError as exc:
+            raise HTTPException(422, "The captured samples did not contain enough usable faces") from exc
+        now = now_iso()
+        profile = db.one("SELECT id FROM face_profiles WHERE home_id=? AND care_recipient_id=?", (home_id, recipient_id))
+        profile_id = profile["id"] if profile else str(uuid.uuid4())
+        template_store.put(home_id, profile_id, json.dumps(embeddings, separators=(",", ":")).encode("utf-8"))
+        db.execute(
+            """
+            INSERT INTO face_profiles(id,home_id,care_recipient_id,template_artifact_key,model_version,sample_count,status,created_at,updated_at)
+            VALUES (?,?,?,?,?,?,?,?,?)
+            ON CONFLICT(home_id,care_recipient_id) DO UPDATE SET
+                template_artifact_key=excluded.template_artifact_key,
+                model_version=excluded.model_version,
+                sample_count=excluded.sample_count,
+                status=excluded.status,
+                updated_at=excluded.updated_at
+            """,
+            (profile_id, home_id, recipient_id, f"face-profiles/{home_id}/{profile_id}.bin", str(result.get("model_version") or "unknown")[:120], len(embeddings), "ready", now, now),
+        )
+        audit(actor, "face_profile.enroll", "face_profile", profile_id, home_id)
+        app.state.vision_person_identity = {
+            key: value for key, value in app.state.vision_person_identity.items()
+            if value.get("profile_id") != profile_id
+        }
+        return face_profile_view(home_id, recipient_id)
+
+    @app.delete("/api/v1/homes/{home_id}/care-recipients/{recipient_id}/face-profile", response_model=FaceProfileOut)
+    def face_profile_delete(home_id: str, recipient_id: str, actor: Current):
+        home_check(actor, home_id); family_actor(actor)
+        recipient_id = canonical_uuid(recipient_id, "recipient_id")
+        care_recipient_row(home_id, recipient_id)
+        row = db.one("SELECT id FROM face_profiles WHERE home_id=? AND care_recipient_id=?", (home_id, recipient_id))
+        if row:
+            template_store.delete(home_id, row["id"])
+            db.execute(
+                "UPDATE face_profiles SET template_artifact_key='', status='revoked', updated_at=? WHERE id=? AND home_id=?",
+                (now_iso(), row["id"], home_id),
+            )
+            app.state.vision_person_identity = {
+                key: value for key, value in app.state.vision_person_identity.items()
+                if value.get("profile_id") != row["id"]
+            }
+        timestamp = now_iso()
+        consent_id = str(uuid.uuid4())
+        db.execute(
+            "INSERT INTO consents(id,home_id,subject_user_id,purpose,policy_version,granted_at,revoked_at,care_recipient_id) VALUES (?,?,?,?,?,?,?,?)",
+            (consent_id, home_id, actor["user_id"], "face_recognition", "2026-09", timestamp, timestamp, recipient_id),
+        )
+        db.execute("UPDATE objects SET care_recipient_id=NULL, display_name='Person' WHERE home_id=? AND care_recipient_id=?", (home_id, recipient_id))
+        audit(actor, "face_profile.delete", "care_recipient", recipient_id, home_id)
+        return face_profile_view(home_id, recipient_id)
 
     # Family mode is deliberately a bounded, consent-gated slice. It exposes
     # household membership and medication adherence records, not a resident's
@@ -4912,22 +5358,36 @@ def make_app(
         else:
             subject = family_subject(home_id, actor, body.subject_user_id, "family_assistant")
             target_field, target_id = "subject_user_id", subject["id"]
-        # Keep this context narrow: plans and their bounded check-in statuses
-        # only. Do not pass events, frames, transcripts, or a household stream.
+        # Keep this context narrow: plans, bounded check-ins, and aggregate
+        # safety signals only. Do not pass frames, face templates, snapshot
+        # bytes, or the household stream.
         plans = db.many(f"SELECT id, name, dose, schedule, instructions, active, version, assigned_caregiver_id FROM medication_plans WHERE home_id=? AND {target_field}=? AND active=1 ORDER BY name LIMIT 50", (home_id, target_id))
         checks = db.many(f"SELECT id, plan_id, scheduled_for, status, note, updated_at FROM medication_check_ins WHERE home_id=? AND {target_field}=? ORDER BY scheduled_for DESC LIMIT 100", (home_id, target_id))
-        context = {"subject": {"id": subject["id"], "display_name": subject["display_name"]}, "plans": plans, "check_ins": checks, "request": body.message, "evidence_scope": "medication plans and check-ins only"}
+        if body.care_recipient_id:
+            daily_checks = db.many("SELECT id,status,trend,explanation,limitations,created_at,model_version FROM summaries WHERE home_id=? AND care_recipient_id=? ORDER BY created_at DESC LIMIT 7", (home_id, target_id))
+            subject_user_id = None
+        else:
+            daily_checks = db.many("SELECT id,status,trend,explanation,limitations,created_at,model_version FROM summaries WHERE home_id=? AND care_recipient_id IS NULL AND subject_user_id=? ORDER BY created_at DESC LIMIT 7", (home_id, target_id))
+            subject_user_id = target_id
+        analytics = care_analytics(db, home_id, window_days=30, care_recipient_id=body.care_recipient_id, subject_user_id=subject_user_id)
+        context_scope = "medication plans, medication check-ins, daily check-ins, and bounded fall-safety analytics"
+        context = {"subject": {"id": subject["id"], "display_name": subject["display_name"]}, "plans": plans, "check_ins": checks, "daily_check_ins": daily_checks, "fall_analytics": analytics["fall"], "event_counts": analytics["event_counts"], "request": body.message, "evidence_scope": context_scope, "privacy_boundary": analytics["assistant_context"]}
         result = lm.family_summary(context)
         degraded = result is None
         if degraded:
             taken = sum(1 for row in checks if row["status"] == "taken")
             pending = sum(1 for row in checks if row["status"] == "pending")
-            result = {"summary": f"{len(plans)} active medication plan(s) are configured; {taken} check-in(s) marked taken and {pending} pending.", "next_action": "Review the reminder list with the resident or caregiver." if pending else "No pending check-ins are recorded in the bounded history.", "evidence_ids": [row["id"] for row in checks[:10]], "limitations": "Local language model unavailable. This is an administrative summary, not medical advice."}
-        allowed_evidence = {row["id"] for row in checks} | {row["id"] for row in plans}
+            fall_count = analytics["fall"]["total_signals"]
+            fall_review = analytics["fall"]["needs_review"]
+            daily_status = analytics["daily_check_in"]["last_status"] or "not recorded"
+            result = {"summary": f"{len(plans)} active medication plan(s) are configured; {taken} medication acknowledgement(s) marked taken and {pending} pending. The latest daily check-in is {daily_status}. There have been {fall_count} fall-safety signal(s) in the last 30 days, with {fall_review} needing review.", "next_action": "Review the reminder list and any safety signals with the resident or caregiver." if pending or fall_review else "No pending reminders or fall-safety signals are awaiting review in the bounded history.", "evidence_ids": [row["id"] for row in checks[:10]] + [row["id"] for row in daily_checks[:5]] + [row["id"] for row in analytics["fall"]["recent"][:5]], "limitations": "Local language model unavailable. This is an administrative summary of recorded observations, not medical advice."}
+        allowed_evidence = {row["id"] for row in checks} | {row["id"] for row in plans} | {row["id"] for row in daily_checks} | {row["id"] for row in analytics["fall"]["recent"]}
         result["evidence_ids"] = [item for item in result.get("evidence_ids", []) if item in allowed_evidence][:20]
         result["evidence_timestamps"] = {row["id"]: row["updated_at"] for row in checks if row["id"] in result["evidence_ids"]}
+        result["evidence_timestamps"].update({row["id"]: row["created_at"] for row in daily_checks if row["id"] in result["evidence_ids"]})
+        result["evidence_timestamps"].update({row["id"]: row["occurred_at"] for row in analytics["fall"]["recent"] if row["id"] in result["evidence_ids"]})
         audit(actor, "assistant.family_summary", "care_recipient" if body.care_recipient_id else "user", subject["id"], home_id)
-        return {"data": result, "degraded": degraded, "inference_status": lm.last_error if degraded else "ok", "subject_user_id": subject["id"] if not body.care_recipient_id else None, "care_recipient_id": body.care_recipient_id, "context_scope": "medication plans and check-ins only", "medical_advice": False, "model_version": settings.effective_llm_model if not degraded else "rules-family-v1"}
+        return {"data": result, "degraded": degraded, "inference_status": lm.last_error if degraded else "ok", "subject_user_id": subject["id"] if not body.care_recipient_id else None, "care_recipient_id": body.care_recipient_id, "context_scope": context_scope, "medical_advice": False, "model_version": settings.effective_llm_model if not degraded else "rules-family-v1"}
 
     @app.post("/api/v1/admin/retention/run")
     def retention_run(actor: Current):
@@ -4936,7 +5396,11 @@ def make_app(
         for clip in expired_clips:
             store.delete(clip["object_key"])
             app.state.clip_store.delete(clip["home_id"], clip["id"])
+        expired_snapshots = db.many("SELECT event_id, home_id FROM event_snapshots WHERE expires_at<=?", (cutoff,))
+        for snapshot in expired_snapshots:
+            app.state.clip_store.delete_snapshot(snapshot["home_id"], snapshot["event_id"])
         counts = {}
+        counts["event_snapshots"] = db.execute("DELETE FROM event_snapshots WHERE expires_at<=?", (cutoff,)).rowcount
         for table, column in (("clips", "expires_at"), ("events", "expires_at"), ("summaries", "expires_at")):
             counts[table] = db.execute(f"DELETE FROM {table} WHERE {column}<=?", (cutoff,)).rowcount
         observation_cutoff = (datetime.now(timezone.utc) - timedelta(days=30)).replace(microsecond=0).isoformat()
@@ -5017,11 +5481,40 @@ def make_app(
         if settings.env == "production": raise HTTPException(503, "LiveKit webhook verification is not configured")
         return {"accepted": True, "verified": False}
 
+    @app.get("/api/v1/homes/{home_id}/analytics")
+    def home_analytics(home_id: str, actor: Current, care_recipient_id: str | None = None, window_days: int = 30):
+        home_check(actor, home_id); publisher_block(actor)
+        if care_recipient_id:
+            care_recipient_id = medication_care_recipient(home_id, actor, care_recipient_id, purpose="analytics")["id"]
+        return {"data": care_analytics(db, home_id, window_days=window_days, care_recipient_id=care_recipient_id)}
+
     @app.post("/api/v1/homes/{home_id}/check-ins")
     def check_in(home_id: str, body: CheckInIn, actor: Current):
-        home_check(actor, home_id); publisher_block(actor); events = db.many("SELECT id,event_type,confidence,last_seen_at FROM events WHERE home_id=? AND expires_at>? ORDER BY last_seen_at DESC LIMIT 20", (home_id, now_iso())); context = {"transcript": body.transcript, "events": events, "baseline": "personal baseline is intentionally bounded to recent derived observations"}; result = lm.summarize(context); degraded = result is None
+        home_check(actor, home_id); publisher_block(actor)
+        if body.subject_user_id and body.care_recipient_id:
+            raise HTTPException(422, "Choose either subject_user_id or care_recipient_id")
+        if body.care_recipient_id:
+            care_recipient = medication_care_recipient(home_id, actor, body.care_recipient_id, purpose="analytics")
+            subject_id = actor["user_id"]
+            care_recipient_id = care_recipient["id"]
+        else:
+            subject_id = body.subject_user_id or actor["user_id"]
+            member(home_id, subject_id)
+            if subject_id != actor["user_id"]:
+                family_actor(actor)
+                require_consent(home_id, subject_id, "analytics")
+            care_recipient_id = None
+        events = db.many("SELECT id,event_type,confidence,last_seen_at FROM events WHERE home_id=? AND expires_at>? ORDER BY last_seen_at DESC LIMIT 20", (home_id, now_iso()))
+        context = {"transcript": body.transcript, "events": events, "baseline": "personal baseline is intentionally bounded to recent derived observations", "output_boundary": "observational check-in only; no diagnosis or emergency decision"}; result = lm.summarize(context); degraded = result is None
         if degraded: result = {"status": "attention" if events else "unknown", "trend": "unknown", "explanation": "Recent household observations are available for human review." if events else "Not enough observations for a comparison.", "evidence_ids": [e["id"] for e in events], "limitations": "Local language model unavailable; this is a deterministic fallback and not medical advice."}
-        sid = str(uuid.uuid4()); exp = (datetime.now(timezone.utc)+timedelta(days=30)).replace(microsecond=0).isoformat(); db.execute("INSERT INTO summaries VALUES (?,?,?,?,?,?,?,?,?,?,?)", (sid, home_id, body.subject_user_id or actor["user_id"], result["status"], result["trend"], result["explanation"], json.dumps(result.get("evidence_ids", [])), result["limitations"], settings.effective_llm_model if not degraded else "rules-fallback-v1", now_iso(), exp)); audit(actor, "assistant.check_in", "summary", sid, home_id); return {"id": sid, **result, "degraded": degraded, "inference_status": lm.last_error if degraded else "ok", "model_version": settings.effective_llm_model if not degraded else "rules-fallback-v1"}
+        sid = str(uuid.uuid4()); created_at = now_iso(); exp = (datetime.now(timezone.utc)+timedelta(days=30)).replace(microsecond=0).isoformat()
+        db.execute("INSERT INTO summaries(id,home_id,subject_user_id,care_recipient_id,status,trend,explanation,evidence_json,limitations,model_version,created_at,expires_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", (sid, home_id, subject_id, care_recipient_id, result["status"], result["trend"], result["explanation"], json.dumps(result.get("evidence_ids", [])), result["limitations"], settings.effective_llm_model if not degraded else "rules-fallback-v1", created_at, exp))
+        event_id = str(uuid.uuid4())
+        event_explanation = f"Daily check-in: {result['explanation']}"
+        db.execute("INSERT INTO events(id,home_id,event_type,status,explanation,confidence,evidence_json,first_seen_at,last_seen_at,expires_at,care_recipient_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)", (event_id, home_id, "daily_check_in", result["status"], event_explanation, None, json.dumps([sid]), created_at, created_at, exp, care_recipient_id))
+        audit(actor, "assistant.check_in", "summary", sid, home_id)
+        audit(actor, "assistant.check_in.event", "event", event_id, home_id)
+        return {"id": sid, "event_id": event_id, "care_recipient_id": care_recipient_id, **result, "degraded": degraded, "inference_status": lm.last_error if degraded else "ok", "model_version": settings.effective_llm_model if not degraded else "rules-fallback-v1"}
 
     @app.get("/api/v1/homes/{home_id}/caregiver-summary")
     def caregiver_summary(home_id: str, actor: Current):
@@ -5040,6 +5533,7 @@ def make_app(
         request_id, requested_at = str(uuid.uuid4()), now_iso()
         rows = db.many("SELECT artifact_key, usdz_artifact_key, metadata_json FROM room_maps WHERE home_id=?", (home_id,))
         clips_for_home = db.many("SELECT id, object_key FROM clips WHERE home_id=?", (home_id,))
+        snapshots_for_home = db.many("SELECT event_id FROM event_snapshots WHERE home_id=?", (home_id,))
         db.execute("INSERT INTO deletion_requests VALUES (?,?,?,?,?,NULL)", (request_id, home_id, actor["user_id"], "processing", requested_at))
         cleanup_errors: list[str] = []
         for row in rows:
@@ -5058,6 +5552,11 @@ def make_app(
                 app.state.clip_store.delete(home_id, row["id"])
             except OSError as exc:
                 cleanup_errors.append(f"clip:{row['id']}:{type(exc).__name__}")
+        for row in snapshots_for_home:
+            try:
+                app.state.clip_store.delete_snapshot(home_id, row["event_id"])
+            except OSError as exc:
+                cleanup_errors.append(f"snapshot:{row['event_id']}:{type(exc).__name__}")
         if cleanup_errors:
             db.execute("UPDATE deletion_requests SET status=? WHERE id=?", ("failed", request_id))
             audit(actor, "privacy.delete.failed", "deletion_request", request_id, home_id)

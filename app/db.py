@@ -40,11 +40,18 @@ CREATE TABLE IF NOT EXISTS calibrations (id TEXT PRIMARY KEY, home_id TEXT NOT N
 CREATE TABLE IF NOT EXISTS camera_localization_references (home_id TEXT NOT NULL, camera_id TEXT NOT NULL, map_id TEXT NOT NULL, x REAL NOT NULL, z REAL NOT NULL, source TEXT NOT NULL DEFAULT 'manual-floor-reference', created_at TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY(home_id,camera_id,map_id), FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE, FOREIGN KEY(camera_id) REFERENCES cameras(id) ON DELETE CASCADE, FOREIGN KEY(map_id) REFERENCES room_maps(id) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS camera_map_generation_jobs (id TEXT PRIMARY KEY, home_id TEXT NOT NULL, camera_id TEXT NOT NULL, room_id TEXT, room_label TEXT NOT NULL DEFAULT 'Room', orientation TEXT NOT NULL DEFAULT 'portrait', status TEXT NOT NULL CHECK(status IN ('collecting','processing','ready','needs_rescan','unavailable','failed')), frame_count INTEGER NOT NULL DEFAULT 0, resolution_width INTEGER NOT NULL, resolution_height INTEGER NOT NULL, map_id TEXT, error_code TEXT, error_message TEXT, metrics_json TEXT NOT NULL DEFAULT '{}', model_version TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, completed_at TEXT, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE, FOREIGN KEY(camera_id) REFERENCES cameras(id) ON DELETE CASCADE, FOREIGN KEY(map_id) REFERENCES room_maps(id) ON DELETE SET NULL);
 CREATE INDEX IF NOT EXISTS camera_map_generation_jobs_camera_idx ON camera_map_generation_jobs(home_id, camera_id, updated_at);
-CREATE TABLE IF NOT EXISTS objects (id TEXT PRIMARY KEY, home_id TEXT NOT NULL, label TEXT NOT NULL, display_name TEXT, enabled INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE);
-CREATE TABLE IF NOT EXISTS observations (id TEXT PRIMARY KEY, home_id TEXT NOT NULL, object_id TEXT, camera_id TEXT, map_id TEXT, x REAL, y REAL, z REAL, uncertainty_m REAL, confidence REAL, detector_version TEXT, observed_at TEXT NOT NULL, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE);
-CREATE TABLE IF NOT EXISTS events (id TEXT PRIMARY KEY, home_id TEXT NOT NULL, event_type TEXT NOT NULL, status TEXT NOT NULL, explanation TEXT, confidence REAL, evidence_json TEXT NOT NULL, first_seen_at TEXT NOT NULL, last_seen_at TEXT NOT NULL, expires_at TEXT NOT NULL, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE);
+CREATE TABLE IF NOT EXISTS objects (id TEXT PRIMARY KEY, home_id TEXT NOT NULL, label TEXT NOT NULL, display_name TEXT, enabled INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, care_recipient_id TEXT, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE, FOREIGN KEY(care_recipient_id) REFERENCES care_recipients(id) ON DELETE SET NULL);
+CREATE TABLE IF NOT EXISTS observations (id TEXT PRIMARY KEY, home_id TEXT NOT NULL, object_id TEXT, camera_id TEXT, map_id TEXT, x REAL, y REAL, z REAL, uncertainty_m REAL, confidence REAL, detector_version TEXT, observed_at TEXT NOT NULL, care_recipient_id TEXT, identity_confidence REAL, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE, FOREIGN KEY(care_recipient_id) REFERENCES care_recipients(id) ON DELETE SET NULL);
+CREATE TABLE IF NOT EXISTS events (id TEXT PRIMARY KEY, home_id TEXT NOT NULL, event_type TEXT NOT NULL, status TEXT NOT NULL, explanation TEXT, confidence REAL, evidence_json TEXT NOT NULL, first_seen_at TEXT NOT NULL, last_seen_at TEXT NOT NULL, expires_at TEXT NOT NULL, care_recipient_id TEXT, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE, FOREIGN KEY(care_recipient_id) REFERENCES care_recipients(id) ON DELETE SET NULL);
+CREATE TABLE IF NOT EXISTS face_profiles (id TEXT PRIMARY KEY, home_id TEXT NOT NULL, care_recipient_id TEXT NOT NULL, template_artifact_key TEXT NOT NULL, model_version TEXT NOT NULL, sample_count INTEGER NOT NULL, status TEXT NOT NULL CHECK(status IN ('ready','unavailable','revoked')), created_at TEXT NOT NULL, updated_at TEXT NOT NULL, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE, FOREIGN KEY(care_recipient_id) REFERENCES care_recipients(id) ON DELETE CASCADE);
+CREATE UNIQUE INDEX IF NOT EXISTS face_profiles_recipient_idx ON face_profiles(home_id, care_recipient_id);
+CREATE INDEX IF NOT EXISTS face_profiles_home_status_idx ON face_profiles(home_id, status);
+CREATE INDEX IF NOT EXISTS objects_recipient_idx ON objects(home_id, care_recipient_id);
+CREATE INDEX IF NOT EXISTS observations_recipient_idx ON observations(home_id, care_recipient_id, observed_at);
 CREATE TABLE IF NOT EXISTS clips (id TEXT PRIMARY KEY, home_id TEXT NOT NULL, event_id TEXT NOT NULL, object_key TEXT NOT NULL, starts_at TEXT NOT NULL, ends_at TEXT NOT NULL, expires_at TEXT NOT NULL, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE, FOREIGN KEY(event_id) REFERENCES events(id) ON DELETE CASCADE);
-CREATE TABLE IF NOT EXISTS summaries (id TEXT PRIMARY KEY, home_id TEXT NOT NULL, subject_user_id TEXT, status TEXT NOT NULL, trend TEXT NOT NULL, explanation TEXT NOT NULL, evidence_json TEXT NOT NULL, limitations TEXT NOT NULL, model_version TEXT NOT NULL, created_at TEXT NOT NULL, expires_at TEXT NOT NULL, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE);
+CREATE TABLE IF NOT EXISTS event_snapshots (event_id TEXT PRIMARY KEY, home_id TEXT NOT NULL, object_key TEXT NOT NULL, content_type TEXT NOT NULL, created_at TEXT NOT NULL, expires_at TEXT NOT NULL, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE, FOREIGN KEY(event_id) REFERENCES events(id) ON DELETE CASCADE);
+CREATE INDEX IF NOT EXISTS event_snapshots_home_idx ON event_snapshots(home_id, expires_at);
+CREATE TABLE IF NOT EXISTS summaries (id TEXT PRIMARY KEY, home_id TEXT NOT NULL, subject_user_id TEXT, care_recipient_id TEXT, status TEXT NOT NULL, trend TEXT NOT NULL, explanation TEXT NOT NULL, evidence_json TEXT NOT NULL, limitations TEXT NOT NULL, model_version TEXT NOT NULL, created_at TEXT NOT NULL, expires_at TEXT NOT NULL, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE, FOREIGN KEY(care_recipient_id) REFERENCES care_recipients(id) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS audit_log (id TEXT PRIMARY KEY, home_id TEXT, user_id TEXT, action TEXT NOT NULL, target_type TEXT, target_id TEXT, metadata_json TEXT NOT NULL, created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS deletion_requests (id TEXT PRIMARY KEY, home_id TEXT NOT NULL, requested_by TEXT NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL, completed_at TEXT);
 CREATE TABLE IF NOT EXISTS family_invites (id TEXT PRIMARY KEY, home_id TEXT NOT NULL, invited_by TEXT NOT NULL, email TEXT, display_name TEXT NOT NULL, role TEXT NOT NULL CHECK(role IN ('resident','caregiver')), code_hash TEXT NOT NULL UNIQUE, expires_at TEXT NOT NULL, accepted_at TEXT, created_at TEXT NOT NULL, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE, FOREIGN KEY(invited_by) REFERENCES users(id) ON DELETE CASCADE);
@@ -364,6 +371,52 @@ class Database:
             if not self._sqlite_migration_applied(12):
                 self.conn.executescript(_migration_file("012_camera_localization_reference.sql"))
                 self._record_sqlite_migration(12)
+            if not self._sqlite_migration_applied(13):
+                object_columns = {row[1] for row in self.conn.execute("PRAGMA table_info(objects)").fetchall()}
+                observation_columns = {row[1] for row in self.conn.execute("PRAGMA table_info(observations)").fetchall()}
+                event_columns = {row[1] for row in self.conn.execute("PRAGMA table_info(events)").fetchall()}
+                if "care_recipient_id" not in object_columns:
+                    self.conn.execute("ALTER TABLE objects ADD COLUMN care_recipient_id TEXT REFERENCES care_recipients(id) ON DELETE SET NULL")
+                if "care_recipient_id" not in observation_columns:
+                    self.conn.execute("ALTER TABLE observations ADD COLUMN care_recipient_id TEXT REFERENCES care_recipients(id) ON DELETE SET NULL")
+                if "identity_confidence" not in observation_columns:
+                    self.conn.execute("ALTER TABLE observations ADD COLUMN identity_confidence REAL")
+                if "care_recipient_id" not in event_columns:
+                    self.conn.execute("ALTER TABLE events ADD COLUMN care_recipient_id TEXT REFERENCES care_recipients(id) ON DELETE SET NULL")
+                # The PostgreSQL migration uses ADD COLUMN IF NOT EXISTS. Do
+                # the equivalent explicitly here because SQLite does not
+                # support that clause on ALTER TABLE.
+                self.conn.executescript(
+                    """
+                    CREATE TABLE IF NOT EXISTS face_profiles (
+                        id TEXT PRIMARY KEY,
+                        home_id TEXT NOT NULL,
+                        care_recipient_id TEXT NOT NULL,
+                        template_artifact_key TEXT NOT NULL,
+                        model_version TEXT NOT NULL,
+                        sample_count INTEGER NOT NULL,
+                        status TEXT NOT NULL CHECK(status IN ('ready','unavailable','revoked')),
+                        created_at TEXT NOT NULL,
+                        updated_at TEXT NOT NULL,
+                        FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE,
+                        FOREIGN KEY(care_recipient_id) REFERENCES care_recipients(id) ON DELETE CASCADE
+                    );
+                    CREATE UNIQUE INDEX IF NOT EXISTS face_profiles_recipient_idx ON face_profiles(home_id, care_recipient_id);
+                    CREATE INDEX IF NOT EXISTS face_profiles_home_status_idx ON face_profiles(home_id, status);
+                    CREATE INDEX IF NOT EXISTS objects_recipient_idx ON objects(home_id, care_recipient_id);
+                    CREATE INDEX IF NOT EXISTS observations_recipient_idx ON observations(home_id, care_recipient_id, observed_at);
+                    """
+                )
+                self._record_sqlite_migration(13)
+            if not self._sqlite_migration_applied(14):
+                self.conn.executescript(_migration_file("014_event_snapshots.sql"))
+                self._record_sqlite_migration(14)
+            if not self._sqlite_migration_applied(15):
+                summary_columns = {row[1] for row in self.conn.execute("PRAGMA table_info(summaries)").fetchall()}
+                if "care_recipient_id" not in summary_columns:
+                    self.conn.execute("ALTER TABLE summaries ADD COLUMN care_recipient_id TEXT REFERENCES care_recipients(id) ON DELETE CASCADE")
+                self.conn.execute("CREATE INDEX IF NOT EXISTS summaries_recipient_idx ON summaries(home_id, care_recipient_id, created_at)")
+                self._record_sqlite_migration(15)
             # Keep the zero-setup SQLite adapter forward-compatible with a
             # database created before caregiver assignment was introduced.
             plan_columns = {row[1] for row in self.conn.execute("PRAGMA table_info(medication_plans)").fetchall()}
@@ -453,7 +506,7 @@ class Database:
     def export_home(self, home_id: str) -> dict:
         # Export user-visible records, including the minimal rights/audit
         # trail. Never export bearer-token hashes or one-time pairing hashes.
-        tables = ["homes", "users", "memberships", "consents", "cameras", "rooms", "room_maps", "calibrations", "camera_map_generation_jobs", "objects", "observations", "events", "clips", "summaries", "family_invites", "medication_plans", "medication_check_ins", "audit_log", "deletion_requests"]
+        tables = ["homes", "users", "memberships", "consents", "cameras", "rooms", "room_maps", "calibrations", "camera_map_generation_jobs", "objects", "observations", "events", "clips", "event_snapshots", "summaries", "family_invites", "medication_plans", "medication_check_ins", "audit_log", "deletion_requests"]
         result = {}
         for table in tables:
             if table == "homes": query, params = "SELECT * FROM homes WHERE id=?", (home_id,)

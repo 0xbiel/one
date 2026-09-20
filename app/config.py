@@ -11,6 +11,10 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./one.db"
     object_store_path: Path = Path("./data/objects")
     clip_encryption_key_b64: str | None = None
+    biometric_encryption_key_b64: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("ONE_BIOMETRIC_ENCRYPTION_KEY_B64", "BIOMETRIC_ENCRYPTION_KEY_B64"),
+    )
     bootstrap_secret: str = "change-me-in-production"
     session_ttl_minutes: int = 10_080
     livekit_url: str = "ws://localhost:7880"

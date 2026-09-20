@@ -34,12 +34,61 @@ class SinglePersonDetector:
         return [Detection("person", 0.93, (180, 70, 330, 430), frame.captured_at)]
 
 
+class FallSequenceDetector:
+    model_version = "fall-sequence-test-v1"
+
+    def detect(self, frame, candidate_labels):
+        step = frame.data[-1]
+        bbox = (220, 80, 420, 460) if step < 3 else (150, 250, 490, 390)
+        return [Detection("person", 0.92, bbox, frame.captured_at)]
+
+
+class FacePersonDetector:
+    model_version = "face-person-test-v1"
+
+    def detect(self, frame, candidate_labels, *, include_faces=False):
+        faces = ()
+        if include_faces:
+            faces = ({
+                "bbox": [205.0, 75.0, 305.0, 185.0],
+                "confidence": 0.99,
+                "landmarks": [220.0, 110.0, 290.0, 110.0, 255.0, 140.0, 230.0, 165.0, 280.0, 165.0],
+                "embedding": [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            },)
+        return [Detection("person", 0.95, (180, 70, 330, 430), frame.captured_at, face_observations=faces)]
+
+
+class FaceEnrollmentGeometry:
+    def enroll_faces(self, *, frames):
+        return {
+            "status": "ready",
+            "model_version": "test-face-v1",
+            "embeddings": [
+                [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                [0.99, 0.01, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                [0.98, 0.02, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            ],
+        }
+
+
 def auth(c):
     started = c.post("/api/v1/pairing/start", json={"display_name": "Resident", "home_name": "Test Home"})
     assert started.status_code == 200
     completed = c.post("/api/v1/pairing/complete", json={"code": started.json()["pairing_code"]})
     assert completed.status_code == 200
     return completed.json()["access_token"], completed.json()["home_id"]
+
+
+def face_client(tmp_path: Path, vision_detector=None):
+    settings = Settings(
+        database_url="sqlite:///:memory:",
+        object_store_path=tmp_path / "objects",
+        bootstrap_secret="test",
+        env="test",
+        lm_studio_url="http://127.0.0.1:9/v1",
+        biometric_encryption_key_b64=base64.b64encode(b"b" * 32).decode(),
+    )
+    return TestClient(make_app(settings, geometry_service=FaceEnrollmentGeometry(), vision_detector=vision_detector))
 
 
 def test_health_and_pairing(tmp_path):
@@ -230,6 +279,7 @@ def test_care_recipient_crud_is_separate_from_home_membership(tmp_path):
     assert updated.json()["data"] | {"created_at": recipient["created_at"]} == {
         "id": recipient["id"], "display_name": "Maria", "relationship": None,
         "room_label": "Suite A", "medication_reminders_enabled": False,
+        "face_recognition_status": "not_enrolled", "face_profile_updated_at": None,
         "created_at": recipient["created_at"],
     }
     assert c.patch(f"/api/v1/homes/{home}/care-recipients/{recipient['id']}", headers=headers, json={}).status_code == 422
@@ -241,6 +291,112 @@ def test_care_recipient_crud_is_separate_from_home_membership(tmp_path):
     assert removed.json()["data"]["display_name"] == "Maria"
     assert c.get(f"/api/v1/homes/{home}/care-recipients", headers=headers).json()["data"][0]["display_name"] == "Joan"
     assert c.get("/api/v1/homes/not-this-home/care-recipients", headers=headers).status_code == 403
+
+
+def test_face_profile_is_consent_gated_encrypted_and_revocable(tmp_path):
+    c = face_client(tmp_path)
+    token, home = auth(c)
+    headers = {"Authorization": f"Bearer {token}"}
+    recipient = c.post(
+        f"/api/v1/homes/{home}/care-recipients",
+        headers=headers,
+        json={"display_name": "María"},
+    ).json()["data"]
+    recipient_id = recipient["id"]
+
+    profile_path = c.get(
+        f"/api/v1/homes/{home}/care-recipients/{recipient_id}/face-profile",
+        headers=headers,
+    )
+    assert profile_path.status_code == 200
+    assert profile_path.json()["status"] == "not_enrolled"
+
+    frames = [
+        {"frame_base64": f"transient-frame-{index}", "width": 640, "height": 480, "camera_position": "front"}
+        for index in range(3)
+    ]
+    blocked = c.post(
+        f"/api/v1/homes/{home}/care-recipients/{recipient_id}/face-profile/enroll",
+        headers=headers,
+        json={"frames": frames},
+    )
+    assert blocked.status_code == 403
+
+    consent = c.post(
+        f"/api/v1/homes/{home}/consents",
+        headers=headers,
+        json={"purpose": "face_recognition", "policy_version": "2026-09", "granted": True, "care_recipient_id": recipient_id},
+    )
+    assert consent.status_code == 200
+
+    enrolled = c.post(
+        f"/api/v1/homes/{home}/care-recipients/{recipient_id}/face-profile/enroll",
+        headers=headers,
+        json={"frames": frames},
+    )
+    assert enrolled.status_code == 200, enrolled.text
+    assert enrolled.json()["status"] == "ready"
+    assert enrolled.json()["sample_count"] == 3
+    artifact = next((tmp_path / "objects" / "face-profiles" / home).glob("*.bin"))
+    assert artifact.read_bytes().startswith(b"ONETPL1")
+    assert b"transient-frame" not in artifact.read_bytes()
+    listed = c.get(f"/api/v1/homes/{home}/care-recipients", headers=headers).json()["data"]
+    assert listed[0]["face_recognition_status"] == "ready"
+
+    revoked = c.delete(
+        f"/api/v1/homes/{home}/care-recipients/{recipient_id}/face-profile",
+        headers=headers,
+    )
+    assert revoked.status_code == 200
+    assert revoked.json()["status"] == "revoked"
+    assert not artifact.exists()
+    face_profile_row = c.app.state.db.one(
+        "SELECT status FROM face_profiles WHERE home_id=? AND care_recipient_id=?", (home, recipient_id)
+    )
+    assert face_profile_row["status"] == "revoked"
+
+
+def test_live_identity_redacts_embeddings_and_internal_profile_ids(tmp_path):
+    c = face_client(tmp_path, vision_detector=FacePersonDetector())
+    token, home = auth(c)
+    headers = {"Authorization": f"Bearer {token}"}
+    recipient = c.post(
+        f"/api/v1/homes/{home}/care-recipients",
+        headers=headers,
+        json={"display_name": "María"},
+    ).json()["data"]
+    recipient_id = recipient["id"]
+    assert c.post(
+        f"/api/v1/homes/{home}/consents",
+        headers=headers,
+        json={"purpose": "face_recognition", "policy_version": "2026-09", "granted": True, "care_recipient_id": recipient_id},
+    ).status_code == 200
+    frames = [
+        {"frame_base64": f"transient-frame-{index}", "width": 640, "height": 480, "camera_position": "front"}
+        for index in range(3)
+    ]
+    assert c.post(
+        f"/api/v1/homes/{home}/care-recipients/{recipient_id}/face-profile/enroll",
+        headers=headers,
+        json={"frames": frames},
+    ).status_code == 200
+    camera = c.post(f"/api/v1/homes/{home}/cameras", headers=headers, json={"name": "Hall"}).json()
+    assert c.post(
+        f"/api/v1/homes/{home}/consents",
+        headers=headers,
+        json={"purpose": "video_capture", "policy_version": "2026-09", "granted": True},
+    ).status_code == 200
+    frame = base64.b64encode(b"face-frame").decode()
+    payload = {"camera_id": camera["id"], "frame_base64": frame, "width": 640, "height": 480}
+    for _ in range(4):
+        response = c.post(f"/api/v1/homes/{home}/vision/frames", headers=headers, json=payload)
+    response = c.post(f"/api/v1/homes/{home}/vision/frames", headers=headers, json=payload)
+    assert response.status_code == 200
+    person = response.json()["data"][0]
+    assert person["identity"]["status"] == "matched"
+    assert person["identity"]["care_recipient_id"] == recipient_id
+    assert "profile_id" not in person["identity"]
+    assert "embedding" not in person["faces"][0]
 
 
 def test_resident_account_can_view_but_not_manage_care_recipients(tmp_path):
@@ -554,7 +710,11 @@ def test_assistant_degraded_and_consent_export_delete(tmp_path):
     consent = c.post(f"/api/v1/homes/{home}/consents", headers=h, json={"purpose": "camera", "policy_version": "2026-01"})
     assert consent.status_code == 200
     summary = c.post(f"/api/v1/homes/{home}/check-ins", headers=h, json={"transcript": "Hello"})
-    assert summary.status_code == 200 and summary.json()["degraded"] is True and summary.json()["inference_status"] in {"disabled", "connection_error", "http_401", "timeout", "invalid_model_response"}
+    assert summary.status_code == 200 and summary.json()["degraded"] is True and summary.json()["event_id"] and summary.json()["inference_status"] in {"disabled", "connection_error", "http_401", "timeout", "invalid_model_response"}
+    events = c.get(f"/api/v1/homes/{home}/events", headers=h)
+    assert events.status_code == 200 and events.json()["data"][0]["event_type"] == "daily_check_in"
+    analytics = c.get(f"/api/v1/homes/{home}/analytics", headers=h)
+    assert analytics.status_code == 200 and analytics.json()["data"]["daily_check_in"]["completed_today"] == 1
     export = c.post(f"/api/v1/homes/{home}/privacy/export", headers=h)
     assert export.status_code == 200 and "consents" in export.json()["data"]
     assert export.json()["data"]["audit_log"]
@@ -601,6 +761,55 @@ def test_bounded_vision_persists_multiple_people_as_distinct_live_objects(tmp_pa
     assert len(people) == 2
     assert len({item["id"] for item in people}) == 2
     assert all(item["presenceState"] == "current" for item in people)
+
+
+def test_fall_pattern_creates_a_reviewable_event(tmp_path):
+    c = client(tmp_path, FallSequenceDetector()); token, home = auth(c); h = {"Authorization": f"Bearer {token}"}
+    camera = c.post(f"/api/v1/homes/{home}/cameras", headers=h, json={"name": "Living room"}).json()
+    assert c.post(
+        f"/api/v1/homes/{home}/consents",
+        headers=h,
+        json={"purpose": "video_capture", "policy_version": "2026-09-01", "granted": True},
+    ).status_code == 200
+
+    responses = []
+    for step in range(6):
+        frame = base64.b64encode(b"\xff\xd8\xff" + bytes([step])).decode()
+        response = c.post(
+            f"/api/v1/homes/{home}/vision/frames",
+            headers=h,
+            json={"camera_id": camera["id"], "frame_base64": frame, "width": 640, "height": 480},
+        )
+        assert response.status_code == 200
+        responses.append(response.json())
+
+    safety_events = [event for body in responses for event in body["safety_events"]]
+    assert len(safety_events) == 1
+    assert safety_events[0]["type"] == "fall_suspected"
+    assert safety_events[0]["status"] == "needs_review"
+    assert safety_events[0]["confidence"] <= 0.88
+    assert safety_events[0]["snapshot_path"]
+    assert safety_events[0]["snapshot_content_type"] == "image/jpeg"
+
+    events = c.get(f"/api/v1/homes/{home}/events", headers=h).json()["data"]
+    fall_event = next(event for event in events if event["event_type"] == "fall_suspected")
+    assert fall_event["status"] == "needs_review"
+    assert "not a diagnosis" in fall_event["explanation"]
+    assert fall_event["evidence_json"] != "[]"
+    assert fall_event["snapshot_path"]
+    assert fall_event["snapshot_content_type"] == "image/jpeg"
+    snapshot = c.get(fall_event["snapshot_path"], headers=h)
+    assert snapshot.status_code == 200
+    assert snapshot.headers["content-type"] == "image/jpeg"
+    assert snapshot.content.startswith(b"\xff\xd8\xff")
+    stored = list((tmp_path / "objects" / "encrypted-clips" / "snapshots" / home).glob("*.bin"))
+    assert len(stored) == 1
+    assert b"\xff\xd8\xff" not in stored[0].read_bytes()
+    analytics = c.get(f"/api/v1/homes/{home}/analytics", headers=h)
+    assert analytics.status_code == 200
+    assert analytics.json()["data"]["fall"]["total_signals"] == 1
+    assert analytics.json()["data"]["fall"]["needs_review"] == 1
+    assert "raw_frames" in analytics.json()["data"]["assistant_context"]["excludes"]
 
 
 def test_anonymous_person_handoff_moves_latest_presence_to_the_new_camera(tmp_path):
@@ -835,7 +1044,7 @@ def test_medication_plan_reminders_checkins_and_bounded_assistant(tmp_path):
     checkin = c.post(f"/api/v1/homes/{home}/medication-plans/{plan_id}/check-ins", headers=h, json={"scheduled_for": "2026-09-12T08:00:00+00:00", "status": "taken"})
     assert checkin.status_code == 200 and checkin.json()["data"]["status"] == "taken"
     summary = c.post(f"/api/v1/homes/{home}/family-assistant", headers=h, json={"message": "What is pending today?"})
-    assert summary.status_code == 200 and summary.json()["context_scope"] == "medication plans and check-ins only" and summary.json()["degraded"] is True
+    assert summary.status_code == 200 and summary.json()["context_scope"] == "medication plans, medication check-ins, daily check-ins, and bounded fall-safety analytics" and summary.json()["degraded"] is True
     assert "medical advice" in summary.json()["data"]["limitations"]
 
 

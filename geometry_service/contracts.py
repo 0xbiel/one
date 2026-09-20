@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 MAX_FRAME_BASE64_CHARS = 4_000_000
 MAX_FRAMES = 20
+MAX_FACE_ENROLLMENT_FRAMES = 8
 
 MapSource = Literal["camera-cv-2d"]
 MapDimension = Literal["2d"]
@@ -189,6 +190,7 @@ class VisionFrameRequest(BaseModel):
     width: int = Field(gt=0, le=7_680)
     height: int = Field(gt=0, le=4_320)
     candidate_labels: list[str] = Field(min_length=1, max_length=32)
+    include_faces: bool = False
 
     @field_validator("candidate_labels")
     @classmethod
@@ -207,10 +209,39 @@ class VisionDetection(BaseModel):
     bbox: list[float] = Field(min_length=4, max_length=4)
 
 
+class FaceObservation(BaseModel):
+    bbox: list[float] = Field(min_length=4, max_length=4)
+    confidence: float = Field(ge=0.0, le=1.0)
+    landmarks: list[float] = Field(min_length=10, max_length=10)
+    embedding: list[float] = Field(min_length=1, max_length=2048)
+
+
 class VisionFrameResponse(BaseModel):
     status: Literal["ready", "unavailable", "failed"]
     model_version: str
     detections: list[VisionDetection] = Field(default_factory=list, max_length=100)
+    faces: list[FaceObservation] = Field(default_factory=list, max_length=8)
+    diagnostics: dict[str, Any] = Field(default_factory=dict)
+
+
+class FaceEnrollmentFrame(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    frame_base64: str = Field(min_length=1, max_length=MAX_FRAME_BASE64_CHARS)
+    width: int = Field(gt=0, le=7_680)
+    height: int = Field(gt=0, le=4_320)
+
+
+class FaceEnrollmentRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    frames: list[FaceEnrollmentFrame] = Field(min_length=1, max_length=MAX_FACE_ENROLLMENT_FRAMES)
+
+
+class FaceEnrollmentResponse(BaseModel):
+    status: Literal["ready", "unavailable", "failed"]
+    model_version: str
+    embeddings: list[list[float]] = Field(default_factory=list, max_length=MAX_FACE_ENROLLMENT_FRAMES)
     diagnostics: dict[str, Any] = Field(default_factory=dict)
 
 

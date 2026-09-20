@@ -60,8 +60,9 @@ class LMStudioAdapter:
 
         Family mode intentionally has a separate method and prompt boundary so
         a future caller cannot accidentally hand the model the complete event
-        or camera stream. The API constructs ``context`` from medication plans
-        and check-ins only and validates the small response shape here.
+        or camera stream. The API constructs ``context`` from medication
+        records, daily check-ins, and bounded fall-safety analytics only and
+        validates the small response shape here.
         """
         if not self.settings.llm_enabled:
             self.last_error = "disabled"
@@ -71,7 +72,7 @@ class LMStudioAdapter:
             "temperature": 0.1,
             "max_tokens": 220,
             "messages": [
-                {"role": "system", "content": "You are ONE's administrative family organizer. Use only the supplied medication plan and check-in records. Do not diagnose, recommend medicine changes, infer health status, or provide emergency advice. Return JSON with summary, next_action, evidence_ids, limitations. Keep it concise and say when records are missing."},
+                {"role": "system", "content": "You are ONE's cautious administrative family organizer. Use only the supplied medication records, daily check-in summaries, and bounded fall-safety analytics. Do not diagnose, infer a medical condition, recommend medicine changes, or provide emergency advice. Describe fall values as review signals, not confirmed falls. Return JSON with summary, next_action, evidence_ids, limitations. Keep it concise and say when records are missing."},
                 {"role": "user", "content": json.dumps(context, ensure_ascii=False)},
             ],
             "response_format": {"type": "json_object"},

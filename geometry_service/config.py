@@ -49,6 +49,9 @@ class ServiceSettings:
     max_request_bytes: int
     minimum_confidence: float
     positioning_workers: int
+    face_detector_model_path: Path | None = None
+    face_recognizer_model_path: Path | None = None
+    face_detector_confidence: float = 0.90
 
     @classmethod
     def from_env(cls) -> "ServiceSettings":
@@ -86,6 +89,12 @@ class ServiceSettings:
             max(_env_int("ONE_POSITIONING_WORKERS", 3), 1),
             8,
         )
+        face_detector = os.getenv("ONE_FACE_DETECTOR_MODEL_PATH", "").strip()
+        face_recognizer = os.getenv("ONE_FACE_RECOGNIZER_MODEL_PATH", "").strip()
+        face_detector_confidence = min(
+            max(_env_float("ONE_FACE_DETECTOR_CONFIDENCE", 0.90), 0.50),
+            0.99,
+        )
 
         return cls(
             mode=mode,
@@ -102,4 +111,7 @@ class ServiceSettings:
             max_request_bytes=max_request_bytes,
             minimum_confidence=minimum_confidence,
             positioning_workers=positioning_workers,
+            face_detector_model_path=Path(face_detector).expanduser() if face_detector else None,
+            face_recognizer_model_path=Path(face_recognizer).expanduser() if face_recognizer else None,
+            face_detector_confidence=face_detector_confidence,
         )

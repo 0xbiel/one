@@ -33,7 +33,7 @@ to skip all LLM requests and use the deterministic fallback paths.
 
 ## Contracts and safety
 
-All product endpoints are versioned under `/api/v1`. Object observations are approximate and include uncertainty; video is not persisted by this API. Events are derived metadata with a 30-day expiry, and clip records are designed for seven-day expiry. The LM Studio adapter uses `qwen3.6-35b-a3b` and falls back explicitly to a deterministic, non-medical summary when the local endpoint is unavailable.
+All product endpoints are versioned under `/api/v1`. Object observations are approximate and include uncertainty; live video is not persisted by this API, except for the single encrypted image explicitly attached to a confirmed safety event. Events are derived metadata with a 30-day expiry, and clip records are designed for seven-day expiry. The LM Studio adapter uses `qwen3.6-35b-a3b` and falls back explicitly to a deterministic, non-medical summary when the local endpoint is unavailable.
 
 ## Camera-derived room geometry
 
@@ -67,9 +67,21 @@ starting the API.
 
 ## Media/vision slice
 
-`app/vision.py` provides bounded temporal stabilization and calibrated projection for detections returned by the same local YOLO-World worker used by camera mapping. `POST /api/v1/homes/{home_id}/vision/frames` accepts bounded base64 frame bytes, processes them in memory, and never persists the raw image. When the camera has an active RoomPlan registration, stable detections are projected into the metric `roomplan-local` frame, associated with the RoomPlan room zone, and saved as derived observations/events. Without a usable registration they remain an explicit approximate fallback rather than being presented as metric 3D evidence. `app/media.py` supplies a bounded ring buffer and AES-GCM encrypted local clip bytes. The clip store is an internal worker primitive: authorization must be checked by the API before retrieval, and expiry must be enforced by the retention job.
+`app/vision.py` provides bounded temporal stabilization and calibrated projection for detections returned by the same local YOLO-World worker used by camera mapping. `POST /api/v1/homes/{home_id}/vision/frames` accepts bounded base64 frame bytes and processes them in memory; it does not persist ordinary raw frames, while a confirmed safety event may persist its single encrypted evidence snapshot. When the camera has an active RoomPlan registration, stable detections are projected into the metric `roomplan-local` frame, associated with the RoomPlan room zone, and saved as derived observations/events. Without a usable registration they remain an explicit approximate fallback rather than being presented as metric 3D evidence. `app/media.py` supplies a bounded ring buffer and AES-GCM encrypted local clip bytes. The clip store is an internal worker primitive: authorization must be checked by the API before retrieval, and expiry must be enforced by the retention job.
 
 LiveKit webhook tokens are verified with HS256 issuer/expiry checks and an optional body digest claim when API credentials are configured. The official `livekit-server-sdk` is not bundled, so pin and prefer it for a production deployment matching the server version.
+
+`app/fall.py` adds the first safety-signal preparation layer. It observes only
+stable person tracks, requires an upright-to-low posture transition and several
+confirming frames, then creates a `fall_suspected` event with
+`status=needs_review`. The event is surfaced through the normal Events API and
+SSE stream for the iOS and web caregiver views. At that moment only, the
+current JPEG/PNG frame may be stored as one AES-GCM encrypted event snapshot;
+the event list exposes metadata and an authorized private/no-store image route,
+with the same bounded retention and privacy deletion path as the event. It is
+intentionally a bounded heuristic, not an emergency detector or diagnosis; a
+later pose/temporal model can replace the tracker behind the same event
+contract.
 
 ## Family mode (bounded MVP)
 
@@ -95,13 +107,20 @@ their own plan or administer a plan for another same-household member;
 `created_by`, `assigned_caregiver_id`, and `marked_by` preserve that
 least-privilege ownership context.
 
+`POST /api/v1/homes/{home_id}/check-ins` records the short, caregiver-led daily
+check-in result as a bounded summary and a `daily_check_in` event. `GET
+/api/v1/homes/{home_id}/analytics` returns a 7–90 day window of daily check-in
+completion and heuristic fall-safety signals for caregiver review.
+
 `POST /api/v1/homes/{home_id}/family-assistant` sends only the selected
-subject's active medication plans and bounded check-in rows to the configured
-local Qwen endpoint. It never sends camera frames, transcripts, events, or a
-full household stream. If LM Studio is unavailable, the endpoint returns a
-clearly labelled deterministic administrative summary. Before real resident
-data, the controller must approve the DPIA, lawful basis, representative
-process, notices, retention, and rights workflows in `docs/privacy/`.
+subject's active medication records, recent daily check-in summaries, and
+bounded fall-safety analytics to the configured local Qwen endpoint. It never
+sends raw camera frames, face templates, event snapshot bytes, or an unbounded
+household stream. If LM Studio is unavailable, the endpoint returns a clearly
+labelled deterministic administrative summary. All safety values are review
+signals, not diagnoses or emergency decisions. Before real resident data, the
+controller must approve the DPIA, lawful basis, representative process,
+notices, retention, and rights workflows in `docs/privacy/`.
 
 ## Docker
 

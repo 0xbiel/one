@@ -171,3 +171,32 @@ uses static RoomPlan/visual landmarks to propose a pose for review.
 Raw JPEG bytes and derived tensors are held only for the request and are not
 written to disk, returned, or emitted in logs. A low-confidence or structurally
 unstable sweep is rejected; it must not replace the previous map.
+
+## Optional local face identity runtime
+
+Face identity is a separate, consent-gated capability from anonymous person
+detection. It uses OpenCV Zoo YuNet for face detection and SFace for derived
+embeddings. The worker processes JPEGs in memory and never writes raw
+enrollment photos, aligned crops, or live frames. The API stores only encrypted
+embedding templates, and requires a separate
+`ONE_BIOMETRIC_ENCRYPTION_KEY_B64` value before enrollment can succeed.
+
+Download the model files into the Compose bind mount with:
+
+```bash
+./scripts/download_face_models.sh
+```
+
+For a host-side worker, set the two explicit model paths before starting it:
+
+```bash
+ONE_FACE_DETECTOR_MODEL_PATH="$PWD/data/face-models/face_detection_yunet_2023mar.onnx" \
+ONE_FACE_RECOGNIZER_MODEL_PATH="$PWD/data/face-models/face_recognition_sface_2021dec.onnx" \
+ONE_GEOMETRY_MODEL_PATH="/path/to/yolov8s-worldv2.pt" \
+ONE_GEOMETRY_MODEL_CONFIG="$PWD/geometry_service/model_config.yolo-world.json" \
+.geometry-venv/bin/python -m geometry_service
+```
+
+The `/health` response reports the face runtime separately under `face`. A
+worker can therefore continue serving anonymous presence while face identity
+remains `unavailable` until both model files are configured.

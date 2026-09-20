@@ -7,6 +7,8 @@ services:
       ONE_GEOMETRY_MODE: model
       ONE_GEOMETRY_MODEL_PATH: /models/yolov8s-worldv2.pt
       ONE_GEOMETRY_MODEL_CONFIG: /app/geometry_service/model_config.yolo-world.json
+      ONE_FACE_DETECTOR_MODEL_PATH: /models/face/face_detection_yunet_2023mar.onnx
+      ONE_FACE_RECOGNIZER_MODEL_PATH: /models/face/face_recognition_sface_2021dec.onnx
       # Docker Desktop on macOS cannot expose Metal/MPS to Linux containers.
       # Keep the Compose-managed worker on CPU so it is always available with
       # the API. The host-side worker can still be run manually for MPS speed.
@@ -15,6 +17,7 @@ services:
       ONE_POSITIONING_WORKERS: ${ONE_POSITIONING_WORKERS:-3}
     volumes:
       - "${ONE_GEOMETRY_MODEL_PATH:?ONE_GEOMETRY_MODEL_PATH must point to the YOLO-World checkpoint}:/models/yolov8s-worldv2.pt:ro"
+      - "${ONE_FACE_MODELS_PATH:-./data/face-models}:/models/face:ro"
     healthcheck:
       test:
         - CMD
@@ -46,6 +49,7 @@ services:
       ONE_LM_STUDIO_MODEL: ${ONE_LM_STUDIO_MODEL:-qwen3.6-35b-a3b}
       ONE_LM_STUDIO_API_KEY: ${ONE_LM_STUDIO_API_KEY:-}
       ONE_GEOMETRY_SERVICE_URL: ${ONE_GEOMETRY_SERVICE_URL:-http://vision-worker:8090}
+      ONE_BIOMETRIC_ENCRYPTION_KEY_B64: ${ONE_BIOMETRIC_ENCRYPTION_KEY_B64:-}
       ONE_GEOMETRY_TIMEOUT_SECONDS: ${ONE_GEOMETRY_TIMEOUT_SECONDS:-45}
       ONE_GEOMETRY_LOCALIZATION_STALL_TIMEOUT_SECONDS: ${ONE_GEOMETRY_LOCALIZATION_STALL_TIMEOUT_SECONDS:-180}
       ONE_GEOMETRY_REQUIRE_GPU: ${ONE_GEOMETRY_REQUIRE_GPU:-false}

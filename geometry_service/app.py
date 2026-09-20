@@ -21,6 +21,8 @@ from .contracts import (
     CameraLocalizationRequest,
     CameraLocalizationObjectDetection,
     CameraLocalizationResponse,
+    FaceEnrollmentRequest,
+    FaceEnrollmentResponse,
     RoomLayoutRequest,
     RoomLayoutResponse,
     VisionFrameRequest,
@@ -29,6 +31,7 @@ from .contracts import (
     VisualLandmarkBuildResponse,
 )
 from .frames import FrameInputError, decode_jpeg, decode_request_frames
+from .face import FaceEngine
 from .geometry import ConfidenceBelowThreshold, ModelOutputError, normalize_model_output
 from .localization import LocalizationInputError, build_visual_landmarks, localize_camera
 from .model_input import DependencyUnavailable, build_torch_batch
@@ -60,6 +63,7 @@ def _response_payload(
 def create_app(settings: ServiceSettings | None = None) -> FastAPI:
     service_settings = settings or ServiceSettings.from_env()
     runtime = RoomLayoutRuntime(service_settings)
+    face_engine = FaceEngine(service_settings)
     positioning_executor = ThreadPoolExecutor(
         max_workers=service_settings.positioning_workers,
         thread_name_prefix="one-positioning",
@@ -113,7 +117,7 @@ def create_app(settings: ServiceSettings | None = None) -> FastAPI:
 
     @api.middleware("http")
     async def enforce_request_bound(request: Request, call_next: Any) -> Any:
-        if request.url.path in {"/v1/room-layout", "/v1/vision/detect", "/v1/visual-landmarks", "/v1/camera-localization"} or request.url.path.startswith("/v1/camera-localization/jobs"):
+        if request.url.path in {"/v1/room-layout", "/v1/vision/detect", "/v1/face/enroll", "/v1/visual-landmarks", "/v1/camera-localization"} or request.url.path.startswith("/v1/camera-localization/jobs"):
             content_length = request.headers.get("content-length")
             if content_length:
                 try:
@@ -396,6 +400,7 @@ def create_app(settings: ServiceSettings | None = None) -> FastAPI:
     @api.get("/health")
     async def health() -> JSONResponse:
         health_payload = runtime.health()
+        health_payload["face"] = face_engine.health()
         health_payload["positioning"] = {
             "executor": "thread-pool",
             "workers": service_settings.positioning_workers,
@@ -567,16 +572,72 @@ def create_app(settings: ServiceSettings | None = None) -> FastAPI:
                 payload.height,
                 payload.candidate_labels,
             )
+            faces: list[dict[str, Any]] = []
+            face_diagnostics = face_engine.health()
+            if payload.include_faces and face_engine.ready:
+                faces = await run_detector_work(face_engine.extract, jpeg, payload.width, payload.height)
             return {
                 "status": "ready",
                 "model_version": runtime.model_version,
                 "detections": detections,
-                "diagnostics": {"device": runtime.device_label, "raw_frames_persisted": False},
+                "faces": faces,
+                "diagnostics": {"device": runtime.device_label, "raw_frames_persisted": False, "face": face_diagnostics},
             }
         except FrameInputError as exc:
-            return JSONResponse(status_code=exc.status_code, content={"status": "failed", "model_version": runtime.model_version, "detections": [], "diagnostics": {"reason": exc.code, "raw_frames_persisted": False}})
+            return JSONResponse(status_code=exc.status_code, content={"status": "failed", "model_version": runtime.model_version, "detections": [], "faces": [], "diagnostics": {"reason": exc.code, "raw_frames_persisted": False}})
         except (RuntimeUnavailable, RuntimeInferenceError) as exc:
-            return JSONResponse(status_code=503, content={"status": "unavailable", "model_version": runtime.model_version, "detections": [], "diagnostics": {"reason": str(exc), "raw_frames_persisted": False}})
+            return JSONResponse(status_code=503, content={"status": "unavailable", "model_version": runtime.model_version, "detections": [], "faces": [], "diagnostics": {"reason": str(exc), "raw_frames_persisted": False}})
+
+    @api.post("/v1/face/enroll", response_model=FaceEnrollmentResponse)
+    async def face_enroll(payload: FaceEnrollmentRequest) -> Any:
+        if not face_engine.ready:
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "status": "unavailable",
+                    "model_version": face_engine.model_version,
+                    "embeddings": [],
+                    "diagnostics": {"reason": face_engine.reason or "face runtime is unavailable", "raw_frames_persisted": False},
+                },
+            )
+        embeddings: list[list[float]] = []
+        sample_diagnostics: list[dict[str, Any]] = []
+        try:
+            for index, frame in enumerate(payload.frames):
+                jpeg = decode_jpeg(frame.frame_base64, service_settings)
+                faces = await run_detector_work(face_engine.extract, jpeg, frame.width, frame.height)
+                if len(faces) != 1:
+                    sample_diagnostics.append({"index": index, "status": "rejected", "reason": "expected_exactly_one_face", "face_count": len(faces)})
+                    continue
+                face = faces[0]
+                bbox = face["bbox"]
+                face_width = float(bbox[2]) - float(bbox[0])
+                face_height = float(bbox[3]) - float(bbox[1])
+                if face_width < frame.width * 0.12 or face_height < frame.height * 0.12:
+                    sample_diagnostics.append({"index": index, "status": "rejected", "reason": "face_too_small"})
+                    continue
+                embeddings.append(face["embedding"])
+                sample_diagnostics.append({"index": index, "status": "accepted", "confidence": face["confidence"]})
+            if len(embeddings) < 3:
+                return JSONResponse(
+                    status_code=422,
+                    content={
+                        "status": "failed",
+                        "model_version": face_engine.model_version,
+                        "embeddings": [],
+                        "diagnostics": {"reason": "not_enough_usable_samples", "accepted_samples": len(embeddings), "samples": sample_diagnostics, "raw_frames_persisted": False},
+                    },
+                )
+            return {
+                "status": "ready",
+                "model_version": face_engine.model_version,
+                "embeddings": embeddings,
+                "diagnostics": {"accepted_samples": len(embeddings), "samples": sample_diagnostics, "raw_frames_persisted": False},
+            }
+        except FrameInputError as exc:
+            return JSONResponse(status_code=exc.status_code, content={"status": "failed", "model_version": face_engine.model_version, "embeddings": [], "diagnostics": {"reason": exc.code, "raw_frames_persisted": False}})
+        except (RuntimeUnavailable, RuntimeInferenceError) as exc:
+            return JSONResponse(status_code=503, content={"status": "unavailable", "model_version": face_engine.model_version, "embeddings": [], "diagnostics": {"reason": str(exc), "raw_frames_persisted": False}})
 
     @api.post("/v1/visual-landmarks", response_model=VisualLandmarkBuildResponse)
     async def visual_landmarks(payload: VisualLandmarkBuildRequest) -> Any:

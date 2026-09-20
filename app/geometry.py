@@ -71,8 +71,19 @@ class RoomLayoutService(Protocol):
     ) -> object:
         """Infer derived room geometry from temporary RGB frames."""
 
-    def detect(self, *, frame_base64: str, width: int, height: int, candidate_labels: Sequence[str]) -> object:
+    def detect(
+        self,
+        *,
+        frame_base64: str,
+        width: int,
+        height: int,
+        candidate_labels: Sequence[str],
+        include_faces: bool = False,
+    ) -> object:
         """Run the configured real local detector on one transient frame."""
+
+    def enroll_faces(self, *, frames: Sequence[dict]) -> object:
+        """Extract transient face templates for a consented enrollment."""
 
     def build_visual_landmarks(self, *, map_id: str, frames: Sequence[dict]) -> object:
         """Build derived RoomPlan visual landmarks from transient RGB/depth samples."""
@@ -305,7 +316,15 @@ class HttpRoomLayoutService:
         }
         return self._post("room-layout", payload)
 
-    def detect(self, *, frame_base64: str, width: int, height: int, candidate_labels: Sequence[str]) -> object:
+    def detect(
+        self,
+        *,
+        frame_base64: str,
+        width: int,
+        height: int,
+        candidate_labels: Sequence[str],
+        include_faces: bool = False,
+    ) -> object:
         return self._post(
             "vision/detect",
             {
@@ -313,8 +332,12 @@ class HttpRoomLayoutService:
                 "width": width,
                 "height": height,
                 "candidate_labels": list(candidate_labels),
+                "include_faces": include_faces,
             },
         )
+
+    def enroll_faces(self, *, frames: Sequence[dict]) -> object:
+        return self._post("face/enroll", {"frames": list(frames)})
 
     def build_visual_landmarks(self, *, map_id: str, frames: Sequence[dict]) -> object:
         return self._post(
