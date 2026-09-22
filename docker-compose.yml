@@ -1,5 +1,6 @@
 services:
   vision-worker:
+    profiles: ["vision"]
     build:
       context: .
       dockerfile: geometry_service/Dockerfile
@@ -65,9 +66,11 @@ services:
         condition: service_started
       vision-worker:
         condition: service_healthy
-    ports: ["127.0.0.1:8000:8000"]
+        required: false
+    ports: ["${ONE_API_BIND:-127.0.0.1}:${ONE_API_PORT:-8000}:8000"]
     volumes: ["one_objects:/app/data/objects"]
   frontend:
+    profiles: ["web"]
     build:
       context: ../one-frontend
       args:
@@ -78,6 +81,7 @@ services:
     # default without exposing the container on the whole LAN.
     ports: ["${ONE_FRONTEND_BIND:-127.0.0.1}:${ONE_FRONTEND_PORT:-4175}:80"]
   demo-service:
+    profiles: ["demo"]
     build:
       context: ../one-demo-service
     ports: ["127.0.0.1:8100:8100"]
@@ -119,6 +123,7 @@ services:
         else exec /livekit-server --dev --bind 0.0.0.0; fi
     ports: ["7880:7880", "7881:7881", "7882:7882/udp"]
   caddy:
+    profiles: ["web"]
     image: caddy:2-alpine
     depends_on: [api, frontend]
     # Bind the local HTTPS proxy to the LAN for trusted same-Wi-Fi devices.

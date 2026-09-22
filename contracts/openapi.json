@@ -1499,6 +1499,118 @@
         "title": "LiveKitTokenIn",
         "type": "object"
       },
+      "LocationBatchIn": {
+        "properties": {
+          "device_id": {
+            "maxLength": 120,
+            "minLength": 8,
+            "title": "Device Id",
+            "type": "string"
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/LocationPointIn"
+            },
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Points",
+            "type": "array"
+          }
+        },
+        "required": [
+          "device_id",
+          "points"
+        ],
+        "title": "LocationBatchIn",
+        "type": "object"
+      },
+      "LocationPointIn": {
+        "properties": {
+          "accuracy_m": {
+            "anyOf": [
+              {
+                "maximum": 10000.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accuracy M"
+          },
+          "battery_percent": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Battery Percent"
+          },
+          "bearing_deg": {
+            "anyOf": [
+              {
+                "maximum": 360.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bearing Deg"
+          },
+          "captured_at": {
+            "format": "date-time",
+            "title": "Captured At",
+            "type": "string"
+          },
+          "client_sample_id": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Client Sample Id",
+            "type": "string"
+          },
+          "latitude": {
+            "maximum": 90.0,
+            "minimum": -90.0,
+            "title": "Latitude",
+            "type": "number"
+          },
+          "longitude": {
+            "maximum": 180.0,
+            "minimum": -180.0,
+            "title": "Longitude",
+            "type": "number"
+          },
+          "speed_mps": {
+            "anyOf": [
+              {
+                "maximum": 200.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Speed Mps"
+          }
+        },
+        "required": [
+          "client_sample_id",
+          "latitude",
+          "longitude",
+          "captured_at"
+        ],
+        "title": "LocationPointIn",
+        "type": "object"
+      },
       "MapIn": {
         "properties": {
           "coordinate_frame": {
@@ -2870,6 +2982,171 @@
           "name"
         ],
         "title": "RoomUpdate",
+        "type": "object"
+      },
+      "SafePlaceIn": {
+        "properties": {
+          "latitude": {
+            "maximum": 90.0,
+            "minimum": -90.0,
+            "title": "Latitude",
+            "type": "number"
+          },
+          "longitude": {
+            "maximum": 180.0,
+            "minimum": -180.0,
+            "title": "Longitude",
+            "type": "number"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "radius_m": {
+            "default": 150,
+            "maximum": 5000.0,
+            "minimum": 25.0,
+            "title": "Radius M",
+            "type": "number"
+          }
+        },
+        "required": [
+          "name",
+          "latitude",
+          "longitude"
+        ],
+        "title": "SafePlaceIn",
+        "type": "object"
+      },
+      "SafePlaceUpdateIn": {
+        "properties": {
+          "latitude": {
+            "anyOf": [
+              {
+                "maximum": 90.0,
+                "minimum": -90.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latitude"
+          },
+          "longitude": {
+            "anyOf": [
+              {
+                "maximum": 180.0,
+                "minimum": -180.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Longitude"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "radius_m": {
+            "anyOf": [
+              {
+                "maximum": 5000.0,
+                "minimum": 25.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Radius M"
+          }
+        },
+        "title": "SafePlaceUpdateIn",
+        "type": "object"
+      },
+      "TrackingDeviceIn": {
+        "properties": {
+          "device_id": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "minLength": 8,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Id"
+          },
+          "label": {
+            "default": "Android phone",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          },
+          "platform": {
+            "default": "android",
+            "enum": [
+              "android",
+              "ios",
+              "other"
+            ],
+            "title": "Platform",
+            "type": "string"
+          }
+        },
+        "title": "TrackingDeviceIn",
+        "type": "object"
+      },
+      "TrackingDeviceUpdateIn": {
+        "properties": {
+          "label": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "active",
+                  "paused",
+                  "revoked"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          }
+        },
+        "title": "TrackingDeviceUpdateIn",
         "type": "object"
       },
       "ValidationError": {
@@ -5078,6 +5355,581 @@
           }
         },
         "summary": "Face Profile Enroll"
+      }
+    },
+    "/api/v1/homes/{home_id}/care-recipients/{recipient_id}/location-points": {
+      "post": {
+        "operationId": "location_points_upload_api_v1_homes__home_id__care_recipients__recipient_id__location_points_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "recipient_id",
+            "required": true,
+            "schema": {
+              "title": "Recipient Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LocationBatchIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Location Points Upload"
+      }
+    },
+    "/api/v1/homes/{home_id}/care-recipients/{recipient_id}/locations": {
+      "get": {
+        "operationId": "location_history_api_v1_homes__home_id__care_recipients__recipient_id__locations_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "recipient_id",
+            "required": true,
+            "schema": {
+              "title": "Recipient Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Since"
+            }
+          },
+          {
+            "in": "query",
+            "name": "until",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Until"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 500,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Location History"
+      }
+    },
+    "/api/v1/homes/{home_id}/care-recipients/{recipient_id}/locations/latest": {
+      "get": {
+        "operationId": "latest_location_api_v1_homes__home_id__care_recipients__recipient_id__locations_latest_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "recipient_id",
+            "required": true,
+            "schema": {
+              "title": "Recipient Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Latest Location"
+      }
+    },
+    "/api/v1/homes/{home_id}/care-recipients/{recipient_id}/safe-places": {
+      "get": {
+        "operationId": "safe_places_api_v1_homes__home_id__care_recipients__recipient_id__safe_places_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "recipient_id",
+            "required": true,
+            "schema": {
+              "title": "Recipient Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Safe Places"
+      },
+      "post": {
+        "operationId": "safe_place_create_api_v1_homes__home_id__care_recipients__recipient_id__safe_places_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "recipient_id",
+            "required": true,
+            "schema": {
+              "title": "Recipient Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SafePlaceIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Safe Place Create"
+      }
+    },
+    "/api/v1/homes/{home_id}/care-recipients/{recipient_id}/safe-places/{place_id}": {
+      "delete": {
+        "operationId": "safe_place_delete_api_v1_homes__home_id__care_recipients__recipient_id__safe_places__place_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "recipient_id",
+            "required": true,
+            "schema": {
+              "title": "Recipient Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "place_id",
+            "required": true,
+            "schema": {
+              "title": "Place Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Safe Place Delete"
+      },
+      "patch": {
+        "operationId": "safe_place_update_api_v1_homes__home_id__care_recipients__recipient_id__safe_places__place_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "recipient_id",
+            "required": true,
+            "schema": {
+              "title": "Recipient Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "place_id",
+            "required": true,
+            "schema": {
+              "title": "Place Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SafePlaceUpdateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Safe Place Update"
+      }
+    },
+    "/api/v1/homes/{home_id}/care-recipients/{recipient_id}/tracking-devices": {
+      "get": {
+        "operationId": "tracking_devices_api_v1_homes__home_id__care_recipients__recipient_id__tracking_devices_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "recipient_id",
+            "required": true,
+            "schema": {
+              "title": "Recipient Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Tracking Devices"
+      },
+      "post": {
+        "operationId": "tracking_device_register_api_v1_homes__home_id__care_recipients__recipient_id__tracking_devices_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "recipient_id",
+            "required": true,
+            "schema": {
+              "title": "Recipient Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrackingDeviceIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Tracking Device Register"
+      }
+    },
+    "/api/v1/homes/{home_id}/care-recipients/{recipient_id}/tracking-devices/{device_id}": {
+      "patch": {
+        "operationId": "tracking_device_update_api_v1_homes__home_id__care_recipients__recipient_id__tracking_devices__device_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "recipient_id",
+            "required": true,
+            "schema": {
+              "title": "Recipient Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "device_id",
+            "required": true,
+            "schema": {
+              "title": "Device Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrackingDeviceUpdateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Tracking Device Update"
       }
     },
     "/api/v1/homes/{home_id}/caregiver-summary": {

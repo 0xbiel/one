@@ -293,6 +293,60 @@ def test_care_recipient_crud_is_separate_from_home_membership(tmp_path):
     assert c.get("/api/v1/homes/not-this-home/care-recipients", headers=headers).status_code == 403
 
 
+def test_outside_location_tracking_is_consent_gated_idempotent_and_bounded(tmp_path):
+    c = client(tmp_path)
+    token, home = auth(c)
+    headers = {"Authorization": f"Bearer {token}"}
+    recipient = c.post(
+        f"/api/v1/homes/{home}/care-recipients",
+        headers=headers,
+        json={"display_name": "María"},
+    ).json()["data"]
+    base = f"/api/v1/homes/{home}/care-recipients/{recipient['id']}"
+
+    assert c.post(f"{base}/tracking-devices", headers=headers, json={"label": "María phone"}).status_code == 403
+    assert c.post(
+        f"/api/v1/homes/{home}/consents",
+        headers=headers,
+        json={"purpose": "outside_location", "policy_version": "2026-09", "granted": True, "care_recipient_id": recipient["id"]},
+    ).status_code == 200
+
+    registered = c.post(f"{base}/tracking-devices", headers=headers, json={"label": "María phone"})
+    assert registered.status_code == 201
+    device = registered.json()["data"]
+    captured_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    batch = {
+        "device_id": device["id"],
+        "points": [{
+            "client_sample_id": "sample-1", "latitude": 38.3452, "longitude": -0.4810,
+            "accuracy_m": 12.5, "speed_mps": 1.2, "bearing_deg": 90,
+            "battery_percent": 78, "captured_at": captured_at,
+        }],
+    }
+    first = c.post(f"{base}/location-points", headers=headers, json=batch)
+    second = c.post(f"{base}/location-points", headers=headers, json=batch)
+    assert first.status_code == 200 and first.json()["accepted"] == 1
+    assert second.status_code == 200 and second.json() == {"accepted": 0, "duplicates": 1, "retention_days": 7}
+    latest = c.get(f"{base}/locations/latest", headers=headers)
+    assert latest.status_code == 200 and latest.json()["data"]["battery_percent"] == 78
+    history = c.get(f"{base}/locations", headers=headers)
+    assert history.status_code == 200 and len(history.json()["data"]) == 1
+
+    place = c.post(
+        f"{base}/safe-places", headers=headers,
+        json={"name": "Home", "latitude": 38.3452, "longitude": -0.4810, "radius_m": 120},
+    )
+    assert place.status_code == 201
+    place_id = place.json()["data"]["id"]
+    assert c.patch(f"{base}/safe-places/{place_id}", headers=headers, json={"radius_m": 180}).json()["data"]["radius_m"] == 180
+    assert c.delete(f"{base}/safe-places/{place_id}", headers=headers).status_code == 200
+
+    paused = c.patch(f"{base}/tracking-devices/{device['id']}", headers=headers, json={"status": "paused"})
+    assert paused.status_code == 200
+    assert c.post(f"{base}/location-points", headers=headers, json={**batch, "points": [{**batch["points"][0], "client_sample_id": "sample-2"}]}).status_code == 409
+    assert c.get(f"/api/v1/homes/not-this-home/care-recipients/{recipient['id']}/locations/latest", headers=headers).status_code == 403
+
+
 def test_face_profile_is_consent_gated_encrypted_and_revocable(tmp_path):
     c = face_client(tmp_path)
     token, home = auth(c)
