@@ -1,17 +1,22 @@
 import asyncio
 import base64
 import binascii
-from contextlib import nullcontext
+from contextlib import nullcontext, asynccontextmanager
 import hashlib
 import ipaddress
 import json
+import logging
 import math
 import re
 import threading
+import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Annotated, Literal, Sequence
 from urllib.parse import urlparse
+from urllib.parse import urlencode
+from urllib.request import Request as UrlRequest, urlopen
+from urllib.error import URLError
 
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
@@ -617,6 +622,8 @@ class LocationPointIn(BaseModel):
     bearing_deg: float | None = Field(default=None, ge=0, le=360)
     battery_percent: int | None = Field(default=None, ge=0, le=100)
     captured_at: datetime
+    street_name: str | None = Field(default=None, max_length=160)
+    dwell_duration_millis: int = Field(default=0, ge=0, le=604800000)
 
 
 class LocationBatchIn(BaseModel):
@@ -625,17 +632,20 @@ class LocationBatchIn(BaseModel):
 
 
 class SafePlaceIn(BaseModel):
+    id: str | None = None
+    kind: Literal["home", "safe"] = "safe"
     name: str = Field(min_length=1, max_length=120)
     latitude: float = Field(ge=-90, le=90)
     longitude: float = Field(ge=-180, le=180)
-    radius_m: float = Field(default=150, ge=25, le=5000)
+    radius_m: float = Field(default=20, ge=20, le=5000)
 
 
 class SafePlaceUpdateIn(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=120)
     latitude: float | None = Field(default=None, ge=-90, le=90)
     longitude: float | None = Field(default=None, ge=-180, le=180)
-    radius_m: float | None = Field(default=None, ge=25, le=5000)
+    radius_m: float | None = Field(default=None, ge=20, le=5000)
+    revision: int = Field(ge=1)
 
 
 class MedicationPlanIn(BaseModel):
@@ -993,7 +1003,27 @@ def make_app(
     lm = LMStudioAdapter(settings)
     geometry = geometry_service or HttpRoomLayoutService(settings)
     vision = CameraVisionPipeline(vision_detector or LocalServiceDetector(geometry))
-    app = FastAPI(title="ONE API", version="0.1.0", openapi_url="/api/v1/openapi.json")
+    @asynccontextmanager
+    async def outside_lifespan(application: FastAPI):
+        async def retention_worker():
+            while True:
+                try:
+                    cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).replace(microsecond=0).isoformat()
+                    db.execute("DELETE FROM location_points WHERE captured_at<?", (cutoff,))
+                except Exception:
+                    logging.getLogger(__name__).exception("Outside-location retention cleanup failed")
+                await asyncio.sleep(3600)
+        task = asyncio.create_task(retention_worker())
+        try:
+            yield
+        finally:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+
+    app = FastAPI(title="ONE API", version="0.1.0", openapi_url="/api/v1/openapi.json", lifespan=outside_lifespan)
     roomplan_calibration_sessions: dict[tuple[str, str], dict] = {}
     roomplan_calibration_lock = threading.RLock()
     roomplan_localization_progress: dict[tuple[str, str], dict] = {}
@@ -5030,6 +5060,54 @@ def make_app(
         require_care_recipient_consent(home_id, recipient_id, "outside_location")
         return recipient
 
+    geocode_cache: dict[str, tuple[float, object]] = {}
+    geocode_lock = threading.Lock()
+    geocode_last_request = [0.0]
+
+    def geocode(path: str, params: dict) -> object:
+        if not settings.geocoder_base_url:
+            raise HTTPException(503, "Street lookup is not configured")
+        base = settings.geocoder_base_url.rstrip("/")
+        if not base.startswith(("http://", "https://")):
+            raise HTTPException(503, "Street lookup URL is invalid")
+        key = path + "?" + urlencode(params)
+        with geocode_lock:
+            cached = geocode_cache.get(key)
+            if cached and cached[0] > time.monotonic():
+                return cached[1]
+            time.sleep(max(0.0, 1.0 - (time.monotonic() - geocode_last_request[0])))
+            geocode_last_request[0] = time.monotonic()
+            try:
+                request = UrlRequest(base + "/" + key, headers={"Accept": "application/json", "User-Agent": "ONE-backend/1.0"})
+                with urlopen(request, timeout=5) as response:
+                    raw = response.read(1_000_001)
+                    if len(raw) > 1_000_000:
+                        raise ValueError("Street lookup response is too large")
+                    payload = json.loads(raw)
+            except (OSError, URLError, ValueError):
+                raise HTTPException(503, "Street lookup is unavailable")
+            if len(geocode_cache) >= 4096:
+                geocode_cache.pop(next(iter(geocode_cache)))
+            geocode_cache[key] = (time.monotonic() + 86400, payload)
+            return payload
+
+    @app.get("/api/v1/homes/{home_id}/care-recipients/{recipient_id}/geo/search")
+    def outside_geo_search(home_id: str, recipient_id: str, actor: Current, q: str):
+        outside_recipient(home_id, recipient_id, actor)
+        query = q.strip()
+        if not 2 <= len(query) <= 160:
+            raise HTTPException(422, "Search must contain 2 to 160 characters")
+        data = geocode("search", {"format": "jsonv2", "limit": 5, "addressdetails": 1, "q": query})
+        return {"data": data if isinstance(data, list) else []}
+
+    @app.get("/api/v1/homes/{home_id}/care-recipients/{recipient_id}/geo/reverse")
+    def outside_geo_reverse(home_id: str, recipient_id: str, actor: Current, lat: float, lon: float):
+        outside_recipient(home_id, recipient_id, actor)
+        if not math.isfinite(lat) or not math.isfinite(lon) or not -90 <= lat <= 90 or not -180 <= lon <= 180:
+            raise HTTPException(422, "Invalid coordinates")
+        data = geocode("reverse", {"format": "jsonv2", "addressdetails": 1, "zoom": 18, "lat": round(lat, 5), "lon": round(lon, 5)})
+        return {"data": data if isinstance(data, dict) else None}
+
     def tracking_device_row(home_id: str, device_id: str) -> dict:
         device_id = canonical_uuid(device_id, "device_id")
         row = db.one("SELECT * FROM tracking_devices WHERE id=? AND home_id=?", (device_id, home_id))
@@ -5053,7 +5131,17 @@ def make_app(
             "battery_percent": row.get("battery_percent"),
             "captured_at": row["captured_at"],
             "received_at": row["received_at"],
+            "street_name": row.get("street_name"),
+            "dwell_duration_millis": row.get("dwell_duration_millis") or 0,
         }
+
+    def clear_watermark(home_id: str, recipient_id: str) -> str | None:
+        row = db.one("SELECT cleared_at FROM location_clear_watermarks WHERE home_id=? AND care_recipient_id=?", (home_id, recipient_id))
+        return row["cleared_at"] if row else None
+
+    def prune_outside_locations() -> None:
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).replace(microsecond=0).isoformat()
+        db.execute("DELETE FROM location_points WHERE captured_at<?", (cutoff,))
 
     @app.post("/api/v1/homes/{home_id}/care-recipients/{recipient_id}/tracking-devices", status_code=status.HTTP_201_CREATED)
     def tracking_device_register(home_id: str, recipient_id: str, body: TrackingDeviceIn, actor: Current):
@@ -5117,7 +5205,9 @@ def make_app(
         maximum_time = current_time + timedelta(minutes=5)
         inserted = 0
         duplicate = 0
+        discarded = 0
         latest_received = None
+        watermark = clear_watermark(home_id, recipient["id"])
         with db.transaction() as conn:
             for point in body.points:
                 captured = point.captured_at
@@ -5126,6 +5216,10 @@ def make_app(
                 captured = captured.astimezone(timezone.utc)
                 if captured < minimum_time or captured > maximum_time:
                     raise HTTPException(422, "Location samples must be within the seven-day retention window")
+                captured_iso = captured.replace(microsecond=0).isoformat()
+                if watermark and captured_iso <= watermark:
+                    discarded += 1
+                    continue
                 sample_id = point.client_sample_id.strip()
                 existing = conn.execute(
                     "SELECT id FROM location_points WHERE device_id=? AND client_sample_id=?",
@@ -5133,11 +5227,16 @@ def make_app(
                 ).fetchone()
                 if existing:
                     duplicate += 1
+                    if point.street_name:
+                        conn.execute(
+                            "UPDATE location_points SET street_name=?, dwell_duration_millis=? WHERE id=?",
+                            (point.street_name.strip(), point.dwell_duration_millis, existing["id"]),
+                        )
                     continue
                 received = now_iso()
                 conn.execute(
-                    "INSERT INTO location_points(id,home_id,care_recipient_id,device_id,client_sample_id,latitude,longitude,accuracy_m,speed_mps,bearing_deg,battery_percent,captured_at,received_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                    (str(uuid.uuid4()), home_id, recipient["id"], device["id"], sample_id, point.latitude, point.longitude, point.accuracy_m, point.speed_mps, point.bearing_deg, point.battery_percent, captured.replace(microsecond=0).isoformat(), received),
+                    "INSERT INTO location_points(id,home_id,care_recipient_id,device_id,client_sample_id,latitude,longitude,accuracy_m,speed_mps,bearing_deg,battery_percent,captured_at,received_at,street_name,dwell_duration_millis) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (str(uuid.uuid4()), home_id, recipient["id"], device["id"], sample_id, point.latitude, point.longitude, point.accuracy_m, point.speed_mps, point.bearing_deg, point.battery_percent, captured_iso, received, point.street_name.strip() if point.street_name else None, point.dwell_duration_millis),
                 )
                 inserted += 1
                 latest_received = received
@@ -5150,20 +5249,32 @@ def make_app(
                 (latest_received or now_iso(), latest_received or now_iso(), device["id"], home_id),
             )
         audit(actor, "location_points.upload", "tracking_device", device["id"], home_id)
-        return {"accepted": inserted, "duplicates": duplicate, "retention_days": 7}
+        return {"accepted": inserted, "duplicates": duplicate, "discarded": discarded, "retention_days": 7}
 
     @app.get("/api/v1/homes/{home_id}/care-recipients/{recipient_id}/locations/latest")
     def latest_location(home_id: str, recipient_id: str, actor: Current):
         recipient = outside_recipient(home_id, recipient_id, actor)
+        prune_outside_locations()
         row = db.one(
             "SELECT * FROM location_points WHERE home_id=? AND care_recipient_id=? ORDER BY captured_at DESC LIMIT 1",
             (home_id, recipient["id"]),
         )
         return {"data": location_point_view(row)}
 
-    @app.get("/api/v1/homes/{home_id}/care-recipients/{recipient_id}/locations")
-    def location_history(home_id: str, recipient_id: str, actor: Current, since: datetime | None = None, until: datetime | None = None, limit: int = 500):
+    @app.get("/api/v1/homes/{home_id}/care-recipients/{recipient_id}/locations/state")
+    def location_state(home_id: str, recipient_id: str, actor: Current):
         recipient = outside_recipient(home_id, recipient_id, actor)
+        prune_outside_locations()
+        row = db.one(
+            "SELECT * FROM location_points WHERE home_id=? AND care_recipient_id=? ORDER BY captured_at DESC, id DESC LIMIT 1",
+            (home_id, recipient["id"]),
+        )
+        return {"cleared_at": clear_watermark(home_id, recipient["id"]), "latest": location_point_view(row), "retention_days": 7}
+
+    @app.get("/api/v1/homes/{home_id}/care-recipients/{recipient_id}/locations")
+    def location_history(home_id: str, recipient_id: str, actor: Current, since: datetime | None = None, until: datetime | None = None, limit: int = 500, cursor: str | None = None):
+        recipient = outside_recipient(home_id, recipient_id, actor)
+        prune_outside_locations()
         limit = max(1, min(limit, 2000))
         if (since and since.tzinfo is None) or (until and until.tzinfo is None):
             raise HTTPException(422, "Location history timestamps must include a timezone")
@@ -5173,11 +5284,42 @@ def make_app(
             raise HTTPException(422, "since must be before until")
         if end - start > timedelta(days=7):
             raise HTTPException(422, "Location history is limited to seven days")
-        rows = db.many(
-            "SELECT * FROM location_points WHERE home_id=? AND care_recipient_id=? AND captured_at>=? AND captured_at<=? ORDER BY captured_at DESC LIMIT ?",
-            (home_id, recipient["id"], start.replace(microsecond=0).isoformat(), end.replace(microsecond=0).isoformat(), limit),
-        )
-        return {"data": [location_point_view(row) for row in rows], "retention_days": 7}
+        cursor_time, cursor_id = None, None
+        if cursor:
+            try:
+                cursor_time, cursor_id = json.loads(base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4)))
+                if not isinstance(cursor_time, str) or not isinstance(cursor_id, str):
+                    raise ValueError("Invalid cursor")
+            except (ValueError, TypeError, binascii.Error):
+                raise HTTPException(422, "Invalid location cursor")
+        query = "SELECT * FROM location_points WHERE home_id=? AND care_recipient_id=? AND captured_at>=? AND captured_at<=?"
+        args = [home_id, recipient["id"], start.replace(microsecond=0).isoformat(), end.replace(microsecond=0).isoformat()]
+        if cursor_time:
+            query += " AND (captured_at<? OR (captured_at=? AND id<?))"
+            args.extend([cursor_time, cursor_time, cursor_id])
+        rows = db.many(query + " ORDER BY captured_at DESC, id DESC LIMIT ?", (*args, limit + 1))
+        has_more = len(rows) > limit
+        rows = rows[:limit]
+        next_cursor = None
+        if has_more:
+            next_cursor = base64.urlsafe_b64encode(json.dumps([rows[-1]["captured_at"], rows[-1]["id"]]).encode()).decode().rstrip("=")
+        return {"data": [location_point_view(row) for row in rows], "next_cursor": next_cursor, "cleared_at": clear_watermark(home_id, recipient["id"]), "retention_days": 7}
+
+    @app.delete("/api/v1/homes/{home_id}/care-recipients/{recipient_id}/locations")
+    def location_history_clear(home_id: str, recipient_id: str, actor: Current):
+        recipient = outside_recipient(home_id, recipient_id, actor)
+        if actor["role"] != "admin":
+            raise HTTPException(403, "Admin permission required")
+        timestamp = now_iso()
+        with db.transaction() as conn:
+            conn.execute("DELETE FROM location_points WHERE home_id=? AND care_recipient_id=?", (home_id, recipient["id"]))
+            conn.execute(
+                "INSERT INTO location_clear_watermarks(home_id,care_recipient_id,cleared_at) VALUES (?,?,?) "
+                "ON CONFLICT(care_recipient_id) DO UPDATE SET cleared_at=excluded.cleared_at",
+                (home_id, recipient["id"], timestamp),
+            )
+        audit(actor, "location_points.clear", "care_recipient", recipient["id"], home_id)
+        return {"cleared_at": timestamp}
 
     @app.get("/api/v1/homes/{home_id}/care-recipients/{recipient_id}/safe-places")
     def safe_places(home_id: str, recipient_id: str, actor: Current):
@@ -5187,10 +5329,21 @@ def make_app(
     @app.post("/api/v1/homes/{home_id}/care-recipients/{recipient_id}/safe-places", status_code=status.HTTP_201_CREATED)
     def safe_place_create(home_id: str, recipient_id: str, body: SafePlaceIn, actor: Current):
         recipient = outside_recipient(home_id, recipient_id, actor)
-        place_id, timestamp = str(uuid.uuid4()), now_iso()
+        place_id, timestamp = canonical_uuid(body.id, "id") if body.id else str(uuid.uuid4()), now_iso()
+        existing = db.one("SELECT * FROM safe_places WHERE id=?", (place_id,))
+        if existing:
+            if existing["home_id"] != home_id or existing["care_recipient_id"] != recipient["id"]:
+                raise HTTPException(409, "Place ID is already in use")
+            if (existing["kind"] != body.kind or existing["name"] != body.name.strip()
+                or existing["latitude"] != body.latitude or existing["longitude"] != body.longitude
+                or existing["radius_m"] != body.radius_m):
+                raise HTTPException(409, "Place changed after creation; refresh before editing")
+            return {"data": existing}
+        if body.kind == "home" and db.one("SELECT id FROM safe_places WHERE care_recipient_id=? AND kind='home'", (recipient["id"],)):
+            raise HTTPException(409, "Home already exists")
         db.execute(
-            "INSERT INTO safe_places(id,home_id,care_recipient_id,name,latitude,longitude,radius_m,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)",
-            (place_id, home_id, recipient["id"], body.name.strip(), body.latitude, body.longitude, body.radius_m, timestamp, timestamp),
+            "INSERT INTO safe_places(id,home_id,care_recipient_id,name,latitude,longitude,radius_m,created_at,updated_at,kind,revision) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (place_id, home_id, recipient["id"], body.name.strip(), body.latitude, body.longitude, body.radius_m, timestamp, timestamp, body.kind, 1),
         )
         audit(actor, "safe_place.create", "safe_place", place_id, home_id)
         return {"data": db.one("SELECT * FROM safe_places WHERE id=? AND home_id=?", (place_id, home_id))}
@@ -5202,24 +5355,32 @@ def make_app(
         current = db.one("SELECT * FROM safe_places WHERE id=? AND home_id=? AND care_recipient_id=?", (place_id, home_id, recipient["id"]))
         if not current:
             raise HTTPException(404, "Safe place not found")
+        if current["revision"] != body.revision:
+            raise HTTPException(409, "Place changed on another device; refresh before editing")
         changes = body.model_dump(exclude_unset=True)
-        if not changes:
+        if len(changes) <= 1:
             raise HTTPException(422, "At least one safe-place field is required")
-        db.execute(
-            "UPDATE safe_places SET name=?, latitude=?, longitude=?, radius_m=?, updated_at=? WHERE id=? AND home_id=?",
-            (changes.get("name", current["name"]).strip(), changes.get("latitude", current["latitude"]), changes.get("longitude", current["longitude"]), changes.get("radius_m", current["radius_m"]), now_iso(), place_id, home_id),
+        changed = db.execute(
+            "UPDATE safe_places SET name=?, latitude=?, longitude=?, radius_m=?, updated_at=?, revision=revision+1 WHERE id=? AND home_id=? AND revision=?",
+            (changes.get("name", current["name"]).strip(), changes.get("latitude", current["latitude"]), changes.get("longitude", current["longitude"]), changes.get("radius_m", current["radius_m"]), now_iso(), place_id, home_id, body.revision),
         )
+        if changed.rowcount != 1:
+            raise HTTPException(409, "Place changed on another device; refresh before editing")
         audit(actor, "safe_place.update", "safe_place", place_id, home_id)
         return {"data": db.one("SELECT * FROM safe_places WHERE id=? AND home_id=?", (place_id, home_id))}
 
     @app.delete("/api/v1/homes/{home_id}/care-recipients/{recipient_id}/safe-places/{place_id}")
-    def safe_place_delete(home_id: str, recipient_id: str, place_id: str, actor: Current):
+    def safe_place_delete(home_id: str, recipient_id: str, place_id: str, actor: Current, revision: int):
         recipient = outside_recipient(home_id, recipient_id, actor)
         place_id = canonical_uuid(place_id, "place_id")
         current = db.one("SELECT * FROM safe_places WHERE id=? AND home_id=? AND care_recipient_id=?", (place_id, home_id, recipient["id"]))
         if not current:
-            raise HTTPException(404, "Safe place not found")
-        db.execute("DELETE FROM safe_places WHERE id=? AND home_id=?", (place_id, home_id))
+            return {"data": None}
+        if current["revision"] != revision:
+            raise HTTPException(409, "Place changed on another device; refresh before deleting")
+        changed = db.execute("DELETE FROM safe_places WHERE id=? AND home_id=? AND revision=?", (place_id, home_id, revision))
+        if changed.rowcount != 1:
+            raise HTTPException(409, "Place changed on another device; refresh before deleting")
         audit(actor, "safe_place.delete", "safe_place", place_id, home_id)
         return {"data": current}
 

@@ -436,6 +436,25 @@ class Database:
             if not self._sqlite_migration_applied(16):
                 self.conn.executescript(_migration_file("016_outside_location_tracking.sql"))
                 self._record_sqlite_migration(16)
+            if not self._sqlite_migration_applied(17):
+                self.conn.executescript(_migration_file("017_outside_tracking_reliability.sql"))
+                self.conn.executescript("""
+                    CREATE TABLE safe_places_new (
+                        id TEXT PRIMARY KEY, home_id TEXT NOT NULL, care_recipient_id TEXT NOT NULL,
+                        name TEXT NOT NULL, latitude REAL NOT NULL, longitude REAL NOT NULL,
+                        radius_m REAL NOT NULL CHECK(radius_m >= 20 AND radius_m <= 5000),
+                        created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+                        kind TEXT NOT NULL DEFAULT 'safe', revision INTEGER NOT NULL DEFAULT 1,
+                        FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE,
+                        FOREIGN KEY(care_recipient_id) REFERENCES care_recipients(id) ON DELETE CASCADE
+                    );
+                    INSERT INTO safe_places_new SELECT id,home_id,care_recipient_id,name,latitude,longitude,radius_m,created_at,updated_at,kind,revision FROM safe_places;
+                    DROP TABLE safe_places;
+                    ALTER TABLE safe_places_new RENAME TO safe_places;
+                    CREATE INDEX safe_places_recipient_idx ON safe_places(home_id,care_recipient_id,created_at);
+                    CREATE UNIQUE INDEX safe_places_one_home_idx ON safe_places(care_recipient_id) WHERE kind='home';
+                """)
+                self._record_sqlite_migration(17)
             # Keep the zero-setup SQLite adapter forward-compatible with a
             # database created before caregiver assignment was introduced.
             plan_columns = {row[1] for row in self.conn.execute("PRAGMA table_info(medication_plans)").fetchall()}
@@ -471,6 +490,9 @@ class Database:
                         continue
                     for statement in _statements(script):
                         self.conn.execute(statement)
+                    if version == 17:
+                        self.conn.execute("ALTER TABLE safe_places DROP CONSTRAINT IF EXISTS safe_places_radius_m_check")
+                        self.conn.execute("ALTER TABLE safe_places ADD CONSTRAINT safe_places_radius_m_check CHECK(radius_m >= 20 AND radius_m <= 5000)")
                     self.conn.execute(
                         "INSERT INTO schema_migrations(version, applied_at) VALUES (%s, %s)",
                         (version, now_iso()),
@@ -525,7 +547,7 @@ class Database:
     def export_home(self, home_id: str) -> dict:
         # Export user-visible records, including the minimal rights/audit
         # trail. Never export bearer-token hashes or one-time pairing hashes.
-        tables = ["homes", "users", "memberships", "consents", "cameras", "rooms", "room_maps", "calibrations", "camera_map_generation_jobs", "objects", "observations", "events", "clips", "event_snapshots", "summaries", "family_invites", "medication_plans", "medication_check_ins", "tracking_devices", "location_points", "safe_places", "audit_log", "deletion_requests"]
+        tables = ["homes", "users", "memberships", "consents", "cameras", "rooms", "room_maps", "calibrations", "camera_map_generation_jobs", "objects", "observations", "events", "clips", "event_snapshots", "summaries", "family_invites", "medication_plans", "medication_check_ins", "tracking_devices", "location_points", "safe_places", "location_clear_watermarks", "audit_log", "deletion_requests"]
         result = {}
         for table in tables:
             if table == "homes": query, params = "SELECT * FROM homes WHERE id=?", (home_id,)

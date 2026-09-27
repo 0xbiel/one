@@ -124,22 +124,21 @@ notices, retention, and rights workflows in `docs/privacy/`.
 
 ## Docker
 
-`docker compose up --build` starts the API plus the local YOLO-World vision worker, PostgreSQL, Redis, MinIO, a self-hosted LiveKit development server, and Caddy. The API waits for both PostgreSQL and the vision worker to become healthy before it starts, and the worker uses `restart: unless-stopped` so it comes back automatically with the stack. `ONE_GEOMETRY_MODEL_PATH` must point to the local YOLO-World checkpoint; Compose bind-mounts that file into the worker container. Docker Desktop cannot expose Apple Metal/MPS to Linux containers, so the Compose-managed worker defaults to CPU. You can still override `ONE_GEOMETRY_SERVICE_URL` with `http://host.docker.internal:8090` when intentionally running the faster host-side MPS worker yourself. Compose applies the numbered migrations before the API starts. The Compose defaults use LiveKit's local `devkey`/`secret` placeholders, so no LiveKit Cloud subscription is involved. Replace every example password/secret before sharing the LAN, set `ONE_LIVEKIT_URL` to a host-reachable `ws://` or trusted `wss://` endpoint for phones, add a real `.env`, and provision the local Caddy CA on client devices before using this on a LAN.
+The complete Dockerfile, dependency and startup guide is in
+docs/docker.md. The short version is:
 
-For the complete Apple Silicon startup path, use `./scripts/start_mac_gpu.sh` from
-this repository after configuring `.env` and creating `.geometry-venv`. The
-script starts or reuses the host-side geometry worker with CPU fallback disabled,
-starts the Compose stack, forces the API route to
-`http://host.docker.internal:8090`, and verifies that the API container sees an
-`mps` or `cuda` worker. The Compose `vision-worker` still starts because it is a
-healthy dependency of the default stack, but it is not the solver selected by
-the API in this mode. The script writes the host-worker log to
-`camera_positioning_lab/.runtime/geometry-gpu.log` and fails rather than silently
-falling back to CPU.
+~~~powershell
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+docker compose up --build -d
+Invoke-WebRequest -Uri "http://127.0.0.1:8000/api/v1/health" -UseBasicParsing
+~~~
 
-The frontend binds to `127.0.0.1` by default. For a private phone browser, keep
-that setting and run `tailscale serve --bg http://127.0.0.1:${ONE_FRONTEND_PORT:-4175}`;
-open the HTTPS URL shown by `tailscale serve status`. For a trusted same-Wi-Fi
-test only, set `ONE_FRONTEND_BIND=0.0.0.0` and open
-`http://<this-Mac-LAN-IP>:<ONE_FRONTEND_PORT>`; browser camera permissions still
-require a secure origin, so Tailscale HTTPS is preferred.
+The default stack starts the API, PostgreSQL, Redis, MinIO and local LiveKit.
+The CPU-only geometry worker is optional and starts with the vision profile.
+The web frontend and Caddy start with the web profile. Compose applies the
+numbered migrations, including the outside-location tracking migration, during
+API startup.
+
+Replace example passwords, secrets and host URLs before exposing the stack
+beyond the local machine. Do not commit .env, model checkpoints, face models
+or generated data.
