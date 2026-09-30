@@ -1,0 +1,13 @@
+{
+  "source_video_sha256": "ddc52bfb8c4dd8a89e2e6fc951b9c7a8126bb2146bc39ab8bda7716cc95beac4",
+  "source_full_trace_sha256": "fc020796d50b4c2282bdc0a2c030afe90ca8299aef2dd4e1dad7c6d39730833d",
+  "clip_id": "fall_side",
+  "fps": 10,
+  "frames": 80,
+  "person_prediction_frames": 26,
+  "no_person_prediction_frames": 54,
+  "first_no_person_prediction_s": 2.6,
+  "fall_signals": 0,
+  "overlay": "raw_detections filtered to label person; unchanged pixel coordinates with64px header offset",
+  "uses_ground_truth_boxes": false
+}

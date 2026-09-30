@@ -1,0 +1,122 @@
+[
+  {
+    "layout": "dev_living",
+    "object": "sofa",
+    "max_bound_error_m": 5.960464477539063e-08
+  },
+  {
+    "layout": "dev_living",
+    "object": "coffee_table",
+    "max_bound_error_m": 2.9802322387695312e-08
+  },
+  {
+    "layout": "dev_living",
+    "object": "dining_table",
+    "max_bound_error_m": 0.0
+  },
+  {
+    "layout": "dev_living",
+    "object": "chair_3",
+    "max_bound_error_m": 0.0
+  },
+  {
+    "layout": "dev_living",
+    "object": "chair_4",
+    "max_bound_error_m": 2.9802322387695312e-08
+  },
+  {
+    "layout": "dev_living",
+    "object": "cabinet",
+    "max_bound_error_m": 5.960464477539063e-08
+  },
+  {
+    "layout": "dev_living",
+    "object": "television",
+    "max_bound_error_m": 0.0
+  },
+  {
+    "layout": "dev_living",
+    "object": "floor_lamp",
+    "max_bound_error_m": 0.0
+  },
+  {
+    "layout": "heldout_mirrored",
+    "object": "sofa",
+    "max_bound_error_m": 1.043081283569336e-07
+  },
+  {
+    "layout": "heldout_mirrored",
+    "object": "coffee_table",
+    "max_bound_error_m": 2.9802322387695312e-08
+  },
+  {
+    "layout": "heldout_mirrored",
+    "object": "dining_table",
+    "max_bound_error_m": 2.9802322387695312e-08
+  },
+  {
+    "layout": "heldout_mirrored",
+    "object": "chair_3",
+    "max_bound_error_m": 0.0
+  },
+  {
+    "layout": "heldout_mirrored",
+    "object": "chair_4",
+    "max_bound_error_m": 0.0
+  },
+  {
+    "layout": "heldout_mirrored",
+    "object": "cabinet",
+    "max_bound_error_m": 5.960464477539063e-08
+  },
+  {
+    "layout": "heldout_mirrored",
+    "object": "television",
+    "max_bound_error_m": 0.0
+  },
+  {
+    "layout": "heldout_mirrored",
+    "object": "floor_lamp",
+    "max_bound_error_m": 0.0
+  },
+  {
+    "layout": "heldout_rearranged",
+    "object": "sofa",
+    "max_bound_error_m": 2.9802322387695312e-08
+  },
+  {
+    "layout": "heldout_rearranged",
+    "object": "coffee_table",
+    "max_bound_error_m": 5.960464477539063e-08
+  },
+  {
+    "layout": "heldout_rearranged",
+    "object": "dining_table",
+    "max_bound_error_m": 0.0
+  },
+  {
+    "layout": "heldout_rearranged",
+    "object": "chair_3",
+    "max_bound_error_m": 0.0
+  },
+  {
+    "layout": "heldout_rearranged",
+    "object": "chair_4",
+    "max_bound_error_m": 2.9802322387695312e-08
+  },
+  {
+    "layout": "heldout_rearranged",
+    "object": "cabinet",
+    "max_bound_error_m": 5.960464477539063e-08
+  },
+  {
+    "layout": "heldout_rearranged",
+    "object": "television",
+    "max_bound_error_m": 0.0
+  },
+  {
+    "layout": "heldout_rearranged",
+    "object": "floor_lamp",
+    "max_bound_error_m": 1.4901161193847656e-08
+  }
+]

@@ -1251,6 +1251,54 @@ def _pose_from_matches(
     return best
 
 
+def _guided_descriptor_pair_candidates(
+    descriptors: np.ndarray,
+    landmark_descriptors: np.ndarray,
+) -> list[tuple[np.ndarray, np.ndarray] | None] | None:
+    """Cache the existing Hamming <=56 gate, independently of pose/spatial gates.
+
+    One thread-local entry is reset for each localization request. Copies used
+    for exact equality checks also prevent stale reuse if an array is mutated.
+    At most 64 pairs per landmark are retained; any row whose shortlist
+    could truncate valid pairs falls back to the unchanged spatial-first path. Distance computation is
+    chunked so no full landmark-by-query matrix is retained.
+    """
+    if (
+        descriptors.ndim != 2 or landmark_descriptors.ndim != 2
+        or descriptors.dtype != np.uint8 or landmark_descriptors.dtype != np.uint8
+        or descriptors.shape[1] != landmark_descriptors.shape[1]
+        or len(descriptors) > 3400 or len(landmark_descriptors) > 8000
+    ):
+        return None
+    cached = getattr(_SOLVER_THREAD_STATE, "guided_descriptor_pairs", None)
+    if (
+        cached is not None
+        and np.array_equal(descriptors, cached["query"])
+        and np.array_equal(landmark_descriptors, cached["landmarks"])
+    ):
+        return cached["pairs"]
+    pairs: list[tuple[np.ndarray, np.ndarray] | None] = []
+    count = min(64, len(descriptors))
+    for start in range(0, len(landmark_descriptors), 128):
+        distances, neighbors = cv2.batchDistance(
+            np.ascontiguousarray(landmark_descriptors[start:start + 128]),
+            np.ascontiguousarray(descriptors),
+            cv2.CV_32S,
+            normType=cv2.NORM_HAMMING,
+            K=count,
+        )
+        for row, indices in zip(distances, neighbors):
+            if count < len(descriptors) and row[-1] <= 56:
+                pairs.append(None)
+                continue
+            keep = row <= 56
+            pairs.append((indices[keep].astype(np.int32), row[keep].astype(np.uint8)))
+    _SOLVER_THREAD_STATE.guided_descriptor_pairs = {
+        "query": descriptors.copy(), "landmarks": landmark_descriptors.copy(), "pairs": pairs,
+    }
+    return pairs
+
+
 def _pose_guided_matches(
     *,
     frame_width: int,
@@ -1290,6 +1338,9 @@ def _pose_guided_matches(
     for query_index, (x, y) in enumerate(keypoint_xy):
         grid.setdefault((int(x // cell_size), int(y // cell_size)), []).append(query_index)
 
+    descriptor_pairs = _guided_descriptor_pair_candidates(descriptors, landmark_descriptors)
+    query_cells = [(int(x // cell_size), int(y // cell_size)) for x, y in keypoint_xy]
+
     # landmark -> (query, descriptor distance, pixel distance)
     landmark_best: dict[int, tuple[int, float, float]] = {}
     for landmark_index, ((x, y), camera_point) in enumerate(zip(projected, camera_space)):
@@ -1303,9 +1354,22 @@ def _pose_guided_matches(
             continue
         cell_x, cell_y = int(x // cell_size), int(y // cell_size)
         candidate_queries: list[int] = []
-        for offset_x in range(-cell_radius, cell_radius + 1):
-            for offset_y in range(-cell_radius, cell_radius + 1):
-                candidate_queries.extend(grid.get((cell_x + offset_x, cell_y + offset_y), []))
+        cached_distances: np.ndarray | None = None
+        if descriptor_pairs is None or descriptor_pairs[landmark_index] is None:
+            for offset_x in range(-cell_radius, cell_radius + 1):
+                for offset_y in range(-cell_radius, cell_radius + 1):
+                    candidate_queries.extend(grid.get((cell_x + offset_x, cell_y + offset_y), []))
+        else:
+            indices, distances = descriptor_pairs[landmark_index]
+            positions = [
+                offset for offset, query in enumerate(indices)
+                if abs(query_cells[int(query)][0] - cell_x) <= cell_radius
+                and abs(query_cells[int(query)][1] - cell_y) <= cell_radius
+            ]
+            # Preserve the original grid traversal tie order exactly.
+            positions.sort(key=lambda offset: (*query_cells[int(indices[offset])], int(indices[offset])))
+            candidate_queries = [int(indices[offset]) for offset in positions]
+            cached_distances = distances[positions]
         if not candidate_queries:
             continue
 
@@ -1322,8 +1386,11 @@ def _pose_guided_matches(
             continue
         query_indices = query_indices[inside]
         pixel_distances = pixel_distances[inside]
-        xor = np.bitwise_xor(descriptors[query_indices], landmark_descriptors[landmark_index])
-        descriptor_distances = _HAMMING_POPCOUNT[xor].sum(axis=1)
+        if cached_distances is None:
+            xor = np.bitwise_xor(descriptors[query_indices], landmark_descriptors[landmark_index])
+            descriptor_distances = _HAMMING_POPCOUNT[xor].sum(axis=1)
+        else:
+            descriptor_distances = cached_distances[inside]
         descriptor_ok = descriptor_distances <= 56
         if not np.any(descriptor_ok):
             continue
@@ -1663,7 +1730,7 @@ def _provisional_pose_from_guided_matches(
             rvec = np.asarray(pose["rvec"], dtype=np.float64).copy()
             tvec = np.asarray(pose["tvec"], dtype=np.float64).copy()
             try:
-                ok, rvec, tvec, _ = cv2.solvePnPRansac(
+                ok, rvec, tvec, ransac_inliers = cv2.solvePnPRansac(
                     object_points[subset],
                     image_points[subset],
                     camera_matrix,
@@ -1681,6 +1748,11 @@ def _provisional_pose_from_guided_matches(
             if not ok:
                 continue
 
+            fit_indices = (
+                subset[np.asarray(ransac_inliers).reshape(-1)]
+                if ransac_inliers is not None else subset
+            )
+
             # Score every original correspondence, including the omitted one.
             # A leave-one-out solve is useful only if at least six observations
             # from the actual pool agree with it; omitting a point never creates
@@ -1690,6 +1762,9 @@ def _provisional_pose_from_guided_matches(
             inlier_indices = np.flatnonzero(residuals <= 8.0)
             if len(inlier_indices) < 6:
                 continue
+            # RANSAC's input pool can contain rejected matches. Record the
+            # actual subset used for the final fit, not the size of that pool.
+            refinement_indices = inlier_indices.copy()
             try:
                 rvec, tvec = cv2.solvePnPRefineLM(
                     object_points[inlier_indices],
@@ -1699,6 +1774,7 @@ def _provisional_pose_from_guided_matches(
                     rvec,
                     tvec,
                 )
+                fit_indices = refinement_indices
                 projected, _ = cv2.projectPoints(object_points, rvec, tvec, camera_matrix, None)
                 residuals = np.linalg.norm(projected.reshape(-1, 2) - image_points, axis=1)
                 inlier_indices = np.flatnonzero(residuals <= 8.0)
@@ -1727,7 +1803,8 @@ def _provisional_pose_from_guided_matches(
                     "world_spread_m": float(np.linalg.norm(np.ptp(inlier_object_points, axis=0))),
                     "positive_depth_ratio": positive_depth_ratio,
                     "search_prior_provisional_refinement": True,
-                    "provisional_subset_size": int(len(subset)),
+                    "provisional_subset_size": int(len(fit_indices)),
+                    "provisional_hypothesis_pool_size": int(len(subset)),
                     "provisional_seed_independent": not use_extrinsic_guess,
                 }
             )
@@ -3002,17 +3079,17 @@ def _semantic_object_pose_seeds(
                 continue
             for camera_matrix, _intrinsics_source, fov_degrees in fov_hypotheses:
                 if len(object_array) == 3:
-                    # OpenCV's solvePnPRansac wrapper rejects three points even
-                    # though the SQPnP solver supports the minimal case. Keep
-                    # every returned solution as a seed and let the RoomPlan
-                    # scene prior plus fresh ORB refinement reject ambiguity.
+                    # Three points can have several exactly fitting poses.
+                    # SQPnP may return only an upside-down branch even when a
+                    # physically valid root exists. AP3P enumerates those roots
+                    # so the unchanged scene gates can choose plausible seeds.
                     try:
-                        ok, rvecs, tvecs, _ = cv2.solvePnPGeneric(
+                        ok, rvecs, tvecs = cv2.solveP3P(
                             object_array,
                             image_array,
                             camera_matrix,
                             np.zeros((4, 1), dtype=np.float64),
-                            flags=cv2.SOLVEPNP_SQPNP,
+                            flags=cv2.SOLVEPNP_AP3P,
                         )
                     except cv2.error:
                         continue
@@ -3075,6 +3152,13 @@ def _semantic_object_pose_seeds(
                             "positive_depth_ratio": positive_depth_ratio,
                             "semantic_object_seed": True,
                             "semantic_object_match_count": len(assignment),
+                            # Center and floor-contact anchors from the same
+                            # detector box are correlated, not independent
+                            # object observations. Do not double their support.
+                            "semantic_object_inlier_count": len({
+                                int(index) // (2 if anchor_kind == "center+floor-contact" else 1)
+                                for index in inlier_indices
+                            }),
                             "semantic_object_labels": sorted(set(labels)),
                             "semantic_object_anchor": anchor_kind,
                             "semantic_object_confidence": round(float(np.mean(confidences)), 6),
@@ -3092,11 +3176,20 @@ def _semantic_object_pose_seeds(
         )
         for seed in seeds
     ]
+    preferred_fov = payload.search_prior.fov_degrees if payload.search_prior else payload.fov_degrees
+    if preferred_fov is None:
+        preferred_fov = payload.fov_degrees
     seeds.sort(
         key=lambda item: (
             _semantic_cuboid_rank(item.get("semantic_cuboid") or {}),
-            item["inlier_count"],
-            -item["mean_error"],
+            item["semantic_object_inlier_count"],
+            # Minimal solutions can all fit to floating-point precision at
+            # different FOVs. Sub-millipixel noise is not calibration evidence;
+            # use the supplied hint only to break these equally fitting cases.
+            -round(float(item["mean_error"]), 3),
+            -abs(float(item["fov_degrees"]) - float(preferred_fov))
+            if preferred_fov is not None and item["fov_degrees"] is not None else 0.0,
+            item["semantic_object_anchor"] == "center",
             item["semantic_object_confidence"],
         ),
         reverse=True,
@@ -3876,6 +3969,7 @@ def localize_camera(
     # Keep the expensive differentiable polish bounded per request.  The
     # detector and CPU PnP remain fully concurrent; only a couple of finalists
     # may enter the serialized accelerator stage.
+    _SOLVER_THREAD_STATE.guided_descriptor_pairs = None
     _SOLVER_THREAD_STATE.gpu_pose_refinement_budget = 2
     _SOLVER_THREAD_STATE.gpu_pose_refinement_attempts = []
 

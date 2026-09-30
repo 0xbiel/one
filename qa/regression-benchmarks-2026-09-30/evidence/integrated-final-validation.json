@@ -1,0 +1,27 @@
+{
+  "collected": 156,
+  "passed": 154,
+  "skipped": 2,
+  "failures": 0,
+  "all_previous_154_test_ids_retained": true,
+  "new_test_ids": [
+    [
+      "geometry_service.tests.test_guided_cache",
+      "test_guided_cache_exact_ordered_equivalence"
+    ],
+    [
+      "geometry_service.tests.test_guided_cache",
+      "test_guided_cache_resets_at_request_entry"
+    ]
+  ],
+  "source_sha256": {
+    "app/main.py": "716f491253df32da9f0be5eee8f98dbf0760334e64fde05aaf691e7cef99cf36",
+    "app/analytics.py": "e1c9d5205ad72e90ca7718511f174910eb8dd6624d025dad2c04386a77208576",
+    "geometry_service/localization.py": "6d4d6653f88d83d2d9089f9dfc6b4fd26ffb1844e554893a5c60134913b1dbaa",
+    "geometry_service/tests/test_guided_cache.py": "2b4d452088e7109387ebb1c7ac353a0302e0e2fdb080bd5ed5040ab4e2a9a6eb"
+  },
+  "openapi_matches_baseline_git_blob": "f317312ee3e6ef99eb43e791b4708fe0a8fb63c6",
+  "scorer_integrity_tests": 5,
+  "frozen_image_summary_recompute": "byte-identical",
+  "limit": "Local PostgreSQL-only tests skipped; exact-head CI supplies PostgreSQL."
+}

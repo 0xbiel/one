@@ -1,0 +1,218 @@
+[
+  {
+    "case": "dev_living_query_0_clean",
+    "layout": "dev_living",
+    "split": "dev",
+    "condition": "clean",
+    "query": "query_0",
+    "input": "inputs/dev_living_query_0_clean.json",
+    "sha256": "55387df5164cb7b89cd431bb51058978a2413199f7b2818618196d70926bf9ba"
+  },
+  {
+    "case": "dev_living_query_1_clean",
+    "layout": "dev_living",
+    "split": "dev",
+    "condition": "clean",
+    "query": "query_1",
+    "input": "inputs/dev_living_query_1_clean.json",
+    "sha256": "1654b16ac7168409a96b58f87188f8ae12ef27bb1b96e61ce3351070e167529a"
+  },
+  {
+    "case": "dev_living_query_0_noisy_depth_missing_boxes",
+    "layout": "dev_living",
+    "split": "dev",
+    "condition": "noisy_depth_missing_boxes",
+    "query": "query_0",
+    "input": "inputs/dev_living_query_0_noisy_depth_missing_boxes.json",
+    "sha256": "6611608610297ef357670f861a294a660b2f349064cb3fc5298beefed8e30291"
+  },
+  {
+    "case": "dev_living_query_1_noisy_depth_missing_boxes",
+    "layout": "dev_living",
+    "split": "dev",
+    "condition": "noisy_depth_missing_boxes",
+    "query": "query_1",
+    "input": "inputs/dev_living_query_1_noisy_depth_missing_boxes.json",
+    "sha256": "dcc8b10f9126a0292fe92a06edae39af7fd7d75c48e2268748318271edb73be0"
+  },
+  {
+    "case": "dev_living_query_0_no_depth",
+    "layout": "dev_living",
+    "split": "dev",
+    "condition": "no_depth",
+    "query": "query_0",
+    "input": "inputs/dev_living_query_0_no_depth.json",
+    "sha256": "93da7ea2d3e301fe5f6bb6b1d9f01a651b89702a2cf18e26b2e520bdf15731b5"
+  },
+  {
+    "case": "dev_living_query_1_no_depth",
+    "layout": "dev_living",
+    "split": "dev",
+    "condition": "no_depth",
+    "query": "query_1",
+    "input": "inputs/dev_living_query_1_no_depth.json",
+    "sha256": "ea1540da21fd1e480d492d3898fce189d27d01d3528b9a61a876c60460ea320c"
+  },
+  {
+    "case": "dev_living_query_0_unknown_intrinsics",
+    "layout": "dev_living",
+    "split": "dev",
+    "condition": "unknown_intrinsics",
+    "query": "query_0",
+    "input": "inputs/dev_living_query_0_unknown_intrinsics.json",
+    "sha256": "880b069f1a08a4a89027a03aab29307e725c4f3ce027741b8486572c54b62a48"
+  },
+  {
+    "case": "dev_living_query_1_unknown_intrinsics",
+    "layout": "dev_living",
+    "split": "dev",
+    "condition": "unknown_intrinsics",
+    "query": "query_1",
+    "input": "inputs/dev_living_query_1_unknown_intrinsics.json",
+    "sha256": "d0ca1290546f2cd7c4927a9fa08f668da38bcb808ab34e69545c281ab1c6fbd7"
+  },
+  {
+    "case": "heldout_mirrored_query_0_clean",
+    "layout": "heldout_mirrored",
+    "split": "heldout",
+    "condition": "clean",
+    "query": "query_0",
+    "input": "inputs/heldout_mirrored_query_0_clean.json",
+    "sha256": "63cfbdf15000d536ebe3c9abf84c702088ecb6abf43271671cf9f6a83ed301d8"
+  },
+  {
+    "case": "heldout_mirrored_query_1_clean",
+    "layout": "heldout_mirrored",
+    "split": "heldout",
+    "condition": "clean",
+    "query": "query_1",
+    "input": "inputs/heldout_mirrored_query_1_clean.json",
+    "sha256": "1f6174c96f60fe0709ca1b7d6a66c86e325a02aed7366d1aade0a488fd9d399f"
+  },
+  {
+    "case": "heldout_mirrored_query_0_noisy_depth_missing_boxes",
+    "layout": "heldout_mirrored",
+    "split": "heldout",
+    "condition": "noisy_depth_missing_boxes",
+    "query": "query_0",
+    "input": "inputs/heldout_mirrored_query_0_noisy_depth_missing_boxes.json",
+    "sha256": "59b4d281649528ed5c5c84f3ced72a461951b89b671f112a2c81c1b2b61cccc7"
+  },
+  {
+    "case": "heldout_mirrored_query_1_noisy_depth_missing_boxes",
+    "layout": "heldout_mirrored",
+    "split": "heldout",
+    "condition": "noisy_depth_missing_boxes",
+    "query": "query_1",
+    "input": "inputs/heldout_mirrored_query_1_noisy_depth_missing_boxes.json",
+    "sha256": "86d940585c91a371dd7a6cbf9ebc58e453c513f775e637c148543df7646b82c9"
+  },
+  {
+    "case": "heldout_mirrored_query_0_no_depth",
+    "layout": "heldout_mirrored",
+    "split": "heldout",
+    "condition": "no_depth",
+    "query": "query_0",
+    "input": "inputs/heldout_mirrored_query_0_no_depth.json",
+    "sha256": "bfa897899d5287ac671cdfa5661872c2a2febf145d8c8c182c00a2d52c4a6404"
+  },
+  {
+    "case": "heldout_mirrored_query_1_no_depth",
+    "layout": "heldout_mirrored",
+    "split": "heldout",
+    "condition": "no_depth",
+    "query": "query_1",
+    "input": "inputs/heldout_mirrored_query_1_no_depth.json",
+    "sha256": "958f8ae917270a910cd045194e0e71b6fb515f761f64b66cafc21cd1bc4dd5bd"
+  },
+  {
+    "case": "heldout_mirrored_query_0_unknown_intrinsics",
+    "layout": "heldout_mirrored",
+    "split": "heldout",
+    "condition": "unknown_intrinsics",
+    "query": "query_0",
+    "input": "inputs/heldout_mirrored_query_0_unknown_intrinsics.json",
+    "sha256": "995fb6c3e679126bc77792c7c0b29cddea0b30985d8659bc922f6538067964ce"
+  },
+  {
+    "case": "heldout_mirrored_query_1_unknown_intrinsics",
+    "layout": "heldout_mirrored",
+    "split": "heldout",
+    "condition": "unknown_intrinsics",
+    "query": "query_1",
+    "input": "inputs/heldout_mirrored_query_1_unknown_intrinsics.json",
+    "sha256": "e7b429c626ba5e2cda82e28da9069638c0c441417f571b00ddb2d65721bce050"
+  },
+  {
+    "case": "heldout_rearranged_query_0_clean",
+    "layout": "heldout_rearranged",
+    "split": "heldout",
+    "condition": "clean",
+    "query": "query_0",
+    "input": "inputs/heldout_rearranged_query_0_clean.json",
+    "sha256": "57638b58edc7c5ab2701f5f31d56dfe2dc2e450f53b331e119b98aa8e4b22aa9"
+  },
+  {
+    "case": "heldout_rearranged_query_1_clean",
+    "layout": "heldout_rearranged",
+    "split": "heldout",
+    "condition": "clean",
+    "query": "query_1",
+    "input": "inputs/heldout_rearranged_query_1_clean.json",
+    "sha256": "a847d9f1c2d2944170af9cdfd0d667d01940981d0e51047a35d02f698341d3db"
+  },
+  {
+    "case": "heldout_rearranged_query_0_noisy_depth_missing_boxes",
+    "layout": "heldout_rearranged",
+    "split": "heldout",
+    "condition": "noisy_depth_missing_boxes",
+    "query": "query_0",
+    "input": "inputs/heldout_rearranged_query_0_noisy_depth_missing_boxes.json",
+    "sha256": "33f60081881e5aef8211048720f6748a5b9a8f10020e8cbc2a52696c9755bf2c"
+  },
+  {
+    "case": "heldout_rearranged_query_1_noisy_depth_missing_boxes",
+    "layout": "heldout_rearranged",
+    "split": "heldout",
+    "condition": "noisy_depth_missing_boxes",
+    "query": "query_1",
+    "input": "inputs/heldout_rearranged_query_1_noisy_depth_missing_boxes.json",
+    "sha256": "7d47288cd958d43e38025983937a8b1d86bca9a500cc6d976c8018fb158cd71a"
+  },
+  {
+    "case": "heldout_rearranged_query_0_no_depth",
+    "layout": "heldout_rearranged",
+    "split": "heldout",
+    "condition": "no_depth",
+    "query": "query_0",
+    "input": "inputs/heldout_rearranged_query_0_no_depth.json",
+    "sha256": "ad0ce3b5d3531fa6467a445e3cdacf9dde13195c13409a300334b6c925903aab"
+  },
+  {
+    "case": "heldout_rearranged_query_1_no_depth",
+    "layout": "heldout_rearranged",
+    "split": "heldout",
+    "condition": "no_depth",
+    "query": "query_1",
+    "input": "inputs/heldout_rearranged_query_1_no_depth.json",
+    "sha256": "59aad81ae9cdb5943528dc9e3a7153f5fbdaf809baee95ece3fef727afaae49d"
+  },
+  {
+    "case": "heldout_rearranged_query_0_unknown_intrinsics",
+    "layout": "heldout_rearranged",
+    "split": "heldout",
+    "condition": "unknown_intrinsics",
+    "query": "query_0",
+    "input": "inputs/heldout_rearranged_query_0_unknown_intrinsics.json",
+    "sha256": "0584abf48f71774bc77a39675de938b6e9246854aded8d9ef408413f6ae53d98"
+  },
+  {
+    "case": "heldout_rearranged_query_1_unknown_intrinsics",
+    "layout": "heldout_rearranged",
+    "split": "heldout",
+    "condition": "unknown_intrinsics",
+    "query": "query_1",
+    "input": "inputs/heldout_rearranged_query_1_unknown_intrinsics.json",
+    "sha256": "0d188f90acb29cbde80d0fd9521e0076b7f9f40d6981301e1f9d88a8bff16af6"
+  }
+]

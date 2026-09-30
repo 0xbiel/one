@@ -1,0 +1,30 @@
+{
+  "code_commit": "e6abb03a803f403371626cfc2636c831308d71a3",
+  "model_name": "yolov8s-worldv2-indoor-objects-v1",
+  "model_sha256": "9b2c17ab6124a913e9b3a5c170617920d91b0f01111a8479da69f00e2cf27792",
+  "input_kind": "rendered_rgb_frames",
+  "inference_fps": 10,
+  "memoized_harness_processing_fps": 0.6620603415517213,
+  "memoized_harness_latency_median_s": 1.9277531670004464,
+  "memoized_harness_latency_p95_s": 2.326641865000056,
+  "clip_sha256": {
+    "fall_forward": "e5511c920416c71f7bd7c97c5b25ef52f5d29614f3490ff6a4c15cc960e18451",
+    "sit": "d618a08c52c8478814a487c3bd4fe41365fb2e897243e8b51cc6dff0ec67c633",
+    "bend": "dfa7e3b9c09be31495f4422af3271aead15c430e791ad50f8634229767048d3f",
+    "lie_down": "8633a7b8c4fce323957723dcfa43bcd8c68dd9f33a43ad26a37972d38e8cba2d",
+    "drop_object": "c07cf29dae9ad0b8cdbf5c25d41fcd2cfd0ebc91b2149fa7aff581d60a793abf"
+  },
+  "clock": "production clocks use decoded clip FPS capture timestamps to separate playback from CPU throughput",
+  "thresholds": {
+    "detection": 0.2,
+    "fall_min_confidence": 0.55,
+    "stability_hits": 3,
+    "fall_confirmation_hits": 3
+  },
+  "inference_calls": 299,
+  "replayed_frames": 400,
+  "memoization": "only exact JPEG bytes + dimensions + labels; every frame still traverses production tracker/API",
+  "device": "cpu",
+  "threads": 2,
+  "image_input": "decoded MP4 frames, re-encoded JPEG quality95; no annotation inputs"
+}

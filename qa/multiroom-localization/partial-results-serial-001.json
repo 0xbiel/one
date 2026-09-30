@@ -1,0 +1,461 @@
+{
+  "status": "PARTIAL_NONFINAL_DO_NOT_REUSE",
+  "expected_outputs": 48,
+  "completed_outputs": 14,
+  "results": [
+    {
+      "case": "dev_living_query_0_clean",
+      "variant": "baseline",
+      "status": "positioned",
+      "input_sha256": "55387df5164cb7b89cd431bb51058978a2413199f7b2818618196d70926bf9ba",
+      "geometry_fingerprint_sha256": "9b7ef45828395239cc3b5dca2eccf2e54cf7bb828d982bcf7cacd6bfad879e2d",
+      "wall_seconds": 38.310325605998514,
+      "camera_to_world": [
+        [
+          0.93917645,
+          0.10228364,
+          -0.32785005,
+          -1.21924426
+        ],
+        [
+          -0.00250419,
+          0.95663454,
+          0.29128007,
+          1.83459053
+        ],
+        [
+          0.34342587,
+          -0.27274239,
+          0.89870477,
+          2.35472511
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "inlier_count": 597,
+      "reprojection_error_px": 2.254793
+    },
+    {
+      "case": "dev_living_query_0_no_depth",
+      "variant": "baseline",
+      "status": "positioned",
+      "input_sha256": "93da7ea2d3e301fe5f6bb6b1d9f01a651b89702a2cf18e26b2e520bdf15731b5",
+      "geometry_fingerprint_sha256": "9b7ef45828395239cc3b5dca2eccf2e54cf7bb828d982bcf7cacd6bfad879e2d",
+      "wall_seconds": 5.100386616999458,
+      "camera_to_world": [
+        [
+          0.93463163,
+          0.10459919,
+          -0.33988634,
+          -1.28090949
+        ],
+        [
+          -0.00238762,
+          0.95758836,
+          0.2881299,
+          1.82109321
+        ],
+        [
+          0.35560935,
+          -0.2684838,
+          0.89524211,
+          2.34881441
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "inlier_count": 114,
+      "reprojection_error_px": 1.878093
+    },
+    {
+      "case": "dev_living_query_0_noisy_depth_missing_boxes",
+      "variant": "baseline",
+      "status": "positioned",
+      "input_sha256": "6611608610297ef357670f861a294a660b2f349064cb3fc5298beefed8e30291",
+      "geometry_fingerprint_sha256": "9b7ef45828395239cc3b5dca2eccf2e54cf7bb828d982bcf7cacd6bfad879e2d",
+      "wall_seconds": 8.575670337000702,
+      "camera_to_world": [
+        [
+          0.93754336,
+          0.10293363,
+          -0.33229071,
+          -1.24169467
+        ],
+        [
+          -0.00197516,
+          0.95677924,
+          0.29080849,
+          1.83380225
+        ],
+        [
+          0.34786283,
+          -0.27198924,
+          0.89722534,
+          2.3523553
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "inlier_count": 575,
+      "reprojection_error_px": 2.201934
+    },
+    {
+      "case": "dev_living_query_0_unknown_intrinsics",
+      "variant": "baseline",
+      "status": "timeout",
+      "input_sha256": "880b069f1a08a4a89027a03aab29307e725c4f3ce027741b8486572c54b62a48",
+      "geometry_fingerprint_sha256": "9b7ef45828395239cc3b5dca2eccf2e54cf7bb828d982bcf7cacd6bfad879e2d",
+      "wall_seconds": 180.02859769599854,
+      "camera_to_world": null,
+      "inlier_count": null,
+      "reprojection_error_px": null
+    },
+    {
+      "case": "dev_living_query_1_clean",
+      "variant": "baseline",
+      "status": "positioned",
+      "input_sha256": "1654b16ac7168409a96b58f87188f8ae12ef27bb1b96e61ce3351070e167529a",
+      "geometry_fingerprint_sha256": "9b7ef45828395239cc3b5dca2eccf2e54cf7bb828d982bcf7cacd6bfad879e2d",
+      "wall_seconds": 35.347304584000085,
+      "camera_to_world": [
+        [
+          0.94172527,
+          -0.04962167,
+          0.33270287,
+          1.20477025
+        ],
+        [
+          -0.00223462,
+          0.98811508,
+          0.15369967,
+          1.3030794
+        ],
+        [
+          -0.33637556,
+          -0.14548633,
+          0.93042206,
+          2.36147706
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "inlier_count": 375,
+      "reprojection_error_px": 2.438976
+    },
+    {
+      "case": "dev_living_query_1_no_depth",
+      "variant": "baseline",
+      "status": "positioned",
+      "input_sha256": "ea1540da21fd1e480d492d3898fce189d27d01d3528b9a61a876c60460ea320c",
+      "geometry_fingerprint_sha256": "9b7ef45828395239cc3b5dca2eccf2e54cf7bb828d982bcf7cacd6bfad879e2d",
+      "wall_seconds": 4.824733916999321,
+      "camera_to_world": [
+        [
+          0.94419705,
+          -0.05462639,
+          0.32481978,
+          1.15721912
+        ],
+        [
+          0.00166559,
+          0.98693097,
+          0.16113498,
+          1.35168431
+        ],
+        [
+          -0.32937692,
+          -0.15160215,
+          0.9319483,
+          2.36640909
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "inlier_count": 77,
+      "reprojection_error_px": 1.800066
+    },
+    {
+      "case": "dev_living_query_1_noisy_depth_missing_boxes",
+      "variant": "baseline",
+      "status": "positioned",
+      "input_sha256": "dcc8b10f9126a0292fe92a06edae39af7fd7d75c48e2268748318271edb73be0",
+      "geometry_fingerprint_sha256": "9b7ef45828395239cc3b5dca2eccf2e54cf7bb828d982bcf7cacd6bfad879e2d",
+      "wall_seconds": 10.695233792999716,
+      "camera_to_world": [
+        [
+          0.9391861,
+          -0.04476452,
+          0.34047849,
+          1.23808598
+        ],
+        [
+          -0.00456769,
+          0.98975147,
+          0.14272756,
+          1.24675534
+        ],
+        [
+          -0.34337821,
+          -0.13560294,
+          0.92935636,
+          2.33795718
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "inlier_count": 371,
+      "reprojection_error_px": 2.643035
+    },
+    {
+      "case": "dev_living_query_1_unknown_intrinsics",
+      "variant": "baseline",
+      "status": "timeout",
+      "input_sha256": "d0ca1290546f2cd7c4927a9fa08f668da38bcb808ab34e69545c281ab1c6fbd7",
+      "geometry_fingerprint_sha256": "9b7ef45828395239cc3b5dca2eccf2e54cf7bb828d982bcf7cacd6bfad879e2d",
+      "wall_seconds": 180.06573085200034,
+      "camera_to_world": null,
+      "inlier_count": null,
+      "reprojection_error_px": null
+    },
+    {
+      "case": "heldout_mirrored_query_0_clean",
+      "variant": "baseline",
+      "status": "positioned",
+      "input_sha256": "63cfbdf15000d536ebe3c9abf84c702088ecb6abf43271671cf9f6a83ed301d8",
+      "geometry_fingerprint_sha256": "9b7ef45828395239cc3b5dca2eccf2e54cf7bb828d982bcf7cacd6bfad879e2d",
+      "wall_seconds": 22.384797560998777,
+      "camera_to_world": [
+        [
+          0.93611923,
+          0.10433395,
+          -0.33584998,
+          -1.26204717
+        ],
+        [
+          -0.00128005,
+          0.95598438,
+          0.29341477,
+          1.84821934
+        ],
+        [
+          0.35168045,
+          -0.2742413,
+          0.89504892,
+          2.35371271
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "inlier_count": 617,
+      "reprojection_error_px": 2.372832
+    },
+    {
+      "case": "heldout_mirrored_query_0_no_depth",
+      "variant": "baseline",
+      "status": "positioned",
+      "input_sha256": "bfa897899d5287ac671cdfa5661872c2a2febf145d8c8c182c00a2d52c4a6404",
+      "geometry_fingerprint_sha256": "9b7ef45828395239cc3b5dca2eccf2e54cf7bb828d982bcf7cacd6bfad879e2d",
+      "wall_seconds": 3.294385659000909,
+      "camera_to_world": [
+        [
+          0.93391463,
+          0.10191457,
+          -0.34266146,
+          -1.28975908
+        ],
+        [
+          0.00181719,
+          0.95713837,
+          0.28962535,
+          1.83111937
+        ],
+        [
+          0.35749147,
+          -0.27110804,
+          0.89370033,
+          2.34203553
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "inlier_count": 116,
+      "reprojection_error_px": 2.022423
+    },
+    {
+      "case": "heldout_mirrored_query_0_noisy_depth_missing_boxes",
+      "variant": "baseline",
+      "status": "positioned",
+      "input_sha256": "59b4d281649528ed5c5c84f3ced72a461951b89b671f112a2c81c1b2b61cccc7",
+      "geometry_fingerprint_sha256": "9b7ef45828395239cc3b5dca2eccf2e54cf7bb828d982bcf7cacd6bfad879e2d",
+      "wall_seconds": 9.588043063999066,
+      "camera_to_world": [
+        [
+          0.937328,
+          0.10290241,
+          -0.33290737,
+          -1.24610062
+        ],
+        [
+          -0.00097654,
+          0.9561716,
+          0.29280525,
+          1.84385257
+        ],
+        [
+          0.34844694,
+          -0.27412946,
+          0.8963469,
+          2.35203663
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "inlier_count": 642,
+      "reprojection_error_px": 2.350731
+    },
+    {
+      "case": "heldout_mirrored_query_1_clean",
+      "variant": "baseline",
+      "status": "positioned",
+      "input_sha256": "1f6174c96f60fe0709ca1b7d6a66c86e325a02aed7366d1aade0a488fd9d399f",
+      "geometry_fingerprint_sha256": "9b7ef45828395239cc3b5dca2eccf2e54cf7bb828d982bcf7cacd6bfad879e2d",
+      "wall_seconds": 43.66277478899974,
+      "camera_to_world": [
+        [
+          0.93913191,
+          -0.05277139,
+          0.33947964,
+          1.2350427
+        ],
+        [
+          0.00073728,
+          0.98843992,
+          0.15161128,
+          1.2948018
+        ],
+        [
+          -0.34355597,
+          -0.1421327,
+          0.92831438,
+          2.34904959
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "inlier_count": 360,
+      "reprojection_error_px": 2.303852
+    },
+    {
+      "case": "heldout_mirrored_query_1_no_depth",
+      "variant": "baseline",
+      "status": "positioned",
+      "input_sha256": "958f8ae917270a910cd045194e0e71b6fb515f761f64b66cafc21cd1bc4dd5bd",
+      "geometry_fingerprint_sha256": "9b7ef45828395239cc3b5dca2eccf2e54cf7bb828d982bcf7cacd6bfad879e2d",
+      "wall_seconds": 5.798238224999295,
+      "camera_to_world": [
+        [
+          0.93946082,
+          -0.04903551,
+          0.3391296,
+          1.22336634
+        ],
+        [
+          -0.00572345,
+          0.98732399,
+          0.15861456,
+          1.33006178
+        ],
+        [
+          -0.34260854,
+          -0.15095315,
+          0.92727155,
+          2.34718148
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "inlier_count": 81,
+      "reprojection_error_px": 2.042569
+    },
+    {
+      "case": "heldout_mirrored_query_1_noisy_depth_missing_boxes",
+      "variant": "baseline",
+      "status": "positioned",
+      "input_sha256": "86d940585c91a371dd7a6cbf9ebc58e453c513f775e637c148543df7646b82c9",
+      "geometry_fingerprint_sha256": "9b7ef45828395239cc3b5dca2eccf2e54cf7bb828d982bcf7cacd6bfad879e2d",
+      "wall_seconds": 9.896663640998668,
+      "camera_to_world": [
+        [
+          0.93846488,
+          -0.05251365,
+          0.34135902,
+          1.24168926
+        ],
+        [
+          0.0015225,
+          0.98899248,
+          0.14795798,
+          1.27755909
+        ],
+        [
+          -0.34537132,
+          -0.13833365,
+          0.92821466,
+          2.33691319
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "inlier_count": 363,
+      "reprojection_error_px": 2.253486
+    }
+  ]
+}

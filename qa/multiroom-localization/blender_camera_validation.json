@@ -1,0 +1,92 @@
+[
+  {
+    "layout": "dev_living",
+    "frame": "reference_0",
+    "max_projection_discrepancy_px": 1.7059844799040144e-05
+  },
+  {
+    "layout": "dev_living",
+    "frame": "reference_1",
+    "max_projection_discrepancy_px": 1.52587890625e-05
+  },
+  {
+    "layout": "dev_living",
+    "frame": "reference_2",
+    "max_projection_discrepancy_px": 3.0517578125e-05
+  },
+  {
+    "layout": "dev_living",
+    "frame": "reference_3",
+    "max_projection_discrepancy_px": 2.1579186437577746e-05
+  },
+  {
+    "layout": "dev_living",
+    "frame": "query_0",
+    "max_projection_discrepancy_px": 1.52587890625e-05
+  },
+  {
+    "layout": "dev_living",
+    "frame": "query_1",
+    "max_projection_discrepancy_px": 3.411968959808029e-05
+  },
+  {
+    "layout": "heldout_mirrored",
+    "frame": "reference_0",
+    "max_projection_discrepancy_px": 1.7059844799040144e-05
+  },
+  {
+    "layout": "heldout_mirrored",
+    "frame": "reference_1",
+    "max_projection_discrepancy_px": 1.52587890625e-05
+  },
+  {
+    "layout": "heldout_mirrored",
+    "frame": "reference_2",
+    "max_projection_discrepancy_px": 3.0517578125e-05
+  },
+  {
+    "layout": "heldout_mirrored",
+    "frame": "reference_3",
+    "max_projection_discrepancy_px": 2.1579186437577746e-05
+  },
+  {
+    "layout": "heldout_mirrored",
+    "frame": "query_0",
+    "max_projection_discrepancy_px": 1.52587890625e-05
+  },
+  {
+    "layout": "heldout_mirrored",
+    "frame": "query_1",
+    "max_projection_discrepancy_px": 3.411968959808029e-05
+  },
+  {
+    "layout": "heldout_rearranged",
+    "frame": "reference_0",
+    "max_projection_discrepancy_px": 1.7059844799040144e-05
+  },
+  {
+    "layout": "heldout_rearranged",
+    "frame": "reference_1",
+    "max_projection_discrepancy_px": 1.52587890625e-05
+  },
+  {
+    "layout": "heldout_rearranged",
+    "frame": "reference_2",
+    "max_projection_discrepancy_px": 3.0517578125e-05
+  },
+  {
+    "layout": "heldout_rearranged",
+    "frame": "reference_3",
+    "max_projection_discrepancy_px": 2.1579186437577746e-05
+  },
+  {
+    "layout": "heldout_rearranged",
+    "frame": "query_0",
+    "max_projection_discrepancy_px": 1.52587890625e-05
+  },
+  {
+    "layout": "heldout_rearranged",
+    "frame": "query_1",
+    "max_projection_discrepancy_px": 3.411968959808029e-05
+  }
+]

@@ -1,0 +1,24 @@
+{
+  "baseline": {
+    "collected": 154,
+    "failed": 13,
+    "skipped": 2,
+    "passed": 139
+  },
+  "candidate": {
+    "collected": 154,
+    "failed": 0,
+    "skipped": 2,
+    "passed": 152
+  },
+  "baseline_commit": "e6abb03a803f403371626cfc2636c831308d71a3",
+  "candidate_implementation_commit": "334235b6737e8ed56f0b0085aadea3d3eff53e95",
+  "same_test_ids": true,
+  "test_identity_sha256": "feb7b718a5983ee53b96d827a34d427266b9804dca6214229ced6d0001e2bb12",
+  "method": "Same expanded test files, same Python/dependency environment, same machine; OMP/MKL threads1. Timing not treated as performance evidence.",
+  "regression_source_tests": {
+    "tests/test_analytics.py": "2e7d2896164aed5037d6201bee3c0940acdb318759f304b1ed4466f6b2b52081",
+    "tests/test_api.py": "954befd7e9c513fcbce1518dd9a4d0ecad3a0ae37ac8c95183880a6d811e2994",
+    "geometry_service/tests/test_localization.py": "8bb4ad60cc421d03a9c75689fc20aae5776da5d4ebf1b3d4d32e73687e09f5a8"
+  }
+}

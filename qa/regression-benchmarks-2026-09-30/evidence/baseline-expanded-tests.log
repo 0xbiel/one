@@ -1,0 +1,312 @@
+FF.F....FFF..............................F.FF........................... [ 46%]
+.......ss.............................F.........FF...................... [ 93%]
+F.........                                                               [100%]
+=================================== FAILURES ===================================
+_______________ test_trend_compares_daily_rates[values0-stable] ________________
+
+values = [7, 7, 7, 7, 7, 7, ...], expected = 'stable'
+
+    @pytest.mark.parametrize(('values','expected'), [
+        ([7]*7, 'stable'), ([7]*9, 'stable'), ([7]*30, 'stable'),
+        ([7,7,7,6,6,6,6], 'decreasing'), ([6,6,6,7,7,7,7], 'increasing'),
+        ([0]*7, 'unknown'), ([1]*3, 'unknown'), ([1,1,2,2], 'increasing'),
+    ])
+    def test_trend_compares_daily_rates(values, expected):
+>       assert analytics._trend(values) == expected
+E       AssertionError: assert 'increasing' == 'stable'
+E         
+E         - stable
+E         + increasing
+
+tests/test_analytics.py:15: AssertionError
+_______________ test_trend_compares_daily_rates[values1-stable] ________________
+
+values = [7, 7, 7, 7, 7, 7, ...], expected = 'stable'
+
+    @pytest.mark.parametrize(('values','expected'), [
+        ([7]*7, 'stable'), ([7]*9, 'stable'), ([7]*30, 'stable'),
+        ([7,7,7,6,6,6,6], 'decreasing'), ([6,6,6,7,7,7,7], 'increasing'),
+        ([0]*7, 'unknown'), ([1]*3, 'unknown'), ([1,1,2,2], 'increasing'),
+    ])
+    def test_trend_compares_daily_rates(values, expected):
+>       assert analytics._trend(values) == expected
+E       AssertionError: assert 'increasing' == 'stable'
+E         
+E         - stable
+E         + increasing
+
+tests/test_analytics.py:15: AssertionError
+_____________ test_trend_compares_daily_rates[values3-decreasing] ______________
+
+values = [7, 7, 7, 6, 6, 6, ...], expected = 'decreasing'
+
+    @pytest.mark.parametrize(('values','expected'), [
+        ([7]*7, 'stable'), ([7]*9, 'stable'), ([7]*30, 'stable'),
+        ([7,7,7,6,6,6,6], 'decreasing'), ([6,6,6,7,7,7,7], 'increasing'),
+        ([0]*7, 'unknown'), ([1]*3, 'unknown'), ([1,1,2,2], 'increasing'),
+    ])
+    def test_trend_compares_daily_rates(values, expected):
+>       assert analytics._trend(values) == expected
+E       AssertionError: assert 'increasing' == 'decreasing'
+E         
+E         - decreasing
+E         ? ^^
+E         + increasing
+E         ? ^^
+
+tests/test_analytics.py:15: AssertionError
+_____________ test_calendar_window_includes_first_day_midnight[7] ______________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f3287589b50>
+window_days = 7
+
+    @pytest.mark.parametrize('window_days', [7, 30, 90])
+    def test_calendar_window_includes_first_day_midnight(monkeypatch, window_days):
+        from datetime import timedelta
+        class FixedDatetime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return cls(2026, 9, 30, 15, 45, tzinfo=timezone.utc)
+        monkeypatch.setattr(analytics, 'datetime', FixedDatetime)
+        first = (FixedDatetime.now() - timedelta(days=window_days-1)).replace(hour=0, minute=0)
+        dates = [(first-timedelta(seconds=1)).isoformat(), first.isoformat(), first.replace(hour=8).isoformat(), FixedDatetime.now().isoformat()]
+        class DB:
+            def __init__(self):
+                self.conn=sqlite3.connect(':memory:');self.conn.row_factory=sqlite3.Row
+                self.conn.executescript('''CREATE TABLE events(id,status,confidence,explanation,first_seen_at,last_seen_at,home_id,event_type,care_recipient_id);
+                CREATE TABLE summaries(id,subject_user_id,care_recipient_id,status,trend,explanation,limitations,created_at,model_version,home_id);''')
+                for i, date in enumerate(dates):
+                    self.conn.execute('INSERT INTO events VALUES (?,?,?,?,?,?,?,?,?)',(str(i),'needs_review',.8,'test',date,date,'home','fall_suspected',None))
+                    self.conn.execute('INSERT INTO summaries VALUES (?,?,?,?,?,?,?,?,?,?)',(str(i),None,None,'ok','stable','test','[]',date,'test','home'))
+            def many(self, sql, params):
+                return [dict(r) for r in self.conn.execute(sql,params)]
+        result=analytics.care_analytics(DB(),'home',window_days=window_days)
+>       assert result['fall']['total_signals']==3
+E       assert 1 == 3
+
+tests/test_analytics.py:39: AssertionError
+_____________ test_calendar_window_includes_first_day_midnight[30] _____________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f328758a720>
+window_days = 30
+
+    @pytest.mark.parametrize('window_days', [7, 30, 90])
+    def test_calendar_window_includes_first_day_midnight(monkeypatch, window_days):
+        from datetime import timedelta
+        class FixedDatetime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return cls(2026, 9, 30, 15, 45, tzinfo=timezone.utc)
+        monkeypatch.setattr(analytics, 'datetime', FixedDatetime)
+        first = (FixedDatetime.now() - timedelta(days=window_days-1)).replace(hour=0, minute=0)
+        dates = [(first-timedelta(seconds=1)).isoformat(), first.isoformat(), first.replace(hour=8).isoformat(), FixedDatetime.now().isoformat()]
+        class DB:
+            def __init__(self):
+                self.conn=sqlite3.connect(':memory:');self.conn.row_factory=sqlite3.Row
+                self.conn.executescript('''CREATE TABLE events(id,status,confidence,explanation,first_seen_at,last_seen_at,home_id,event_type,care_recipient_id);
+                CREATE TABLE summaries(id,subject_user_id,care_recipient_id,status,trend,explanation,limitations,created_at,model_version,home_id);''')
+                for i, date in enumerate(dates):
+                    self.conn.execute('INSERT INTO events VALUES (?,?,?,?,?,?,?,?,?)',(str(i),'needs_review',.8,'test',date,date,'home','fall_suspected',None))
+                    self.conn.execute('INSERT INTO summaries VALUES (?,?,?,?,?,?,?,?,?,?)',(str(i),None,None,'ok','stable','test','[]',date,'test','home'))
+            def many(self, sql, params):
+                return [dict(r) for r in self.conn.execute(sql,params)]
+        result=analytics.care_analytics(DB(),'home',window_days=window_days)
+>       assert result['fall']['total_signals']==3
+E       assert 1 == 3
+
+tests/test_analytics.py:39: AssertionError
+_____________ test_calendar_window_includes_first_day_midnight[90] _____________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f328758b5c0>
+window_days = 90
+
+    @pytest.mark.parametrize('window_days', [7, 30, 90])
+    def test_calendar_window_includes_first_day_midnight(monkeypatch, window_days):
+        from datetime import timedelta
+        class FixedDatetime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return cls(2026, 9, 30, 15, 45, tzinfo=timezone.utc)
+        monkeypatch.setattr(analytics, 'datetime', FixedDatetime)
+        first = (FixedDatetime.now() - timedelta(days=window_days-1)).replace(hour=0, minute=0)
+        dates = [(first-timedelta(seconds=1)).isoformat(), first.isoformat(), first.replace(hour=8).isoformat(), FixedDatetime.now().isoformat()]
+        class DB:
+            def __init__(self):
+                self.conn=sqlite3.connect(':memory:');self.conn.row_factory=sqlite3.Row
+                self.conn.executescript('''CREATE TABLE events(id,status,confidence,explanation,first_seen_at,last_seen_at,home_id,event_type,care_recipient_id);
+                CREATE TABLE summaries(id,subject_user_id,care_recipient_id,status,trend,explanation,limitations,created_at,model_version,home_id);''')
+                for i, date in enumerate(dates):
+                    self.conn.execute('INSERT INTO events VALUES (?,?,?,?,?,?,?,?,?)',(str(i),'needs_review',.8,'test',date,date,'home','fall_suspected',None))
+                    self.conn.execute('INSERT INTO summaries VALUES (?,?,?,?,?,?,?,?,?,?)',(str(i),None,None,'ok','stable','test','[]',date,'test','home'))
+            def many(self, sql, params):
+                return [dict(r) for r in self.conn.execute(sql,params)]
+        result=analytics.care_analytics(DB(),'home',window_days=window_days)
+>       assert result['fall']['total_signals']==3
+E       assert 1 == 3
+
+tests/test_analytics.py:39: AssertionError
+____ test_same_label_tracks_have_distinct_objects_and_independent_throttles ____
+
+tmp_path = PosixPath('/tmp/pytest-of-agent/pytest-16/test_same_label_tracks_have_di0')
+
+    def test_same_label_tracks_have_distinct_objects_and_independent_throttles(tmp_path):
+        c = client(tmp_path, TwoTableDetector()); token, home = auth(c)
+        headers = {"Authorization": f"Bearer {token}"}
+        c.post(f"/api/v1/homes/{home}/consents", headers=headers, json={"purpose":"video_capture","policy_version":"2026-09-01","granted":True})
+        seen = []
+        for name in ['living', 'dining']:
+            camera=c.post(f"/api/v1/homes/{home}/cameras",headers=headers,json={"name":name}).json()['id']
+            payload={"camera_id":camera,"frame_base64":base64.b64encode(b'two tables').decode(),"width":640,"height":480,"candidate_labels":["table"]}
+            for _ in range(3):
+                response=c.post(f"/api/v1/homes/{home}/vision/frames",headers=headers,json=payload)
+                assert response.status_code==200
+            result=response.json()
+            assert len(result['data'])==2
+>           assert len(result['observations'])==2
+E           AssertionError: assert 1 == 2
+E            +  where 1 = len([{'event_id': 'bab486fa-e751-435a-b50f-67f7afb61cf9', 'identity': {'status': 'anonymous'}, 'object_id': '7177fb32-8cb1-4ee8-94d8-05393cc4e76f', 'observation_id': 'b8808fe6-6e3b-45bc-94e2-21048698d6d4', ...}])
+
+tests/test_api.py:1152: AssertionError
+__________ test_ambiguous_named_objects_are_not_arbitrarily_assigned ___________
+
+tmp_path = PosixPath('/tmp/pytest-of-agent/pytest-16/test_ambiguous_named_objects_a0')
+
+    def test_ambiguous_named_objects_are_not_arbitrarily_assigned(tmp_path):
+        c, home, h, p, _ = tracked_glasses_client(tmp_path)
+        named={c.post(f'/api/v1/homes/{home}/objects',headers=h,json={'label':'glasses','display_name':name}).json()['id'] for name in ['Reading glasses','Spare glasses']}
+        for _ in range(3):r=c.post(f'/api/v1/homes/{home}/vision/frames',headers=h,json=p)
+>       assert r.json()['observations'][0]['object_id'] not in named
+E       AssertionError: assert 'b6a8fe4d-5995-4263-a41a-6fb8ecfa4006' not in {'0faec76a-09bf-4487-bc70-2be7f3842197', 'b6a8fe4d-5995-4263-a41a-6fb8ecfa4006'}
+
+tests/test_api.py:1209: AssertionError
+____________ test_duplicate_objects_do_not_starve_candidate_labels _____________
+
+tmp_path = PosixPath('/tmp/pytest-of-agent/pytest-16/test_duplicate_objects_do_not_0')
+
+    def test_duplicate_objects_do_not_starve_candidate_labels(tmp_path):
+        c, home, h, p, detector = tracked_glasses_client(tmp_path)
+        for i in range(21):
+            c.post(f'/api/v1/homes/{home}/objects',headers=h,json={'label':'glasses','display_name':f'Glasses {i}'})
+        c.post(f'/api/v1/homes/{home}/objects',headers=h,json={'label':'walker','display_name':'Walker'})
+        assert c.post(f'/api/v1/homes/{home}/vision/frames',headers=h,json=p).status_code==200
+>       assert 'walker' in detector.labels
+E       AssertionError: assert 'walker' in ['person', 'glasses']
+E        +  where ['person', 'glasses'] = <test_api.NamedGlassesDetector object at 0x7f327fadbd10>.labels
+
+tests/test_api.py:1219: AssertionError
+_ LocalizationTests.test_minimal_semantic_roots_preserve_pose_across_fov_and_assignment_order _
+
+self = <geometry_service.tests.test_localization.LocalizationTests testMethod=test_minimal_semantic_roots_preserve_pose_across_fov_and_assignment_order>
+
+    def test_minimal_semantic_roots_preserve_pose_across_fov_and_assignment_order(self) -> None:
+        # Three exact center correspondences have ambiguous minimal roots.
+        # Recover the upright branch without depending on SQPnP's root/order
+        # choices or using duplicated floor anchors as extra object evidence.
+        for fov in (54.0, 60.0, 74.0):
+            for reverse_order in (False, True):
+                with self.subTest(fov=fov, reverse_order=reverse_order):
+                    request, true_center = _semantic_center_scene(fov)
+                    if reverse_order:
+                        request.room_objects.reverse()
+                        request.object_detections.reverse()
+                    seeds = _semantic_object_pose_seeds(
+                        request, frame_index=0, frame_width=640, frame_height=360,
+                    )
+                    self.assertTrue(seeds)
+                    best = seeds[0]
+                    estimated = np.asarray(_camera_to_world(best["rvec"], best["tvec"]))
+>                   np.testing.assert_allclose(estimated[:3, 3], true_center, atol=0.01)
+E                   AssertionError: 
+E                   Not equal to tolerance rtol=1e-07, atol=0.01
+E                   
+E                   Mismatched elements: 3 / 3 (100%)
+E                   Max absolute difference among violations: 1.23040352
+E                   Max relative difference among violations: 3.39182655
+E                    ACTUAL: array([-0.478365,  0.65896 ,  0.769596])
+E                    DESIRED: array([0.2, 0.2, 2. ])
+
+geometry_service/tests/test_localization.py:1259: AssertionError
+_ LocalizationTests.test_provisional_fit_support_tracks_rejected_and_clean_correspondences _
+
+self = <geometry_service.tests.test_localization.LocalizationTests testMethod=test_provisional_fit_support_tracks_rejected_and_clean_correspondences>
+
+    def test_provisional_fit_support_tracks_rejected_and_clean_correspondences(self) -> None:
+        for outlier_index in (0, 3, 6, None):
+            with self.subTest(outlier_index=outlier_index):
+                provisional = _provisional_pose_from_guided_matches(
+                    **_guided_match_scene(outlier_index),
+                )
+                self.assertIsNotNone(provisional)
+                assert provisional is not None
+                expected = [index for index in range(7) if index != outlier_index]
+                np.testing.assert_array_equal(provisional["inlier_indices"], expected)
+>               self.assertEqual(provisional["provisional_subset_size"], len(expected))
+E               AssertionError: 7 != 6
+
+geometry_service/tests/test_localization.py:1949: AssertionError
+_ LocalizationTests.test_provisional_guided_pose_recovers_six_good_matches_with_one_outlier _
+
+self = <geometry_service.tests.test_localization.LocalizationTests testMethod=test_provisional_guided_pose_recovers_six_good_matches_with_one_outlier>
+
+    def test_provisional_guided_pose_recovers_six_good_matches_with_one_outlier(self) -> None:
+        scene = _guided_match_scene()
+    
+        provisional = _provisional_pose_from_guided_matches(**scene)
+    
+        self.assertIsNotNone(provisional)
+        assert provisional is not None
+        self.assertGreaterEqual(provisional["inlier_count"], 6)
+>       self.assertEqual(provisional["provisional_subset_size"], 6)
+E       AssertionError: 7 != 6
+
+geometry_service/tests/test_localization.py:1933: AssertionError
+___ LocalizationTests.test_semantic_room_objects_provide_a_bounded_pose_seed ___
+
+self = <geometry_service.tests.test_localization.LocalizationTests testMethod=test_semantic_room_objects_provide_a_bounded_pose_seed>
+
+    def test_semantic_room_objects_provide_a_bounded_pose_seed(self) -> None:
+        width, height = 640, 360
+        request, true_center = _semantic_center_scene()
+    
+        seeds = _semantic_object_pose_seeds(request, frame_index=0, frame_width=width, frame_height=height)
+    
+        self.assertTrue(seeds)
+        best = seeds[0]
+        estimated = np.asarray(_camera_to_world(best["rvec"], best["tvec"]), dtype=np.float64)
+>       np.testing.assert_allclose(estimated[:3, 3], true_center, atol=0.30)
+E       AssertionError: 
+E       Not equal to tolerance rtol=1e-07, atol=0.3
+E       
+E       Mismatched elements: 2 / 3 (66.7%)
+E       Max absolute difference among violations: 0.52891379
+E       Max relative difference among violations: 1.6843876
+E        ACTUAL: array([-0.136878,  0.481287,  1.471086])
+E        DESIRED: array([0.2, 0.2, 2. ])
+
+geometry_service/tests/test_localization.py:1237: AssertionError
+=============================== warnings summary ===============================
+../../../opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+--------- generated xml file: /workspace/shared/baseline-expanded.xml ----------
+================================ tests coverage ================================
+_______________ coverage: platform linux, python 3.12.14-final-0 _______________
+
+Coverage JSON written to file /workspace/shared/baseline-expanded-coverage.json
+=========================== short test summary info ============================
+FAILED tests/test_analytics.py::test_trend_compares_daily_rates[values0-stable]
+FAILED tests/test_analytics.py::test_trend_compares_daily_rates[values1-stable]
+FAILED tests/test_analytics.py::test_trend_compares_daily_rates[values3-decreasing]
+FAILED tests/test_analytics.py::test_calendar_window_includes_first_day_midnight[7]
+FAILED tests/test_analytics.py::test_calendar_window_includes_first_day_midnight[30]
+FAILED tests/test_analytics.py::test_calendar_window_includes_first_day_midnight[90]
+FAILED tests/test_api.py::test_same_label_tracks_have_distinct_objects_and_independent_throttles
+FAILED tests/test_api.py::test_ambiguous_named_objects_are_not_arbitrarily_assigned
+FAILED tests/test_api.py::test_duplicate_objects_do_not_starve_candidate_labels
+FAILED geometry_service/tests/test_localization.py::LocalizationTests::test_minimal_semantic_roots_preserve_pose_across_fov_and_assignment_order
+FAILED geometry_service/tests/test_localization.py::LocalizationTests::test_provisional_fit_support_tracks_rejected_and_clean_correspondences
+FAILED geometry_service/tests/test_localization.py::LocalizationTests::test_provisional_guided_pose_recovers_six_good_matches_with_one_outlier
+FAILED geometry_service/tests/test_localization.py::LocalizationTests::test_semantic_room_objects_provide_a_bounded_pose_seed
+13 failed, 139 passed, 2 skipped, 1 warning in 159.65s (0:02:39)

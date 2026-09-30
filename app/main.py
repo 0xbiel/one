@@ -1033,6 +1033,7 @@ def make_app(
 
     app.state.db, app.state.store, app.state.clip_store, app.state.template_store, app.state.bus, app.state.settings, app.state.vision = db, store, clip_store, template_store, bus, settings, vision
     app.state.vision_person_objects = {}
+    app.state.vision_tracked_objects = {}
     app.state.vision_person_identity = {}
     app.state.fall_detector = FallDetectionTracker()
     app.state.geometry_service = geometry
@@ -4227,7 +4228,7 @@ def make_app(
     def vision_candidate_labels(home_id: str, requested: list[str]) -> list[str]:
         labels = [item.strip().lower() for item in requested if item.strip()]
         if not labels:
-            labels = [str(row["label"]).strip().lower() for row in db.many("SELECT label FROM objects WHERE home_id=? AND enabled=1 ORDER BY created_at LIMIT 20", (home_id,))]
+            labels = [str(row["label"]).strip().lower() for row in db.many("SELECT lower(trim(label)) AS label FROM objects WHERE home_id=? AND enabled=1 GROUP BY lower(trim(label)) ORDER BY MIN(created_at), lower(trim(label)) LIMIT 20", (home_id,))]
             labels = ["person", *labels]
         if len(labels) == 1 and labels[0] == "person":
             labels.extend(["keys", "glasses", "mobile phone", "remote control", "cup", "bottle", "book", "medication box", "cane", "walker"])
@@ -4549,6 +4550,37 @@ def make_app(
             object_id = live_person_object_id(home_id, camera_id, track_id, map_id=map_id, x=x, z=z)
             if identity.get("status") == "matched":
                 object_id = bind_person_identity(home_id, object_id, identity)
+        elif isinstance(track_id, int) and track_id > 0:
+            # Track IDs are local to one camera. A label describes a class,
+            # not an individual object: two tables must keep separate histories.
+            now = datetime.now(timezone.utc)
+            tracks = app.state.vision_tracked_objects
+            key = (home_id, camera_id, label, track_id)
+            # Keep an arriving track's continuity even after a capture pause.
+            # Prune other stale claims before attempting a new association.
+            existing = tracks.get(key)
+            for stale_key, (_object_id, last_seen) in list(tracks.items()):
+                if stale_key != key and (now - last_seen).total_seconds() > 12:
+                    tracks.pop(stale_key, None)
+            object_id = existing[0] if existing else None
+            if object_id is not None and not db.one(
+                "SELECT id FROM objects WHERE id=? AND home_id=? AND lower(label)=? AND enabled=1",
+                (object_id, home_id, label),
+            ):
+                object_id = None
+            if object_id is None:
+                claimed = {value[0] for other_key, value in tracks.items() if other_key != key}
+                candidates = [row for row in db.many(
+                    "SELECT id FROM objects WHERE home_id=? AND lower(label)=? AND enabled=1",
+                    (home_id, label),
+                ) if row["id"] not in claimed]
+                # Preserve the existing named-object behavior only when there
+                # is exactly one unclaimed candidate. This is label-based
+                # compatibility association, not verified physical identity.
+                object_id = candidates[0]["id"] if len(candidates) == 1 else str(uuid.uuid4())
+                if len(candidates) != 1:
+                    db.execute("INSERT INTO objects(id,home_id,label,display_name,enabled,created_at,care_recipient_id) VALUES (?,?,?,?,?,?,NULL)", (object_id, home_id, label, label.replace("_", " ").title(), 1, now_iso()))
+            tracks[key] = (object_id, now)
         else:
             object_row = db.one("SELECT * FROM objects WHERE home_id=? AND lower(label)=? AND enabled=1 ORDER BY created_at LIMIT 1", (home_id, label))
             if object_row is None:
@@ -5574,3 +5606,4 @@ def make_app(
 
 
 app = make_app()
+

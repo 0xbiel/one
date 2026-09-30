@@ -1,0 +1,62 @@
+F.FF                                                                     [100%]
+=================================== FAILURES ===================================
+____ test_same_label_tracks_have_distinct_objects_and_independent_throttles ____
+
+tmp_path = PosixPath('/tmp/pytest-of-agent/pytest-11/test_same_label_tracks_have_di0')
+
+    def test_same_label_tracks_have_distinct_objects_and_independent_throttles(tmp_path):
+        c = client(tmp_path, TwoTableDetector()); token, home = auth(c)
+        headers = {"Authorization": f"Bearer {token}"}
+        c.post(f"/api/v1/homes/{home}/consents", headers=headers, json={"purpose":"video_capture","policy_version":"2026-09-01","granted":True})
+        seen = []
+        for name in ['living', 'dining']:
+            camera=c.post(f"/api/v1/homes/{home}/cameras",headers=headers,json={"name":name}).json()['id']
+            payload={"camera_id":camera,"frame_base64":base64.b64encode(b'two tables').decode(),"width":640,"height":480,"candidate_labels":["table"]}
+            for _ in range(3):
+                response=c.post(f"/api/v1/homes/{home}/vision/frames",headers=headers,json=payload)
+                assert response.status_code==200
+            result=response.json()
+            assert len(result['data'])==2
+>           assert len(result['observations'])==2
+E           AssertionError: assert 1 == 2
+E            +  where 1 = len([{'event_id': 'a96698f2-b425-4033-a303-09f6b4a1170b', 'identity': {'status': 'anonymous'}, 'object_id': '0edf9084-3be7-4632-beb9-74440c94a78d', 'observation_id': 'ad05314b-b9db-4ab7-b8ed-ac4d0f36874a', ...}])
+
+tests/test_api.py:1152: AssertionError
+__________ test_ambiguous_named_objects_are_not_arbitrarily_assigned ___________
+
+tmp_path = PosixPath('/tmp/pytest-of-agent/pytest-11/test_ambiguous_named_objects_a0')
+
+    def test_ambiguous_named_objects_are_not_arbitrarily_assigned(tmp_path):
+        c, home, h, p, _ = tracked_glasses_client(tmp_path)
+        named={c.post(f'/api/v1/homes/{home}/objects',headers=h,json={'label':'glasses','display_name':name}).json()['id'] for name in ['Reading glasses','Spare glasses']}
+        for _ in range(3):r=c.post(f'/api/v1/homes/{home}/vision/frames',headers=h,json=p)
+>       assert r.json()['observations'][0]['object_id'] not in named
+E       AssertionError: assert '3de7c50d-018a-4d7f-9ccf-00edc58f9064' not in {'1cfdbc2f-823a-45e5-a779-ad9df1bd55d0', '3de7c50d-018a-4d7f-9ccf-00edc58f9064'}
+
+tests/test_api.py:1209: AssertionError
+____________ test_duplicate_objects_do_not_starve_candidate_labels _____________
+
+tmp_path = PosixPath('/tmp/pytest-of-agent/pytest-11/test_duplicate_objects_do_not_0')
+
+    def test_duplicate_objects_do_not_starve_candidate_labels(tmp_path):
+        c, home, h, p, detector = tracked_glasses_client(tmp_path)
+        for i in range(21):
+            c.post(f'/api/v1/homes/{home}/objects',headers=h,json={'label':'glasses','display_name':f'Glasses {i}'})
+        c.post(f'/api/v1/homes/{home}/objects',headers=h,json={'label':'walker','display_name':'Walker'})
+        assert c.post(f'/api/v1/homes/{home}/vision/frames',headers=h,json=p).status_code==200
+>       assert 'walker' in detector.labels
+E       AssertionError: assert 'walker' in ['person', 'glasses']
+E        +  where ['person', 'glasses'] = <test_api.NamedGlassesDetector object at 0x7ff67075c890>.labels
+
+tests/test_api.py:1219: AssertionError
+=============================== warnings summary ===============================
+../../../opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_api.py::test_same_label_tracks_have_distinct_objects_and_independent_throttles
+FAILED tests/test_api.py::test_ambiguous_named_objects_are_not_arbitrarily_assigned
+FAILED tests/test_api.py::test_duplicate_objects_do_not_starve_candidate_labels
+3 failed, 1 passed, 30 deselected, 1 warning in 1.45s

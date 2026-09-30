@@ -1,0 +1,27 @@
+{
+  "code_commit": "e6abb03a803f403371626cfc2636c831308d71a3",
+  "model_name": "yolov8s-worldv2-indoor-objects-v1",
+  "model_sha256": "9b2c17ab6124a913e9b3a5c170617920d91b0f01111a8479da69f00e2cf27792",
+  "input_kind": "rendered_rgb_frames",
+  "inference_fps": 12.0,
+  "memoized_harness_processing_fps": 0.4684590206532995,
+  "memoized_harness_latency_median_s": 2.111122452000018,
+  "memoized_harness_latency_p95_s": 2.5197829289991205,
+  "clip_sha256": {
+    "fall_physics_ragdoll": "4af74ee70c6d5cff4d4339423274b89f00073169ba17d635e2407599fe604278",
+    "fall_physics_forward": "2f3eb79e985659c18151288ea49d79a55e6cc83ef186b2ceed2a0684ba207f52"
+  },
+  "clock": "production clocks use decoded clip FPS capture timestamps to separate playback from CPU throughput",
+  "thresholds": {
+    "detection": 0.2,
+    "fall_min_confidence": 0.55,
+    "stability_hits": 3,
+    "fall_confirmation_hits": 3
+  },
+  "inference_calls": 143,
+  "replayed_frames": 144,
+  "memoization": "only exact JPEG bytes + dimensions + labels; every frame still traverses production tracker/API",
+  "device": "cpu",
+  "threads": 2,
+  "image_input": "decoded MP4 frames, re-encoded JPEG quality95; no annotation inputs"
+}

@@ -1,0 +1,88 @@
+{
+  "schema": "one-synthetic-fall-clips/v1",
+  "fps": 10,
+  "width": 640,
+  "height": 480,
+  "frames_per_clip": 80,
+  "duration_seconds": 8,
+  "frame_timestamp": "zero-based frame index / fps",
+  "source_room_commit": "a89ff32f1024f83b925c5cccdc0dc29bd91ec370",
+  "ground_truth_origin": "procedural choreography; not detector outputs",
+  "limitations": [
+    "Stylized procedural adult actor, not photorealistic",
+    "Ground-truth intent labels do not establish medical or emergency validity",
+    "Projected ground-truth boxes are annotations only and must not substitute for image detections"
+  ],
+  "clips": [
+    {
+      "id": "fall_side",
+      "file": "fall_side.mp4",
+      "expected_fall": true,
+      "motion_onset_s": 2.0,
+      "fall_onset_s": 2.0,
+      "floor_contact_s": 2.7,
+      "observation_end_s": 7.9,
+      "confounder": null
+    },
+    {
+      "id": "fall_forward",
+      "file": "fall_forward.mp4",
+      "expected_fall": true,
+      "motion_onset_s": 2.0,
+      "fall_onset_s": 2.0,
+      "floor_contact_s": 2.7,
+      "observation_end_s": 7.9,
+      "confounder": null
+    },
+    {
+      "id": "fall_occluded",
+      "file": "fall_occluded.mp4",
+      "expected_fall": true,
+      "motion_onset_s": 2.0,
+      "fall_onset_s": 2.0,
+      "floor_contact_s": 2.7,
+      "observation_end_s": 7.9,
+      "confounder": null
+    },
+    {
+      "id": "sit",
+      "file": "sit.mp4",
+      "expected_fall": false,
+      "motion_onset_s": 2.0,
+      "fall_onset_s": null,
+      "floor_contact_s": null,
+      "observation_end_s": 7.9,
+      "confounder": "sit"
+    },
+    {
+      "id": "bend",
+      "file": "bend.mp4",
+      "expected_fall": false,
+      "motion_onset_s": 2.0,
+      "fall_onset_s": null,
+      "floor_contact_s": null,
+      "observation_end_s": 7.9,
+      "confounder": "bend"
+    },
+    {
+      "id": "lie_down",
+      "file": "lie_down.mp4",
+      "expected_fall": false,
+      "motion_onset_s": 2.0,
+      "fall_onset_s": null,
+      "floor_contact_s": 5.0,
+      "observation_end_s": 7.9,
+      "confounder": "lie_down"
+    },
+    {
+      "id": "drop_object",
+      "file": "drop_object.mp4",
+      "expected_fall": false,
+      "motion_onset_s": 2.0,
+      "fall_onset_s": null,
+      "floor_contact_s": null,
+      "observation_end_s": 7.9,
+      "confounder": "drop_object"
+    }
+  ]
+}

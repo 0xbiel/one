@@ -1,0 +1,18 @@
+{
+  "probe": {
+    "programs": [],
+    "stream_groups": [],
+    "streams": [
+      {
+        "width": 640,
+        "height": 480,
+        "r_frame_rate": "12/1",
+        "nb_frames": "72"
+      }
+    ],
+    "format": {
+      "duration": "6.000000"
+    }
+  },
+  "sha256": "4af74ee70c6d5cff4d4339423274b89f00073169ba17d635e2407599fe604278"
+}

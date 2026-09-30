@@ -1,0 +1,42 @@
+{
+  "common_poses": 18,
+  "exactly_unchanged_common_poses": 18,
+  "conditions": [
+    {
+      "condition": "clean",
+      "baseline_completed": 6,
+      "optimized_completed": 6,
+      "baseline_median_seconds": 37.960390252499565,
+      "optimized_median_seconds": 14.17675210050038,
+      "optimized_min_seconds": 9.827318116000242,
+      "optimized_max_seconds": 16.26068665800085
+    },
+    {
+      "condition": "noisy_depth_missing_boxes",
+      "baseline_completed": 6,
+      "optimized_completed": 6,
+      "baseline_median_seconds": 9.960396432999005,
+      "optimized_median_seconds": 7.501852596498793,
+      "optimized_min_seconds": 6.818273402999694,
+      "optimized_max_seconds": 7.995716661000188
+    },
+    {
+      "condition": "no_depth",
+      "baseline_completed": 6,
+      "optimized_completed": 6,
+      "baseline_median_seconds": 4.96256026699939,
+      "optimized_median_seconds": 3.975133081999047,
+      "optimized_min_seconds": 2.84803503799958,
+      "optimized_max_seconds": 4.9928624860003765
+    },
+    {
+      "condition": "unknown_intrinsics",
+      "baseline_completed": 0,
+      "optimized_completed": 6,
+      "baseline_median_seconds": null,
+      "optimized_median_seconds": 71.11934671449944,
+      "optimized_min_seconds": 61.751690102000794,
+      "optimized_max_seconds": 86.04222570499951
+    }
+  ]
+}

@@ -19,11 +19,26 @@ jobs:
           --health-retries 12
     env:
       ONE_TEST_POSTGRES_URL: postgresql://one:one@127.0.0.1:5432/one
+      # The geometry tests train a tiny real matcher. Bound CPU thread pools
+      # for reproducible runtimes without requiring a GPU or model weights.
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: "3.12"}
+      # Install the CPU wheel first so the dev extra does not pull CUDA wheels.
+      - run: pip install 'torch>=2.4,<3' --index-url https://download.pytorch.org/whl/cpu
       - run: pip install -e '.[dev,postgres]'
       - run: pytest
+      - run: python -m unittest discover -s qa/fall-animations -p "test_score_results.py"
+      - name: Verify frozen image benchmark lineage
+        run: |
+          QA=qa/regression-benchmarks-2026-09-30
+          python "$QA/summarize_image_runs.py" \
+            --baseline "$QA/evidence/fall-baseline-part1.jsonl" "$QA/evidence/fall-baseline-part2.jsonl" "$QA/evidence/fall-physics-baseline.jsonl" \
+            --candidate "$QA/evidence/fall-candidate-part1.jsonl" "$QA/evidence/fall-candidate-part2.jsonl" "$QA/evidence/fall-physics-candidate.jsonl" \
+            --manifest qa/fall-animations/assets/manifest.json --output /tmp/image-comparison.json
+          cmp /tmp/image-comparison.json "$QA/evidence/final-image-comparison.json"
       - run: python scripts/generate_openapi.py
       - run: git diff --exit-code -- contracts/openapi.json

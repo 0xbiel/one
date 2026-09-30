@@ -1,0 +1,90 @@
+{
+  "baseline-expanded": {
+    "totals": {
+      "covered_lines": 7617,
+      "num_statements": 10399,
+      "percent_covered": 73.24742763727282,
+      "percent_covered_display": "73",
+      "missing_lines": 2782,
+      "excluded_lines": 43,
+      "percent_statements_covered": 73.24742763727282,
+      "percent_statements_covered_display": "73"
+    },
+    "modules": {
+      "app/analytics.py": {
+        "covered_lines": 63,
+        "num_statements": 70,
+        "percent_covered": 90.0,
+        "percent_covered_display": "90",
+        "missing_lines": 7,
+        "excluded_lines": 0,
+        "percent_statements_covered": 90.0,
+        "percent_statements_covered_display": "90"
+      },
+      "app/main.py": {
+        "covered_lines": 2749,
+        "num_statements": 3487,
+        "percent_covered": 78.83567536564382,
+        "percent_covered_display": "79",
+        "missing_lines": 738,
+        "excluded_lines": 0,
+        "percent_statements_covered": 78.83567536564382,
+        "percent_statements_covered_display": "79"
+      },
+      "geometry_service/localization.py": {
+        "covered_lines": 1801,
+        "num_statements": 2481,
+        "percent_covered": 72.59169689641274,
+        "percent_covered_display": "73",
+        "missing_lines": 680,
+        "excluded_lines": 0,
+        "percent_statements_covered": 72.59169689641274,
+        "percent_statements_covered_display": "73"
+      }
+    }
+  },
+  "replacement-final": {
+    "totals": {
+      "covered_lines": 7650,
+      "num_statements": 10424,
+      "percent_covered": 73.38833461243284,
+      "percent_covered_display": "73",
+      "missing_lines": 2774,
+      "excluded_lines": 43,
+      "percent_statements_covered": 73.38833461243284,
+      "percent_statements_covered_display": "73"
+    },
+    "modules": {
+      "app/analytics.py": {
+        "covered_lines": 64,
+        "num_statements": 70,
+        "percent_covered": 91.42857142857143,
+        "percent_covered_display": "91",
+        "missing_lines": 6,
+        "excluded_lines": 0,
+        "percent_statements_covered": 91.42857142857143,
+        "percent_statements_covered_display": "91"
+      },
+      "app/main.py": {
+        "covered_lines": 2761,
+        "num_statements": 3506,
+        "percent_covered": 78.75071306332002,
+        "percent_covered_display": "79",
+        "missing_lines": 745,
+        "excluded_lines": 0,
+        "percent_statements_covered": 78.75071306332002,
+        "percent_statements_covered_display": "79"
+      },
+      "geometry_service/localization.py": {
+        "covered_lines": 1807,
+        "num_statements": 2487,
+        "percent_covered": 72.65782066747084,
+        "percent_covered_display": "73",
+        "missing_lines": 680,
+        "excluded_lines": 0,
+        "percent_statements_covered": 72.65782066747084,
+        "percent_statements_covered_display": "73"
+      }
+    }
+  }
+}
