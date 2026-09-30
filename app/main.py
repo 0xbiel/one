@@ -12,6 +12,7 @@ import threading
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from typing import Annotated, Literal, Sequence
 from urllib.parse import urlparse
 from urllib.parse import urlencode
@@ -667,6 +668,51 @@ class MedicationPlanUpdate(BaseModel):
     active: bool | None = None
     assigned_caregiver_id: str | None = None
     version: int | None = Field(default=None, ge=1)
+
+
+class CareEntryIn(BaseModel):
+    care_recipient_id: str
+    kind: Literal["note", "appointment"]
+    title: str = Field(min_length=1, max_length=160)
+    body: str = Field(default="", max_length=4000)
+    location: str = Field(default="", max_length=240)
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
+    timezone_name: str | None = Field(default=None, max_length=100)
+    reminder_minutes: int | None = Field(default=None, ge=0, le=10080)
+
+    @model_validator(mode="after")
+    def validate_schedule(self) -> "CareEntryIn":
+        if not self.title.strip():
+            raise ValueError("A title is required")
+        if self.kind == "note":
+            if not self.body.strip():
+                raise ValueError("Notes need text")
+            if self.location or any(value is not None for value in (self.starts_at, self.ends_at, self.timezone_name, self.reminder_minutes)):
+                raise ValueError("Notes cannot have an appointment schedule")
+        else:
+            if self.starts_at is None or self.timezone_name is None:
+                raise ValueError("Appointments need a start and timezone")
+            if self.starts_at.tzinfo is None or self.starts_at.utcoffset() is None:
+                raise ValueError("Appointment start must include a timezone")
+            if self.ends_at is not None and (self.ends_at.tzinfo is None or self.ends_at.utcoffset() is None or self.ends_at <= self.starts_at):
+                raise ValueError("Appointment end must be after start and include a timezone")
+            try:
+                ZoneInfo(self.timezone_name)
+            except (ZoneInfoNotFoundError, ValueError) as exc:
+                raise ValueError("Unknown appointment timezone") from exc
+        return self
+
+
+class CareEntryUpdate(BaseModel):
+    version: int = Field(ge=1)
+    title: str = Field(min_length=1, max_length=160)
+    body: str = Field(default="", max_length=4000)
+    location: str = Field(default="", max_length=240)
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
+    timezone_name: str | None = Field(default=None, max_length=100)
+    reminder_minutes: int | None = Field(default=None, ge=0, le=10080)
 
 
 class MedicationCheckInIn(BaseModel):
@@ -5051,6 +5097,84 @@ def make_app(
         db.execute("UPDATE objects SET care_recipient_id=NULL, display_name='Person' WHERE home_id=? AND care_recipient_id=?", (home_id, recipient_id))
         audit(actor, "face_profile.delete", "care_recipient", recipient_id, home_id)
         return face_profile_view(home_id, recipient_id)
+
+    def care_planning_recipient(home_id: str, recipient_id: str, actor: dict) -> dict:
+        home_check(actor, home_id)
+        family_actor(actor)
+        recipient_id = canonical_uuid(recipient_id, "care_recipient_id")
+        recipient = care_recipient_row(home_id, recipient_id)
+        require_care_recipient_consent(home_id, recipient_id, "care_planning")
+        return recipient
+
+    def care_entry_view(row: dict) -> dict:
+        return {key: row.get(key) for key in (
+            "id", "home_id", "care_recipient_id", "kind", "title", "body", "location", "starts_at", "ends_at",
+            "timezone_name", "reminder_minutes", "version", "created_by", "created_at", "updated_at"
+        )}
+
+    def care_entry_row(home_id: str, entry_id: str, actor: dict) -> dict:
+        home_check(actor, home_id)
+        family_actor(actor)
+        entry_id = canonical_uuid(entry_id, "entry_id")
+        row = db.one("SELECT * FROM care_entries WHERE id=? AND home_id=?", (entry_id, home_id))
+        if not row:
+            raise HTTPException(404, "Care entry not found")
+        care_planning_recipient(home_id, row["care_recipient_id"], actor)
+        return row
+
+    @app.get("/api/v1/homes/{home_id}/care-entries")
+    def care_entries(home_id: str, care_recipient_id: str, actor: Current):
+        recipient = care_planning_recipient(home_id, care_recipient_id, actor)
+        rows = db.many(
+            "SELECT * FROM care_entries WHERE home_id=? AND care_recipient_id=? ORDER BY COALESCE(starts_at,created_at) DESC",
+            (home_id, recipient["id"]),
+        )
+        return {"data": [care_entry_view(row) for row in rows]}
+
+    @app.post("/api/v1/homes/{home_id}/care-entries", status_code=201)
+    def create_care_entry(home_id: str, body: CareEntryIn, actor: Current):
+        recipient = care_planning_recipient(home_id, body.care_recipient_id, actor)
+        entry_id, timestamp = str(uuid.uuid4()), now_iso()
+        starts = body.starts_at.astimezone(timezone.utc).isoformat() if body.starts_at else None
+        ends = body.ends_at.astimezone(timezone.utc).isoformat() if body.ends_at else None
+        db.execute(
+            "INSERT INTO care_entries(id,home_id,care_recipient_id,kind,title,body,location,starts_at,ends_at,timezone_name,reminder_minutes,version,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,1,?,?,?)",
+            (entry_id, home_id, recipient["id"], body.kind, body.title.strip(), body.body.strip(), body.location.strip(), starts, ends, body.timezone_name, body.reminder_minutes, actor["user_id"], timestamp, timestamp),
+        )
+        audit(actor, "care_entry.create", "care_entry", entry_id, home_id)
+        return care_entry_view(db.one("SELECT * FROM care_entries WHERE id=?", (entry_id,)))
+
+    @app.patch("/api/v1/homes/{home_id}/care-entries/{entry_id}")
+    def update_care_entry(home_id: str, entry_id: str, body: CareEntryUpdate, actor: Current):
+        row = care_entry_row(home_id, entry_id, actor)
+        if actor["role"] != "admin" and row["created_by"] != actor["user_id"]:
+            raise HTTPException(403, "Only the author or admin can edit this entry")
+        if body.version != row["version"]:
+            raise HTTPException(409, "Care entry version conflict")
+        validated = CareEntryIn(care_recipient_id=row["care_recipient_id"], kind=row["kind"], **body.model_dump(exclude={"version"}))
+        starts = validated.starts_at.astimezone(timezone.utc).isoformat() if validated.starts_at else None
+        ends = validated.ends_at.astimezone(timezone.utc).isoformat() if validated.ends_at else None
+        updated = db.execute(
+            "UPDATE care_entries SET title=?,body=?,location=?,starts_at=?,ends_at=?,timezone_name=?,reminder_minutes=?,version=version+1,updated_at=? WHERE id=? AND home_id=? AND version=?",
+            (validated.title.strip(), validated.body.strip(), validated.location.strip(), starts, ends, validated.timezone_name, validated.reminder_minutes, now_iso(), row["id"], home_id, body.version),
+        )
+        if updated.rowcount != 1:
+            raise HTTPException(409, "Care entry version conflict")
+        audit(actor, "care_entry.update", "care_entry", row["id"], home_id)
+        return care_entry_view(db.one("SELECT * FROM care_entries WHERE id=?", (row["id"],)))
+
+    @app.delete("/api/v1/homes/{home_id}/care-entries/{entry_id}")
+    def remove_care_entry(home_id: str, entry_id: str, version: int, actor: Current):
+        row = care_entry_row(home_id, entry_id, actor)
+        if actor["role"] != "admin" and row["created_by"] != actor["user_id"]:
+            raise HTTPException(403, "Only the author or admin can remove this entry")
+        if version != row["version"]:
+            raise HTTPException(409, "Care entry version conflict")
+        removed = db.execute("DELETE FROM care_entries WHERE id=? AND home_id=? AND version=?", (row["id"], home_id, version))
+        if removed.rowcount != 1:
+            raise HTTPException(409, "Care entry version conflict")
+        audit(actor, "care_entry.remove", "care_entry", row["id"], home_id)
+        return {"ok": True}
 
     def outside_recipient(home_id: str, recipient_id: str, actor: dict) -> dict:
         home_check(actor, home_id)

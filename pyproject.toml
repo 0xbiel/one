@@ -13,6 +13,7 @@ dependencies = [
   "pydantic-settings>=2.5,<3",
   "python-multipart>=0.0.9,<1",
   "cryptography>=43,<48",
+  "tzdata>=2025.1,<2028",
 ]
 
 [project.optional-dependencies]

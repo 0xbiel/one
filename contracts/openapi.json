@@ -684,6 +684,178 @@
         "title": "CameraUpdate",
         "type": "object"
       },
+      "CareEntryIn": {
+        "properties": {
+          "body": {
+            "default": "",
+            "maxLength": 4000,
+            "title": "Body",
+            "type": "string"
+          },
+          "care_recipient_id": {
+            "title": "Care Recipient Id",
+            "type": "string"
+          },
+          "ends_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ends At"
+          },
+          "kind": {
+            "enum": [
+              "note",
+              "appointment"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "location": {
+            "default": "",
+            "maxLength": 240,
+            "title": "Location",
+            "type": "string"
+          },
+          "reminder_minutes": {
+            "anyOf": [
+              {
+                "maximum": 10080.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reminder Minutes"
+          },
+          "starts_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Starts At"
+          },
+          "timezone_name": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timezone Name"
+          },
+          "title": {
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "care_recipient_id",
+          "kind",
+          "title"
+        ],
+        "title": "CareEntryIn",
+        "type": "object"
+      },
+      "CareEntryUpdate": {
+        "properties": {
+          "body": {
+            "default": "",
+            "maxLength": 4000,
+            "title": "Body",
+            "type": "string"
+          },
+          "ends_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ends At"
+          },
+          "location": {
+            "default": "",
+            "maxLength": 240,
+            "title": "Location",
+            "type": "string"
+          },
+          "reminder_minutes": {
+            "anyOf": [
+              {
+                "maximum": 10080.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reminder Minutes"
+          },
+          "starts_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Starts At"
+          },
+          "timezone_name": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timezone Name"
+          },
+          "title": {
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "version": {
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version",
+          "title"
+        ],
+        "title": "CareEntryUpdate",
+        "type": "object"
+      },
       "CareRecipientCreateIn": {
         "properties": {
           "display_name": {
@@ -1576,6 +1748,13 @@
             "title": "Client Sample Id",
             "type": "string"
           },
+          "dwell_duration_millis": {
+            "default": 0,
+            "maximum": 604800000.0,
+            "minimum": 0.0,
+            "title": "Dwell Duration Millis",
+            "type": "integer"
+          },
           "latitude": {
             "maximum": 90.0,
             "minimum": -90.0,
@@ -1600,6 +1779,18 @@
               }
             ],
             "title": "Speed Mps"
+          },
+          "street_name": {
+            "anyOf": [
+              {
+                "maxLength": 160,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Street Name"
           }
         },
         "required": [
@@ -2986,6 +3177,26 @@
       },
       "SafePlaceIn": {
         "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "kind": {
+            "default": "safe",
+            "enum": [
+              "home",
+              "safe"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
           "latitude": {
             "maximum": 90.0,
             "minimum": -90.0,
@@ -3005,9 +3216,9 @@
             "type": "string"
           },
           "radius_m": {
-            "default": 150,
+            "default": 20,
             "maximum": 5000.0,
-            "minimum": 25.0,
+            "minimum": 20.0,
             "title": "Radius M",
             "type": "number"
           }
@@ -3065,7 +3276,7 @@
             "anyOf": [
               {
                 "maximum": 5000.0,
-                "minimum": 25.0,
+                "minimum": 20.0,
                 "type": "number"
               },
               {
@@ -3073,8 +3284,16 @@
               }
             ],
             "title": "Radius M"
+          },
+          "revision": {
+            "minimum": 1.0,
+            "title": "Revision",
+            "type": "integer"
           }
         },
+        "required": [
+          "revision"
+        ],
         "title": "SafePlaceUpdateIn",
         "type": "object"
       },
@@ -5015,6 +5234,206 @@
         "summary": "Camera Roomplan Readiness"
       }
     },
+    "/api/v1/homes/{home_id}/care-entries": {
+      "get": {
+        "operationId": "care_entries_api_v1_homes__home_id__care_entries_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "care_recipient_id",
+            "required": true,
+            "schema": {
+              "title": "Care Recipient Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Care Entries"
+      },
+      "post": {
+        "operationId": "create_care_entry_api_v1_homes__home_id__care_entries_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CareEntryIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Care Entry"
+      }
+    },
+    "/api/v1/homes/{home_id}/care-entries/{entry_id}": {
+      "delete": {
+        "operationId": "remove_care_entry_api_v1_homes__home_id__care_entries__entry_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "entry_id",
+            "required": true,
+            "schema": {
+              "title": "Entry Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "version",
+            "required": true,
+            "schema": {
+              "title": "Version",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove Care Entry"
+      },
+      "patch": {
+        "operationId": "update_care_entry_api_v1_homes__home_id__care_entries__entry_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "entry_id",
+            "required": true,
+            "schema": {
+              "title": "Entry Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CareEntryUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Care Entry"
+      }
+    },
     "/api/v1/homes/{home_id}/care-recipients": {
       "get": {
         "operationId": "care_recipients_api_v1_homes__home_id__care_recipients_get",
@@ -5357,6 +5776,125 @@
         "summary": "Face Profile Enroll"
       }
     },
+    "/api/v1/homes/{home_id}/care-recipients/{recipient_id}/geo/reverse": {
+      "get": {
+        "operationId": "outside_geo_reverse_api_v1_homes__home_id__care_recipients__recipient_id__geo_reverse_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "recipient_id",
+            "required": true,
+            "schema": {
+              "title": "Recipient Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "lat",
+            "required": true,
+            "schema": {
+              "title": "Lat",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "lon",
+            "required": true,
+            "schema": {
+              "title": "Lon",
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Outside Geo Reverse"
+      }
+    },
+    "/api/v1/homes/{home_id}/care-recipients/{recipient_id}/geo/search": {
+      "get": {
+        "operationId": "outside_geo_search_api_v1_homes__home_id__care_recipients__recipient_id__geo_search_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "recipient_id",
+            "required": true,
+            "schema": {
+              "title": "Recipient Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "title": "Q",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Outside Geo Search"
+      }
+    },
     "/api/v1/homes/{home_id}/care-recipients/{recipient_id}/location-points": {
       "post": {
         "operationId": "location_points_upload_api_v1_homes__home_id__care_recipients__recipient_id__location_points_post",
@@ -5414,6 +5952,50 @@
       }
     },
     "/api/v1/homes/{home_id}/care-recipients/{recipient_id}/locations": {
+      "delete": {
+        "operationId": "location_history_clear_api_v1_homes__home_id__care_recipients__recipient_id__locations_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "recipient_id",
+            "required": true,
+            "schema": {
+              "title": "Recipient Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Location History Clear"
+      },
       "get": {
         "operationId": "location_history_api_v1_homes__home_id__care_recipients__recipient_id__locations_get",
         "parameters": [
@@ -5477,6 +6059,22 @@
               "default": 500,
               "title": "Limit",
               "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
             }
           }
         ],
@@ -5547,6 +6145,52 @@
           }
         },
         "summary": "Latest Location"
+      }
+    },
+    "/api/v1/homes/{home_id}/care-recipients/{recipient_id}/locations/state": {
+      "get": {
+        "operationId": "location_state_api_v1_homes__home_id__care_recipients__recipient_id__locations_state_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "title": "Home Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "recipient_id",
+            "required": true,
+            "schema": {
+              "title": "Recipient Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Location State"
       }
     },
     "/api/v1/homes/{home_id}/care-recipients/{recipient_id}/safe-places": {
@@ -5678,6 +6322,15 @@
             "schema": {
               "title": "Place Id",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "revision",
+            "required": true,
+            "schema": {
+              "title": "Revision",
+              "type": "integer"
             }
           }
         ],

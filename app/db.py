@@ -455,6 +455,9 @@ class Database:
                     CREATE UNIQUE INDEX safe_places_one_home_idx ON safe_places(care_recipient_id) WHERE kind='home';
                 """)
                 self._record_sqlite_migration(17)
+            if not self._sqlite_migration_applied(18):
+                self.conn.executescript(_migration_file("018_care_planning.sql"))
+                self._record_sqlite_migration(18)
             # Keep the zero-setup SQLite adapter forward-compatible with a
             # database created before caregiver assignment was introduced.
             plan_columns = {row[1] for row in self.conn.execute("PRAGMA table_info(medication_plans)").fetchall()}
@@ -547,7 +550,7 @@ class Database:
     def export_home(self, home_id: str) -> dict:
         # Export user-visible records, including the minimal rights/audit
         # trail. Never export bearer-token hashes or one-time pairing hashes.
-        tables = ["homes", "users", "memberships", "consents", "cameras", "rooms", "room_maps", "calibrations", "camera_map_generation_jobs", "objects", "observations", "events", "clips", "event_snapshots", "summaries", "family_invites", "medication_plans", "medication_check_ins", "tracking_devices", "location_points", "safe_places", "location_clear_watermarks", "audit_log", "deletion_requests"]
+        tables = ["homes", "users", "memberships", "consents", "cameras", "rooms", "room_maps", "calibrations", "camera_map_generation_jobs", "objects", "observations", "events", "clips", "event_snapshots", "summaries", "family_invites", "medication_plans", "medication_check_ins", "care_entries", "tracking_devices", "location_points", "safe_places", "location_clear_watermarks", "audit_log", "deletion_requests"]
         result = {}
         for table in tables:
             if table == "homes": query, params = "SELECT * FROM homes WHERE id=?", (home_id,)

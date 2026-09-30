@@ -35,6 +35,8 @@ to skip all LLM requests and use the deterministic fallback paths.
 
 All product endpoints are versioned under `/api/v1`. Object observations are approximate and include uncertainty; live video is not persisted by this API, except for the single encrypted image explicitly attached to a confirmed safety event. Events are derived metadata with a 30-day expiry, and clip records are designed for seven-day expiry. The LM Studio adapter uses `qwen3.6-35b-a3b` and falls back explicitly to a deterministic, non-medical summary when the local endpoint is unavailable.
 
+Caregiver-written notes and appointments are separate from detected events. With `care_planning` consent for a care recipient, household admins/caregivers can list and create them at `GET/POST /api/v1/homes/{home_id}/care-entries`; the author or admin can update/delete one at `PATCH/DELETE /api/v1/homes/{home_id}/care-entries/{entry_id}`. Updates/deletions use a version to reject stale edits. Deletion removes the entry content and records the action in audit, never presenting a note as an AI observation. Appointment times require an offset and IANA timezone and are stored as UTC instants. Android's appointment notifications are local after synchronization, not remote push.
+
 ## Camera-derived room geometry
 
 Camera setup can submit a short guided RGB sweep to the local room geometry
@@ -64,6 +66,11 @@ the tracked migrations in `migrations/` transactionally, and `/api/v1/health`
 reports the selected backend and connectivity status. The Docker image installs
 the PostgreSQL extra and Compose waits for the database health check before
 starting the API.
+
+Migration `018_care_planning.sql` is applied at API startup. After backing up
+PostgreSQL, rebuild with `docker compose up --build -d api`. The existing
+Dockerfile installs the new `tzdata` Python dependency from `pyproject.toml`;
+no Dockerfile change is needed.
 
 ## Media/vision slice
 
