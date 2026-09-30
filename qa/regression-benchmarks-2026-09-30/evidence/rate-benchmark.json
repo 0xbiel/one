@@ -1,0 +1,61 @@
+{
+  "method": "20 paired randomized-order batches \u00d7 10,000 calls after warmup, same process and inputs; nanoseconds/call; noisy shared CPU, no speedup claim",
+  "results": {
+    "baseline": {
+      "correct_cases": 5,
+      "case_count": 8,
+      "median_ns_per_call": 993.5101999999999,
+      "p95_batch_ns_per_call": 2574.3116,
+      "batch_ns_per_call": [
+        987.6569,
+        1203.6471,
+        2167.5422,
+        1395.6141,
+        1413.7965,
+        1391.8243,
+        2574.3116,
+        999.8853,
+        997.7331,
+        968.5671,
+        989.2873,
+        986.1767,
+        987.8572,
+        2604.3047,
+        980.0444,
+        1352.5131,
+        914.9695,
+        357.7836,
+        760.4749,
+        758.1183
+      ]
+    },
+    "candidate": {
+      "correct_cases": 8,
+      "case_count": 8,
+      "median_ns_per_call": 1376.3015,
+      "p95_batch_ns_per_call": 1574.7327,
+      "batch_ns_per_call": [
+        1369.9635,
+        1417.6754,
+        1011.8704,
+        1015.7682,
+        1030.5815,
+        993.3535,
+        1014.261,
+        1459.6674,
+        1456.4136,
+        1432.0489,
+        2610.7986,
+        1414.6157,
+        1430.746,
+        1435.2898,
+        1382.6395,
+        775.116,
+        780.7634,
+        774.7794,
+        1574.7327,
+        371.3079
+      ]
+    }
+  }
+}

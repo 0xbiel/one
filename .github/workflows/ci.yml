@@ -31,5 +31,6 @@ jobs:
       - run: pip install 'torch>=2.4,<3' --index-url https://download.pytorch.org/whl/cpu
       - run: pip install -e '.[dev,postgres]'
       - run: pytest
+      - run: python -m unittest discover -s qa/fall-animations -p "test_score_results.py"
       - run: python scripts/generate_openapi.py
       - run: git diff --exit-code -- contracts/openapi.json
