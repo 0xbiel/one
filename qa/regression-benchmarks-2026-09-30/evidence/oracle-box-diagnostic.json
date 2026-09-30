@@ -1,0 +1,84 @@
+{
+  "input_kind": "oracle_ground_truth_boxes",
+  "warning": "Perfect projected annotation boxes at confidence1, not inferred images; never combine these scores with real detector evaluation. Diagnostic exposes heuristic limitations only.",
+  "clips": [
+    {
+      "clip": "fall_side",
+      "expected_fall": true,
+      "direct_fall_rule_signal_times_s": [
+        2.7
+      ],
+      "stability_plus_fall_rule_signal_times_s": [
+        2.7
+      ]
+    },
+    {
+      "clip": "fall_forward",
+      "expected_fall": true,
+      "direct_fall_rule_signal_times_s": [
+        2.6
+      ],
+      "stability_plus_fall_rule_signal_times_s": [
+        2.6
+      ]
+    },
+    {
+      "clip": "fall_occluded",
+      "expected_fall": true,
+      "direct_fall_rule_signal_times_s": [
+        2.7
+      ],
+      "stability_plus_fall_rule_signal_times_s": [
+        2.7
+      ]
+    },
+    {
+      "clip": "sit",
+      "expected_fall": false,
+      "direct_fall_rule_signal_times_s": [],
+      "stability_plus_fall_rule_signal_times_s": []
+    },
+    {
+      "clip": "bend",
+      "expected_fall": false,
+      "direct_fall_rule_signal_times_s": [],
+      "stability_plus_fall_rule_signal_times_s": []
+    },
+    {
+      "clip": "lie_down",
+      "expected_fall": false,
+      "direct_fall_rule_signal_times_s": [
+        4.3
+      ],
+      "stability_plus_fall_rule_signal_times_s": [
+        4.3
+      ]
+    },
+    {
+      "clip": "drop_object",
+      "expected_fall": false,
+      "direct_fall_rule_signal_times_s": [],
+      "stability_plus_fall_rule_signal_times_s": []
+    },
+    {
+      "clip": "fall_physics_ragdoll",
+      "expected_fall": true,
+      "direct_fall_rule_signal_times_s": [
+        2.0
+      ],
+      "stability_plus_fall_rule_signal_times_s": [
+        2.0
+      ]
+    },
+    {
+      "clip": "fall_physics_forward",
+      "expected_fall": true,
+      "direct_fall_rule_signal_times_s": [
+        2.0
+      ],
+      "stability_plus_fall_rule_signal_times_s": [
+        2.0
+      ]
+    }
+  ]
+}

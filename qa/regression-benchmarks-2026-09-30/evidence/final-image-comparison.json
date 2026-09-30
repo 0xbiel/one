@@ -1,0 +1,276 @@
+{
+  "method": "Genuine baseline YOLO-World RGB inference through production API; exact same inferred predictions replayed through candidate API. Not a second independent image-model run. No GT boxes loaded. Source video hashes checked by replay.",
+  "model_sha256": "9b2c17ab6124a913e9b3a5c170617920d91b0f01111a8479da69f00e2cf27792",
+  "claim_scope": "Nine synthetic fixtures only; no clinical/real-world validation, no safety improvement or deployment throughput claim.",
+  "counts": {
+    "controlled_choreography": {
+      "baseline": {
+        "TP": 0,
+        "FN": 3,
+        "FP": 0,
+        "TN": 4
+      },
+      "candidate_replay": {
+        "TP": 0,
+        "FN": 3,
+        "FP": 0,
+        "TN": 4
+      }
+    },
+    "Bullet_physics": {
+      "baseline": {
+        "TP": 0,
+        "FN": 2,
+        "FP": 0,
+        "TN": 0
+      },
+      "candidate_replay": {
+        "TP": 0,
+        "FN": 2,
+        "FP": 0,
+        "TN": 0
+      }
+    },
+    "all": {
+      "baseline": {
+        "TP": 0,
+        "FN": 5,
+        "FP": 0,
+        "TN": 4
+      },
+      "candidate_replay": {
+        "TP": 0,
+        "FN": 5,
+        "FP": 0,
+        "TN": 4
+      }
+    }
+  },
+  "clips": [
+    {
+      "clip": "fall_side",
+      "source": "controlled_choreography",
+      "expected_fall": true,
+      "frames": 80,
+      "fps": 10,
+      "baseline": {
+        "outcome": "FN",
+        "fall_event_count": 0,
+        "signal_times_s": [],
+        "delay_from_onset_s": null,
+        "pre_onset_events": 0,
+        "person_detection_frames": 26,
+        "stable_person_frames": 24
+      },
+      "candidate_replay": {
+        "outcome": "FN",
+        "fall_event_count": 0,
+        "signal_times_s": [],
+        "delay_from_onset_s": null,
+        "pre_onset_events": 0,
+        "person_detection_frames": 26,
+        "stable_person_frames": 24
+      }
+    },
+    {
+      "clip": "fall_forward",
+      "source": "controlled_choreography",
+      "expected_fall": true,
+      "frames": 80,
+      "fps": 10,
+      "baseline": {
+        "outcome": "FN",
+        "fall_event_count": 0,
+        "signal_times_s": [],
+        "delay_from_onset_s": null,
+        "pre_onset_events": 0,
+        "person_detection_frames": 27,
+        "stable_person_frames": 25
+      },
+      "candidate_replay": {
+        "outcome": "FN",
+        "fall_event_count": 0,
+        "signal_times_s": [],
+        "delay_from_onset_s": null,
+        "pre_onset_events": 0,
+        "person_detection_frames": 27,
+        "stable_person_frames": 25
+      }
+    },
+    {
+      "clip": "fall_occluded",
+      "source": "controlled_choreography",
+      "expected_fall": true,
+      "frames": 80,
+      "fps": 10,
+      "baseline": {
+        "outcome": "FN",
+        "fall_event_count": 0,
+        "signal_times_s": [],
+        "delay_from_onset_s": null,
+        "pre_onset_events": 0,
+        "person_detection_frames": 26,
+        "stable_person_frames": 24
+      },
+      "candidate_replay": {
+        "outcome": "FN",
+        "fall_event_count": 0,
+        "signal_times_s": [],
+        "delay_from_onset_s": null,
+        "pre_onset_events": 0,
+        "person_detection_frames": 26,
+        "stable_person_frames": 24
+      }
+    },
+    {
+      "clip": "sit",
+      "source": "controlled_choreography",
+      "expected_fall": false,
+      "frames": 80,
+      "fps": 10,
+      "baseline": {
+        "outcome": "TN",
+        "fall_event_count": 0,
+        "signal_times_s": [],
+        "delay_from_onset_s": null,
+        "pre_onset_events": 0,
+        "person_detection_frames": 80,
+        "stable_person_frames": 78
+      },
+      "candidate_replay": {
+        "outcome": "TN",
+        "fall_event_count": 0,
+        "signal_times_s": [],
+        "delay_from_onset_s": null,
+        "pre_onset_events": 0,
+        "person_detection_frames": 80,
+        "stable_person_frames": 78
+      }
+    },
+    {
+      "clip": "bend",
+      "source": "controlled_choreography",
+      "expected_fall": false,
+      "frames": 80,
+      "fps": 10,
+      "baseline": {
+        "outcome": "TN",
+        "fall_event_count": 0,
+        "signal_times_s": [],
+        "delay_from_onset_s": null,
+        "pre_onset_events": 0,
+        "person_detection_frames": 58,
+        "stable_person_frames": 56
+      },
+      "candidate_replay": {
+        "outcome": "TN",
+        "fall_event_count": 0,
+        "signal_times_s": [],
+        "delay_from_onset_s": null,
+        "pre_onset_events": 0,
+        "person_detection_frames": 58,
+        "stable_person_frames": 56
+      }
+    },
+    {
+      "clip": "lie_down",
+      "source": "controlled_choreography",
+      "expected_fall": false,
+      "frames": 80,
+      "fps": 10,
+      "baseline": {
+        "outcome": "TN",
+        "fall_event_count": 0,
+        "signal_times_s": [],
+        "delay_from_onset_s": null,
+        "pre_onset_events": 0,
+        "person_detection_frames": 44,
+        "stable_person_frames": 42
+      },
+      "candidate_replay": {
+        "outcome": "TN",
+        "fall_event_count": 0,
+        "signal_times_s": [],
+        "delay_from_onset_s": null,
+        "pre_onset_events": 0,
+        "person_detection_frames": 44,
+        "stable_person_frames": 42
+      }
+    },
+    {
+      "clip": "drop_object",
+      "source": "controlled_choreography",
+      "expected_fall": false,
+      "frames": 80,
+      "fps": 10,
+      "baseline": {
+        "outcome": "TN",
+        "fall_event_count": 0,
+        "signal_times_s": [],
+        "delay_from_onset_s": null,
+        "pre_onset_events": 0,
+        "person_detection_frames": 80,
+        "stable_person_frames": 78
+      },
+      "candidate_replay": {
+        "outcome": "TN",
+        "fall_event_count": 0,
+        "signal_times_s": [],
+        "delay_from_onset_s": null,
+        "pre_onset_events": 0,
+        "person_detection_frames": 80,
+        "stable_person_frames": 78
+      }
+    },
+    {
+      "clip": "fall_physics_ragdoll",
+      "source": "Bullet_physics",
+      "expected_fall": true,
+      "frames": 72,
+      "fps": 12,
+      "baseline": {
+        "outcome": "FN",
+        "fall_event_count": 0,
+        "signal_times_s": [],
+        "delay_from_onset_s": null,
+        "pre_onset_events": 0,
+        "person_detection_frames": 22,
+        "stable_person_frames": 20
+      },
+      "candidate_replay": {
+        "outcome": "FN",
+        "fall_event_count": 0,
+        "signal_times_s": [],
+        "delay_from_onset_s": null,
+        "pre_onset_events": 0,
+        "person_detection_frames": 22,
+        "stable_person_frames": 20
+      }
+    },
+    {
+      "clip": "fall_physics_forward",
+      "source": "Bullet_physics",
+      "expected_fall": true,
+      "frames": 72,
+      "fps": 12,
+      "baseline": {
+        "outcome": "FN",
+        "fall_event_count": 0,
+        "signal_times_s": [],
+        "delay_from_onset_s": null,
+        "pre_onset_events": 0,
+        "person_detection_frames": 22,
+        "stable_person_frames": 20
+      },
+      "candidate_replay": {
+        "outcome": "FN",
+        "fall_event_count": 0,
+        "signal_times_s": [],
+        "delay_from_onset_s": null,
+        "pre_onset_events": 0,
+        "person_detection_frames": 22,
+        "stable_person_frames": 20
+      }
+    }
+  ]
+}

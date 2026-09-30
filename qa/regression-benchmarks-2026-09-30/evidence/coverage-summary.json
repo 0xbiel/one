@@ -1,13 +1,13 @@
 {
-  "baseline-final": {
+  "baseline-expanded": {
     "totals": {
-      "covered_lines": 7587,
-      "num_statements": 10360,
-      "percent_covered": 73.23359073359073,
+      "covered_lines": 7617,
+      "num_statements": 10399,
+      "percent_covered": 73.24742763727282,
       "percent_covered_display": "73",
-      "missing_lines": 2773,
+      "missing_lines": 2782,
       "excluded_lines": 43,
-      "percent_statements_covered": 73.23359073359073,
+      "percent_statements_covered": 73.24742763727282,
       "percent_statements_covered_display": "73"
     },
     "modules": {
@@ -32,13 +32,13 @@
         "percent_statements_covered_display": "79"
       },
       "geometry_service/localization.py": {
-        "covered_lines": 1800,
+        "covered_lines": 1801,
         "num_statements": 2481,
-        "percent_covered": 72.55139056831922,
+        "percent_covered": 72.59169689641274,
         "percent_covered_display": "73",
-        "missing_lines": 681,
+        "missing_lines": 680,
         "excluded_lines": 0,
-        "percent_statements_covered": 72.55139056831922,
+        "percent_statements_covered": 72.59169689641274,
         "percent_statements_covered_display": "73"
       }
     }
