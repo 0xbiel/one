@@ -1,0 +1,202 @@
+[
+  {
+    "path": "qa/multiroom-localization/PROPOSAL_STATUS.md",
+    "bytes": 539,
+    "sha256": "512c44a06a66599aab9603c7da624aef0c4138af21cb0a82f53a8fa4656bd555"
+  },
+  {
+    "path": "qa/multiroom-localization/README.md",
+    "bytes": 7713,
+    "sha256": "63035566b9fc62f3568aea16cf52a6d8724b976ca2ce0c70054da6278e3d7143"
+  },
+  {
+    "path": "qa/multiroom-localization/REPORT.md",
+    "bytes": 5388,
+    "sha256": "67d6a23bbf870581ccc94e8e0f11464715a2bcf2751e4a1743efc96958d01621"
+  },
+  {
+    "path": "qa/multiroom-localization/archive.py",
+    "bytes": 1486,
+    "sha256": "be8fe2a5af8da450e54fbe0c42ebdbcf00a6e2ec55c84f00383b868a31ef3b0d"
+  },
+  {
+    "path": "qa/multiroom-localization/backend_usdz_validation_baseline.json",
+    "bytes": 701,
+    "sha256": "105ad2828418f22c40036bc5f1bdb3ede580ffa1a6a5e29448f9ad07550a36a9"
+  },
+  {
+    "path": "qa/multiroom-localization/backend_usdz_validation_candidate.json",
+    "bytes": 701,
+    "sha256": "105ad2828418f22c40036bc5f1bdb3ede580ffa1a6a5e29448f9ad07550a36a9"
+  },
+  {
+    "path": "qa/multiroom-localization/benchmark_serial.py",
+    "bytes": 2397,
+    "sha256": "cd16dbf5d9afcaf2019c98f939dba19dcea167d9b2397e352515e026614b5661"
+  },
+  {
+    "path": "qa/multiroom-localization/blender_camera_validation.json",
+    "bytes": 2261,
+    "sha256": "b4597d86fb84f1c416dd00a885a6ace5bd5e4d5ffdb1ea733ae5a3a58ca9a6c0"
+  },
+  {
+    "path": "qa/multiroom-localization/cache-equivalence.json",
+    "bytes": 158,
+    "sha256": "f0d64dd05eef81652d71ec3722bfbd26d2894801201336620177d497ea32817b"
+  },
+  {
+    "path": "qa/multiroom-localization/cache-geometry-tests-final.txt",
+    "bytes": 679,
+    "sha256": "660d59a298ffb96d9734e4e6aa75d5e17a9d1799e2eef550c1b8d05e1e2a97e0"
+  },
+  {
+    "path": "qa/multiroom-localization/cache-geometry-tests.txt",
+    "bytes": 679,
+    "sha256": "c79bfd400e888605283055a6c3c02a589d16992706581f566a4662aa1c4762b7"
+  },
+  {
+    "path": "qa/multiroom-localization/cache-microbenchmark.json",
+    "bytes": 1158,
+    "sha256": "eaf537ba114820e3268a8abe081dcf4f0525e34de431e526b10f9405df0c8b37"
+  },
+  {
+    "path": "qa/multiroom-localization/detect.py",
+    "bytes": 2093,
+    "sha256": "3a5e23e7b885b561c398f80ba3a465de009e2c8e5db546b1a7553cb134265344"
+  },
+  {
+    "path": "qa/multiroom-localization/detection-environment.txt",
+    "bytes": 3326,
+    "sha256": "0703264147645a9e332520e1d0f592aaaa71d4d5dbf68af53625d764f0f9f8a3"
+  },
+  {
+    "path": "qa/multiroom-localization/detector_diagnostics.json",
+    "bytes": 25323,
+    "sha256": "82215ca4c861c53e52c7214319b1a9a398160d2ad0789fe5590d0f814f708a89"
+  },
+  {
+    "path": "qa/multiroom-localization/dev-preflight-summary.json",
+    "bytes": 351,
+    "sha256": "730a010f639a441208a143a26a52945facc001999489789860d32e8bd6119d48"
+  },
+  {
+    "path": "qa/multiroom-localization/fixture_audit.json",
+    "bytes": 831,
+    "sha256": "d39f3990ce4c75a5a01d327d95a214e2053ec48723445889742c15f1d865d96e"
+  },
+  {
+    "path": "qa/multiroom-localization/generate_scene.py",
+    "bytes": 6357,
+    "sha256": "3b0fbbd5d912621964f0ceb99f27e0e96e3e8d2a02d57f3974fc20aa9ba7d9a9"
+  },
+  {
+    "path": "qa/multiroom-localization/localization-environment.txt",
+    "bytes": 2795,
+    "sha256": "a85744f4b212db4afad164b60100c2adca1a354cc521c10184df203e32bb52fe"
+  },
+  {
+    "path": "qa/multiroom-localization/manifest.json",
+    "bytes": 7794,
+    "sha256": "2b9540cbb25499eb7cd6e76ddee5da4cc62fd03c6e51810f8bcfdbb410f4928f"
+  },
+  {
+    "path": "qa/multiroom-localization/microbench_dev_cache.py",
+    "bytes": 2732,
+    "sha256": "6711a20cee5eaf632c005e321902bda84a4ee815d24cf1e3ce775f02ebd2b333"
+  },
+  {
+    "path": "qa/multiroom-localization/package_scans.py",
+    "bytes": 1959,
+    "sha256": "799e3313f3161bf26988448f8012a98f5bc142586a923897911e43a825b1b6e1"
+  },
+  {
+    "path": "qa/multiroom-localization/performance_summary.json",
+    "bytes": 1342,
+    "sha256": "1232195e93d8d7d3738631ab6ead2570a16909b3d0aa9286ca2912b36f08109e"
+  },
+  {
+    "path": "qa/multiroom-localization/prepare.py",
+    "bytes": 3774,
+    "sha256": "051d7d46b27a30e9b21d410a9146d5ad383da9b90b727baa47519f714cca535d"
+  },
+  {
+    "path": "qa/multiroom-localization/proposed-cache.patch",
+    "bytes": 5636,
+    "sha256": "16ed79ad54bf1ad173baaa24b4c26b09989f9e3b818bc34f2a40875e02d6684e"
+  },
+  {
+    "path": "qa/multiroom-localization/proposed_test_guided_cache.py",
+    "bytes": 3413,
+    "sha256": "2b4d452088e7109387ebb1c7ac353a0302e0e2fdb080bd5ed5040ab4e2a9a6eb"
+  },
+  {
+    "path": "qa/multiroom-localization/provenance.json",
+    "bytes": 5828,
+    "sha256": "6cf37740f917db9d669622cc840589ce872216319cfab2d17db5f6d2330356a2"
+  },
+  {
+    "path": "qa/multiroom-localization/render-environment.txt",
+    "bytes": 14,
+    "sha256": "e8c2acc53fbac585a6becc0dbed623c375ac68a570efb4dba6d1ddcc59593ecc"
+  },
+  {
+    "path": "qa/multiroom-localization/render.py",
+    "bytes": 4647,
+    "sha256": "67e210a9f6d66404629f78f85c3634e2e5073b0afbe2835f2899753ed3123b74"
+  },
+  {
+    "path": "qa/multiroom-localization/render_boxes.py",
+    "bytes": 1991,
+    "sha256": "7bfb6f11c3284363106665ca10f47a93f63a9718db6958bf1483bd50b1b53a78"
+  },
+  {
+    "path": "qa/multiroom-localization/results.json",
+    "bytes": 35256,
+    "sha256": "d26ab7329f33929b6c782ea14c455696fa48ae107a608cf97f17361b580b345b"
+  },
+  {
+    "path": "qa/multiroom-localization/run_single.py",
+    "bytes": 1458,
+    "sha256": "d41dfb66cb5f5ebbde63409c089c6b6db52247d4e264086d94baf685536c2e16"
+  },
+  {
+    "path": "qa/multiroom-localization/scan_bbox_validation.json",
+    "bytes": 2578,
+    "sha256": "18246c714dc19badac29cf74f5aca9856ba3a349971a7fd0ef47585f5bb11050"
+  },
+  {
+    "path": "qa/multiroom-localization/summarize.py",
+    "bytes": 3077,
+    "sha256": "84819edd16d42a8583534a859d48ad71a6c86eb48b184ce6749d2e9469c72123"
+  },
+  {
+    "path": "qa/multiroom-localization/summary.json",
+    "bytes": 17775,
+    "sha256": "643c2190a4746925e114bda1735461c321977d78c4ab6957eff628301a1e02c2"
+  },
+  {
+    "path": "qa/multiroom-localization/test_guided_cache_equivalence.py",
+    "bytes": 3297,
+    "sha256": "9c2deb6e393394a4e781982b3fe98f219dfb582427430d4579f5cfbaaa1de756"
+  },
+  {
+    "path": "qa/multiroom-localization/validate.py",
+    "bytes": 2652,
+    "sha256": "0756f5abfd2cab3c0cf76c75b1fc46af0c1b51787b756ee50a83953f6a63f8b9"
+  },
+  {
+    "path": "qa/multiroom-localization/validate_backend_usdz.py",
+    "bytes": 732,
+    "sha256": "d818d185801c96611113d0a2f075af32dbbb0bb814752597c3f5c26685049669"
+  },
+  {
+    "path": "qa/multiroom-localization/validate_blender_camera.py",
+    "bytes": 1287,
+    "sha256": "5957c003e157cf88b02a14dc4eaffcc6479cde9fda0bb636e8f437de597121a8"
+  },
+  {
+    "path": "qa/multiroom-localization/validate_scan_bounds.py",
+    "bytes": 1161,
+    "sha256": "30d28f9de02b87d2440d8ad9ed768e6d33efdb9232aa930d8825ec074897b34f"
+  }
+]

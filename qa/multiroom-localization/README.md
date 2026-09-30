@@ -86,7 +86,8 @@ need the production YOLO-World checkpoint and its runtime dependencies.
 
 1. `blender -b --python generate_scene.py` creates `assets/room.blend`
 2. `blender -b -t 4 --python render.py -- assets/room.blend`
-3. `python package_scans.py`
+3. `python package_scans.py`, then `python validate_scan_bounds.py` and
+   `VALIDATION_LABEL=candidate PYTHONPATH=CANDIDATE_CHECKOUT python validate_backend_usdz.py`
 4. Set production model environment paths and run `python detect.py`
 5. Set `PYTHONPATH` to the candidate checkout; run `python prepare.py`
 6. `python validate.py`
@@ -105,7 +106,9 @@ payloads are the authoritative paired comparison inputs.
 All three variants use the same 6m × 5m rectangular shell and furniture model
 family; two variants rearrange object positions/colors. Held out means the
 layout was excluded from development, not unseen architecture or unseen object
-categories. There are no open doorways to another mapped room, severe scan
+categories. All renders use one 480×360 camera model with fx=fy=320px
+(horizontal FOV 73.74°); this does not establish generalization across camera
+lenses or resolutions. There are no open doorways to another mapped room, severe scan
 pose drift, moving furniture, lens distortion, rolling shutter, real camera
 noise, or multi-home distractors. Those remain untested.
 

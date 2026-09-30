@@ -2,5 +2,7 @@
   "initial_detector_provenance_mismatch": "Mirrored query frame0 JPEG hash differed while re-encoded frame1 hash agreed. All renderer sessions then verified terminal; reran actual detector for every final JPEG, regenerated every payload.",
   "changed_payloads_after_detector_rerun": [],
   "final_detector_hash_checks": 48,
-  "passed": true
+  "passed": true,
+  "protocol_audit": "Initial concurrent prototype invalidated for deadline/lock ambiguity. Final serial outputs fresh, no locks or cache reuse; watchdog begins at explicit compute-ready monotonic timestamp, and fingerprints cover every top-level geometry module.",
+  "independent_review": "Reviewer validated24payload hashes,48detector JPEG hashes,48detection lists,54Blender/K projection checks; cache validated362author+50reviewer exact ordered match comparisons and63geometry tests."
 }

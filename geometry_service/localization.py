@@ -1251,6 +1251,54 @@ def _pose_from_matches(
     return best
 
 
+def _guided_descriptor_pair_candidates(
+    descriptors: np.ndarray,
+    landmark_descriptors: np.ndarray,
+) -> list[tuple[np.ndarray, np.ndarray] | None] | None:
+    """Cache the existing Hamming <=56 gate, independently of pose/spatial gates.
+
+    One thread-local entry is reset for each localization request. Copies used
+    for exact equality checks also prevent stale reuse if an array is mutated.
+    At most 64 pairs per landmark are retained; any row whose shortlist
+    could truncate valid pairs falls back to the unchanged spatial-first path. Distance computation is
+    chunked so no full landmark-by-query matrix is retained.
+    """
+    if (
+        descriptors.ndim != 2 or landmark_descriptors.ndim != 2
+        or descriptors.dtype != np.uint8 or landmark_descriptors.dtype != np.uint8
+        or descriptors.shape[1] != landmark_descriptors.shape[1]
+        or len(descriptors) > 3400 or len(landmark_descriptors) > 8000
+    ):
+        return None
+    cached = getattr(_SOLVER_THREAD_STATE, "guided_descriptor_pairs", None)
+    if (
+        cached is not None
+        and np.array_equal(descriptors, cached["query"])
+        and np.array_equal(landmark_descriptors, cached["landmarks"])
+    ):
+        return cached["pairs"]
+    pairs: list[tuple[np.ndarray, np.ndarray] | None] = []
+    count = min(64, len(descriptors))
+    for start in range(0, len(landmark_descriptors), 128):
+        distances, neighbors = cv2.batchDistance(
+            np.ascontiguousarray(landmark_descriptors[start:start + 128]),
+            np.ascontiguousarray(descriptors),
+            cv2.CV_32S,
+            normType=cv2.NORM_HAMMING,
+            K=count,
+        )
+        for row, indices in zip(distances, neighbors):
+            if count < len(descriptors) and row[-1] <= 56:
+                pairs.append(None)
+                continue
+            keep = row <= 56
+            pairs.append((indices[keep].astype(np.int32), row[keep].astype(np.uint8)))
+    _SOLVER_THREAD_STATE.guided_descriptor_pairs = {
+        "query": descriptors.copy(), "landmarks": landmark_descriptors.copy(), "pairs": pairs,
+    }
+    return pairs
+
+
 def _pose_guided_matches(
     *,
     frame_width: int,
@@ -1290,6 +1338,9 @@ def _pose_guided_matches(
     for query_index, (x, y) in enumerate(keypoint_xy):
         grid.setdefault((int(x // cell_size), int(y // cell_size)), []).append(query_index)
 
+    descriptor_pairs = _guided_descriptor_pair_candidates(descriptors, landmark_descriptors)
+    query_cells = [(int(x // cell_size), int(y // cell_size)) for x, y in keypoint_xy]
+
     # landmark -> (query, descriptor distance, pixel distance)
     landmark_best: dict[int, tuple[int, float, float]] = {}
     for landmark_index, ((x, y), camera_point) in enumerate(zip(projected, camera_space)):
@@ -1303,9 +1354,22 @@ def _pose_guided_matches(
             continue
         cell_x, cell_y = int(x // cell_size), int(y // cell_size)
         candidate_queries: list[int] = []
-        for offset_x in range(-cell_radius, cell_radius + 1):
-            for offset_y in range(-cell_radius, cell_radius + 1):
-                candidate_queries.extend(grid.get((cell_x + offset_x, cell_y + offset_y), []))
+        cached_distances: np.ndarray | None = None
+        if descriptor_pairs is None or descriptor_pairs[landmark_index] is None:
+            for offset_x in range(-cell_radius, cell_radius + 1):
+                for offset_y in range(-cell_radius, cell_radius + 1):
+                    candidate_queries.extend(grid.get((cell_x + offset_x, cell_y + offset_y), []))
+        else:
+            indices, distances = descriptor_pairs[landmark_index]
+            positions = [
+                offset for offset, query in enumerate(indices)
+                if abs(query_cells[int(query)][0] - cell_x) <= cell_radius
+                and abs(query_cells[int(query)][1] - cell_y) <= cell_radius
+            ]
+            # Preserve the original grid traversal tie order exactly.
+            positions.sort(key=lambda offset: (*query_cells[int(indices[offset])], int(indices[offset])))
+            candidate_queries = [int(indices[offset]) for offset in positions]
+            cached_distances = distances[positions]
         if not candidate_queries:
             continue
 
@@ -1322,8 +1386,11 @@ def _pose_guided_matches(
             continue
         query_indices = query_indices[inside]
         pixel_distances = pixel_distances[inside]
-        xor = np.bitwise_xor(descriptors[query_indices], landmark_descriptors[landmark_index])
-        descriptor_distances = _HAMMING_POPCOUNT[xor].sum(axis=1)
+        if cached_distances is None:
+            xor = np.bitwise_xor(descriptors[query_indices], landmark_descriptors[landmark_index])
+            descriptor_distances = _HAMMING_POPCOUNT[xor].sum(axis=1)
+        else:
+            descriptor_distances = cached_distances[inside]
         descriptor_ok = descriptor_distances <= 56
         if not np.any(descriptor_ok):
             continue
@@ -3902,6 +3969,7 @@ def localize_camera(
     # Keep the expensive differentiable polish bounded per request.  The
     # detector and CPU PnP remain fully concurrent; only a couple of finalists
     # may enter the serialized accelerator stage.
+    _SOLVER_THREAD_STATE.guided_descriptor_pairs = None
     _SOLVER_THREAD_STATE.gpu_pose_refinement_budget = 2
     _SOLVER_THREAD_STATE.gpu_pose_refinement_attempts = []
 

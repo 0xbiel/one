@@ -1,0 +1,23 @@
+{
+  "source_sha256": "59f101aaba0d3418901f984fe22cd263c1a8b755e43743a2fab7266cab44acbf",
+  "results": [
+    {
+      "layout": "dev_living",
+      "bytes": 2023,
+      "sha256": "f31acf9eb334ad9e47a345d57d7348b928f1dd97dccbe60712e710be18a77c77",
+      "backend_package_validation": "passed"
+    },
+    {
+      "layout": "heldout_mirrored",
+      "bytes": 2023,
+      "sha256": "f47ecbfb45c240a2139d8f87802cac684179c0990212cbdc4945eedc997addda",
+      "backend_package_validation": "passed"
+    },
+    {
+      "layout": "heldout_rearranged",
+      "bytes": 2023,
+      "sha256": "72758fe6deca9aa02ad84a36aec666dc7d7ffb93e9bc40000884853e8b45cca9",
+      "backend_package_validation": "passed"
+    }
+  ]
+}

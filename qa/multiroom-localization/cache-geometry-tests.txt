@@ -1,0 +1,8 @@
+.............................................................            [100%]
+=============================== warnings summary ===============================
+../../shared/one-fixes/.venv/lib/python3.12/site-packages/_pytest/cacheprovider.py:475
+  /workspace/shared/one-fixes/.venv/lib/python3.12/site-packages/_pytest/cacheprovider.py:475: PytestCacheWarning: could not create cache path /workspace/.pytest_cache/v/cache/nodeids: [Errno 30] Read-only file system: '/workspace/pytest-cache-files-z_kcoi7n'
+    config.cache.set("cache/nodeids", sorted(self.cached_nodeids))
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+61 passed, 1 warning in 22.63s

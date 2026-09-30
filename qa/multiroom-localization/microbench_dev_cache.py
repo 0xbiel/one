@@ -3,7 +3,7 @@ import os,json,time,base64,cv2,numpy as np,ast
 from pathlib import Path
 from geometry_service import localization as new
 from geometry_service.contracts import CameraLocalizationRequest
-root=Path(__file__).parent;source=Path('/workspace/shared/one-replacement/geometry_service/localization.py');fn=next(n for n in ast.parse(source.read_text()).body if isinstance(n,ast.FunctionDef) and n.name=='_pose_guided_matches');env=dict(vars(new));exec(compile(ast.Module(body=[fn],type_ignores=[]),str(source),'exec'),env);old=env['_pose_guided_matches'];cv2.setNumThreads(1)
+root=Path(__file__).parent;source=Path(os.environ.get('REFERENCE_ROOT','/workspace/shared/one-baseline'))/'geometry_service/localization.py';fn=next(n for n in ast.parse(source.read_text()).body if isinstance(n,ast.FunctionDef) and n.name=='_pose_guided_matches');env=dict(vars(new));exec(compile(ast.Module(body=[fn],type_ignores=[]),str(source),'exec'),env);old=env['_pose_guided_matches'];cv2.setNumThreads(1)
 payload=CameraLocalizationRequest.model_validate_json((root/'inputs/dev_living_query_0_unknown_intrinsics.json').read_text());image=cv2.imdecode(np.frombuffer(base64.b64decode(payload.frames[0].frame_base64),np.uint8),cv2.IMREAD_COLOR);gray,_=new.prepare_feature_gray(image);keypoints,descriptors=cv2.ORB_create(nfeatures=3400,scaleFactor=1.2,nlevels=8,fastThreshold=5,edgeThreshold=17).detectAndCompute(gray,None);points,landmarks,_=new._landmark_arrays(payload)
 # This ground truth is DEV-only, purely to generate plausible microbench poses.
 gt=next(r for r in json.loads((root/'fixtures/dev_living/evaluator_groundtruth.json').read_text())['records'] if r['id']=='query_0');W=new._world_to_cv(np.asarray(gt['camera_to_world']));rvec,_=cv2.Rodrigues(W[:3,:3]);results=[]

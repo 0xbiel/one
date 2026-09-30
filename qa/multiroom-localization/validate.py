@@ -26,5 +26,6 @@ for m in json.loads((root/'manifest.json').read_text()):
   det=detector[m['layout'],m['query'],i]
   assert hashlib.sha256(base64.b64decode(frame['frame_base64'])).hexdigest()==det['sha256']
   assert [{k:v for k,v in x.items() if k!='frame_index'} for x in payload['object_detections'] if x['frame_index']==i]==det['detections']
+ if m['condition']=='unknown_intrinsics':assert 'intrinsics' not in payload and 'fov_degrees' not in payload
  assert len(payload['landmarks'])<=8000
 print('PASS: 3 layouts,18 calibrated renders, distinct reference/query frames,48 input pose/depth exclusion and detector-provenance checks, cuboid transform consistency')

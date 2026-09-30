@@ -3,7 +3,7 @@ import ast,json,sys,os,time
 from pathlib import Path
 import cv2,numpy as np
 from geometry_service import localization as new
-source=Path(os.environ.get('REFERENCE_ROOT','/workspace/shared/one-replacement'))/'geometry_service/localization.py';tree=ast.parse(source.read_text());fn=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='_pose_guided_matches');env=dict(vars(new));exec(compile(ast.Module(body=[fn],type_ignores=[]),str(source),'exec'),env);old=env['_pose_guided_matches']
+source=Path(os.environ.get('REFERENCE_ROOT','/workspace/shared/one-baseline'))/'geometry_service/localization.py';tree=ast.parse(source.read_text());fn=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='_pose_guided_matches');env=dict(vars(new));exec(compile(ast.Module(body=[fn],type_ignores=[]),str(source),'exec'),env);old=env['_pose_guided_matches']
 class Scorer:
  threshold=.55
  def score_pairs(self,a,b,qa=None,la=None):return .1+.8*(np.bitwise_xor(a,b).sum(axis=1)%101)/100
