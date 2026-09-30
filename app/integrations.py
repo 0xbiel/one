@@ -27,8 +27,25 @@ class LMStudioAdapter:
                 {"role": "system", "content": "You are ONE's cautious household assistant. Never diagnose or infer medical conditions. Return JSON with status (stable|attention|unknown), trend (stable|improving|changing|unknown), explanation, evidence_ids, limitations."},
                 {"role": "user", "content": json.dumps(context, ensure_ascii=False)},
             ],
-            "response_format": {"type": "json_object"},
+            "response_format": {"type": "json_schema", "json_schema": {
+                "name": "check_in_summary",
+                "strict": True,
+                "schema": {
+                    "type": "object",
+                    "properties": {
+                        "status": {"type": "string", "enum": ["stable", "attention", "unknown"]},
+                        "trend": {"type": "string", "enum": ["stable", "improving", "changing", "unknown"]},
+                        "explanation": {"type": "string"},
+                        "evidence_ids": {"type": "array", "items": {"type": "string"}},
+                        "limitations": {"type": "string"},
+                    },
+                    "required": ["status", "trend", "explanation", "evidence_ids", "limitations"],
+                    "additionalProperties": False,
+                },
+            }},
         }
+        if self.settings.llm_provider in (None, "lmstudio", "lm_studio"):
+            payload["reasoning_effort"] = "none"
         headers = {"Content-Type": "application/json"}
         if self.settings.effective_llm_api_key:
             headers["Authorization"] = f"Bearer {self.settings.effective_llm_api_key}"
@@ -75,8 +92,24 @@ class LMStudioAdapter:
                 {"role": "system", "content": "You are ONE's cautious administrative family organizer. Use only the supplied medication records, daily check-in summaries, and bounded fall-safety analytics. Do not diagnose, infer a medical condition, recommend medicine changes, or provide emergency advice. Describe fall values as review signals, not confirmed falls. Return JSON with summary, next_action, evidence_ids, limitations. Keep it concise and say when records are missing."},
                 {"role": "user", "content": json.dumps(context, ensure_ascii=False)},
             ],
-            "response_format": {"type": "json_object"},
+            "response_format": {"type": "json_schema", "json_schema": {
+                "name": "family_summary",
+                "strict": True,
+                "schema": {
+                    "type": "object",
+                    "properties": {
+                        "summary": {"type": "string"},
+                        "next_action": {"type": "string"},
+                        "evidence_ids": {"type": "array", "items": {"type": "string"}},
+                        "limitations": {"type": "string"},
+                    },
+                    "required": ["summary", "next_action", "evidence_ids", "limitations"],
+                    "additionalProperties": False,
+                },
+            }},
         }
+        if self.settings.llm_provider in (None, "lmstudio", "lm_studio"):
+            payload["reasoning_effort"] = "none"
         headers = {"Content-Type": "application/json"}
         if self.settings.effective_llm_api_key:
             headers["Authorization"] = f"Bearer {self.settings.effective_llm_api_key}"
