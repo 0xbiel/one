@@ -1,0 +1,17 @@
+{
+  "models": [
+    {
+      "file": "yolov8s-worldv2.pt",
+      "bytes": 25923032,
+      "sha256": "9b2c17ab6124a913e9b3a5c170617920d91b0f01111a8479da69f00e2cf27792"
+    },
+    {
+      "file": "ViT-B-32.pt",
+      "bytes": 353976522,
+      "sha256": "40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af"
+    }
+  ],
+  "detector_source": "geometry_service.runtime.RoomLayoutRuntime.detect_jpeg",
+  "checkpoint_kind": "actual pretrained YOLO-World, not ground-truth boxes",
+  "reference_assumptions": "Ideal simulated camera-to-world and synthetic axial depth"
+}

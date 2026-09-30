@@ -1,0 +1,625 @@
+{
+  "seed": 104729,
+  "frames": [
+    {
+      "id": "ref_west_south_0",
+      "role": "reference",
+      "position": [
+        -5.9,
+        1.55,
+        4.35
+      ],
+      "target": [
+        -4,
+        0.75,
+        1.5
+      ],
+      "room": "west_south"
+    },
+    {
+      "id": "ref_west_south_1",
+      "role": "reference",
+      "position": [
+        -4.65,
+        1.7,
+        4.55
+      ],
+      "target": [
+        -4,
+        0.75,
+        1.5
+      ],
+      "room": "west_south"
+    },
+    {
+      "id": "ref_west_south_2",
+      "role": "reference",
+      "position": [
+        -3.35,
+        1.55,
+        4.55
+      ],
+      "target": [
+        -4,
+        0.75,
+        1.5
+      ],
+      "room": "west_south"
+    },
+    {
+      "id": "ref_west_south_3",
+      "role": "reference",
+      "position": [
+        -2.15,
+        1.7,
+        4.4
+      ],
+      "target": [
+        -4,
+        0.75,
+        1.5
+      ],
+      "room": "west_south"
+    },
+    {
+      "id": "query_west_south_0",
+      "role": "query",
+      "position": [
+        -5.25,
+        1.85,
+        4.8
+      ],
+      "target": [
+        -4,
+        0.75,
+        1.5
+      ],
+      "room": "west_south",
+      "split": "dev"
+    },
+    {
+      "id": "query_west_south_1",
+      "role": "query",
+      "position": [
+        -2.8,
+        1.3,
+        4.75
+      ],
+      "target": [
+        -4,
+        0.75,
+        1.5
+      ],
+      "room": "west_south",
+      "split": "dev"
+    },
+    {
+      "id": "ref_west_north_0",
+      "role": "reference",
+      "position": [
+        -5.9,
+        1.55,
+        -0.6499999999999999
+      ],
+      "target": [
+        -4,
+        0.75,
+        -3.5
+      ],
+      "room": "west_north"
+    },
+    {
+      "id": "ref_west_north_1",
+      "role": "reference",
+      "position": [
+        -4.65,
+        1.7,
+        -0.4500000000000002
+      ],
+      "target": [
+        -4,
+        0.75,
+        -3.5
+      ],
+      "room": "west_north"
+    },
+    {
+      "id": "ref_west_north_2",
+      "role": "reference",
+      "position": [
+        -3.35,
+        1.55,
+        -0.4500000000000002
+      ],
+      "target": [
+        -4,
+        0.75,
+        -3.5
+      ],
+      "room": "west_north"
+    },
+    {
+      "id": "ref_west_north_3",
+      "role": "reference",
+      "position": [
+        -2.15,
+        1.7,
+        -0.6000000000000001
+      ],
+      "target": [
+        -4,
+        0.75,
+        -3.5
+      ],
+      "room": "west_north"
+    },
+    {
+      "id": "query_west_north_0",
+      "role": "query",
+      "position": [
+        -5.25,
+        1.85,
+        -0.20000000000000018
+      ],
+      "target": [
+        -4,
+        0.75,
+        -3.5
+      ],
+      "room": "west_north",
+      "split": "heldout"
+    },
+    {
+      "id": "query_west_north_1",
+      "role": "query",
+      "position": [
+        -2.8,
+        1.3,
+        -0.25
+      ],
+      "target": [
+        -4,
+        0.75,
+        -3.5
+      ],
+      "room": "west_north",
+      "split": "heldout"
+    },
+    {
+      "id": "ref_east_south_0",
+      "role": "reference",
+      "position": [
+        2.1,
+        1.55,
+        4.35
+      ],
+      "target": [
+        4,
+        0.75,
+        1.5
+      ],
+      "room": "east_south"
+    },
+    {
+      "id": "ref_east_south_1",
+      "role": "reference",
+      "position": [
+        3.35,
+        1.7,
+        4.55
+      ],
+      "target": [
+        4,
+        0.75,
+        1.5
+      ],
+      "room": "east_south"
+    },
+    {
+      "id": "ref_east_south_2",
+      "role": "reference",
+      "position": [
+        4.65,
+        1.55,
+        4.55
+      ],
+      "target": [
+        4,
+        0.75,
+        1.5
+      ],
+      "room": "east_south"
+    },
+    {
+      "id": "ref_east_south_3",
+      "role": "reference",
+      "position": [
+        5.85,
+        1.7,
+        4.4
+      ],
+      "target": [
+        4,
+        0.75,
+        1.5
+      ],
+      "room": "east_south"
+    },
+    {
+      "id": "query_east_south_0",
+      "role": "query",
+      "position": [
+        2.75,
+        1.85,
+        4.8
+      ],
+      "target": [
+        4,
+        0.75,
+        1.5
+      ],
+      "room": "east_south",
+      "split": "heldout"
+    },
+    {
+      "id": "query_east_south_1",
+      "role": "query",
+      "position": [
+        5.2,
+        1.3,
+        4.75
+      ],
+      "target": [
+        4,
+        0.75,
+        1.5
+      ],
+      "room": "east_south",
+      "split": "heldout"
+    },
+    {
+      "id": "ref_east_north_0",
+      "role": "reference",
+      "position": [
+        2.1,
+        1.55,
+        -0.6499999999999999
+      ],
+      "target": [
+        4,
+        0.75,
+        -3.5
+      ],
+      "room": "east_north"
+    },
+    {
+      "id": "ref_east_north_1",
+      "role": "reference",
+      "position": [
+        3.35,
+        1.7,
+        -0.4500000000000002
+      ],
+      "target": [
+        4,
+        0.75,
+        -3.5
+      ],
+      "room": "east_north"
+    },
+    {
+      "id": "ref_east_north_2",
+      "role": "reference",
+      "position": [
+        4.65,
+        1.55,
+        -0.4500000000000002
+      ],
+      "target": [
+        4,
+        0.75,
+        -3.5
+      ],
+      "room": "east_north"
+    },
+    {
+      "id": "ref_east_north_3",
+      "role": "reference",
+      "position": [
+        5.85,
+        1.7,
+        -0.6000000000000001
+      ],
+      "target": [
+        4,
+        0.75,
+        -3.5
+      ],
+      "room": "east_north"
+    },
+    {
+      "id": "query_east_north_0",
+      "role": "query",
+      "position": [
+        2.75,
+        1.85,
+        -0.20000000000000018
+      ],
+      "target": [
+        4,
+        0.75,
+        -3.5
+      ],
+      "room": "east_north",
+      "split": "heldout"
+    },
+    {
+      "id": "query_east_north_1",
+      "role": "query",
+      "position": [
+        5.2,
+        1.3,
+        -0.25
+      ],
+      "target": [
+        4,
+        0.75,
+        -3.5
+      ],
+      "room": "east_north",
+      "split": "heldout"
+    },
+    {
+      "id": "ref_hall_0",
+      "role": "reference",
+      "position": [
+        0,
+        1.6,
+        4.4
+      ],
+      "target": [
+        0,
+        1,
+        -3
+      ],
+      "room": "hallway"
+    },
+    {
+      "id": "ref_hall_1",
+      "role": "reference",
+      "position": [
+        0,
+        1.6,
+        -4.4
+      ],
+      "target": [
+        0,
+        1,
+        3
+      ],
+      "room": "hallway"
+    },
+    {
+      "id": "ref_hall_2",
+      "role": "reference",
+      "position": [
+        0.2,
+        1.65,
+        0
+      ],
+      "target": [
+        0,
+        1,
+        4
+      ],
+      "room": "hallway"
+    },
+    {
+      "id": "ref_hall_3",
+      "role": "reference",
+      "position": [
+        -0.2,
+        1.65,
+        0
+      ],
+      "target": [
+        0,
+        1,
+        -4
+      ],
+      "room": "hallway"
+    },
+    {
+      "id": "query_transition_0",
+      "role": "query",
+      "position": [
+        0,
+        1.7,
+        3.9
+      ],
+      "target": [
+        0,
+        1,
+        -3
+      ],
+      "room": "hallway",
+      "split": "heldout",
+      "kind": "hallway"
+    },
+    {
+      "id": "query_transition_1",
+      "role": "query",
+      "position": [
+        -0.75,
+        1.6,
+        2.5
+      ],
+      "target": [
+        -4,
+        1,
+        1
+      ],
+      "room": "hallway",
+      "split": "heldout",
+      "kind": "door_before"
+    },
+    {
+      "id": "query_transition_2",
+      "role": "query",
+      "position": [
+        -1.25,
+        1.6,
+        2.5
+      ],
+      "target": [
+        -4,
+        1,
+        1
+      ],
+      "room": "west_south",
+      "split": "heldout",
+      "kind": "door_after"
+    },
+    {
+      "id": "query_transition_3",
+      "role": "query",
+      "position": [
+        0.75,
+        1.6,
+        -2.5
+      ],
+      "target": [
+        4,
+        1,
+        -4
+      ],
+      "room": "hallway",
+      "split": "heldout",
+      "kind": "door_before"
+    }
+  ],
+  "rooms": [
+    {
+      "id": "west_south",
+      "floor_y": 0,
+      "polygon": [
+        {
+          "x": -7,
+          "z": 0.0
+        },
+        {
+          "x": -1,
+          "z": 0.0
+        },
+        {
+          "x": -1,
+          "z": 5.0
+        },
+        {
+          "x": -7,
+          "z": 5.0
+        }
+      ]
+    },
+    {
+      "id": "west_north",
+      "floor_y": 0,
+      "polygon": [
+        {
+          "x": -7,
+          "z": -5.0
+        },
+        {
+          "x": -1,
+          "z": -5.0
+        },
+        {
+          "x": -1,
+          "z": 0.0
+        },
+        {
+          "x": -7,
+          "z": 0.0
+        }
+      ]
+    },
+    {
+      "id": "east_south",
+      "floor_y": 0,
+      "polygon": [
+        {
+          "x": 1,
+          "z": 0.0
+        },
+        {
+          "x": 7,
+          "z": 0.0
+        },
+        {
+          "x": 7,
+          "z": 5.0
+        },
+        {
+          "x": 1,
+          "z": 5.0
+        }
+      ]
+    },
+    {
+      "id": "east_north",
+      "floor_y": 0,
+      "polygon": [
+        {
+          "x": 1,
+          "z": -5.0
+        },
+        {
+          "x": 7,
+          "z": -5.0
+        },
+        {
+          "x": 7,
+          "z": 0.0
+        },
+        {
+          "x": 1,
+          "z": 0.0
+        }
+      ]
+    },
+    {
+      "id": "hallway",
+      "floor_y": 0,
+      "polygon": [
+        {
+          "x": -1,
+          "z": -5
+        },
+        {
+          "x": 1,
+          "z": -5
+        },
+        {
+          "x": 1,
+          "z": 5
+        },
+        {
+          "x": -1,
+          "z": 5
+        }
+      ]
+    }
+  ],
+  "scope": "One connected four-room home plus hallway; heldout camera poses, not heldout architecture",
+  "thresholds": {
+    "tight_m": 0.1,
+    "tight_deg": 2,
+    "loose_m": 0.25,
+    "loose_deg": 5
+  },
+  "conditions": [
+    "clean",
+    "unknown_intrinsics"
+  ],
+  "timeout_seconds": 180
+}
