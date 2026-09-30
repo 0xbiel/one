@@ -19,10 +19,16 @@ jobs:
           --health-retries 12
     env:
       ONE_TEST_POSTGRES_URL: postgresql://one:one@127.0.0.1:5432/one
+      # The geometry tests train a tiny real matcher. Bound CPU thread pools
+      # for reproducible runtimes without requiring a GPU or model weights.
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: "3.12"}
+      # Install the CPU wheel first so the dev extra does not pull CUDA wheels.
+      - run: pip install 'torch>=2.4,<3' --index-url https://download.pytorch.org/whl/cpu
       - run: pip install -e '.[dev,postgres]'
       - run: pytest
       - run: python scripts/generate_openapi.py

@@ -1123,3 +1123,98 @@ def test_care_recipient_medication_plan_checkin_and_attribution(tmp_path):
     assert refreshed["status"] == "taken"
     assert refreshed["marked_by_name"] == marker_name
     assert refreshed["updated_at"] is not None
+
+
+
+class TwoTableDetector:
+    model_version = "two-table-regression-v1"
+
+    def detect(self, frame, candidate_labels):
+        return [
+            Detection("table", 0.92, (40, 200, 220, 400), frame.captured_at),
+            Detection("table", 0.90, (340, 200, 550, 400), frame.captured_at),
+        ]
+
+
+def test_same_label_tracks_have_distinct_objects_and_independent_throttles(tmp_path):
+    c = client(tmp_path, TwoTableDetector()); token, home = auth(c)
+    headers = {"Authorization": f"Bearer {token}"}
+    c.post(f"/api/v1/homes/{home}/consents", headers=headers, json={"purpose":"video_capture","policy_version":"2026-09-01","granted":True})
+    seen = []
+    for name in ['living', 'dining']:
+        camera=c.post(f"/api/v1/homes/{home}/cameras",headers=headers,json={"name":name}).json()['id']
+        payload={"camera_id":camera,"frame_base64":base64.b64encode(b'two tables').decode(),"width":640,"height":480,"candidate_labels":["table"]}
+        for _ in range(3):
+            response=c.post(f"/api/v1/homes/{home}/vision/frames",headers=headers,json=payload)
+            assert response.status_code==200
+        result=response.json()
+        assert len(result['data'])==2
+        assert len(result['observations'])==2
+        ids={o['object_id'] for o in result['observations']}
+        assert len(ids)==2
+        seen.extend(ids)
+        # Repeating the same stable tracks retains IDs and throttles both.
+        repeated=c.post(f"/api/v1/homes/{home}/vision/frames",headers=headers,json=payload).json()
+        assert repeated['observations']==[]
+        c.app.state.db.execute("UPDATE observations SET observed_at=? WHERE camera_id=?", ((datetime.now(timezone.utc)-timedelta(seconds=6)).isoformat(), camera))
+        resumed=c.post(f"/api/v1/homes/{home}/vision/frames",headers=headers,json=payload).json()
+        assert {o['object_id'] for o in resumed['observations']}==ids
+    # Camera-local track IDs must not collide across cameras.
+    assert len(set(seen))==4
+
+
+class NamedGlassesDetector:
+    model_version = 'named-glasses-regression-v1'
+    labels = []
+    def detect(self, frame, candidate_labels):
+        self.labels = list(candidate_labels)
+        return [Detection('glasses', .95, (40, 200, 220, 400), frame.captured_at)]
+
+
+def tracked_glasses_client(tmp_path):
+    detector = NamedGlassesDetector()
+    c = client(tmp_path, detector); token, home = auth(c)
+    headers = {'Authorization': f'Bearer {token}'}
+    c.post(f'/api/v1/homes/{home}/consents', headers=headers, json={'purpose':'video_capture','policy_version':'2026-09-01','granted':True})
+    camera = c.post(f'/api/v1/homes/{home}/cameras', headers=headers, json={'name':'Living'}).json()['id']
+    payload = {'camera_id':camera,'frame_base64':base64.b64encode(b'glasses-frame').decode(),'width':640,'height':480}
+    return c, home, headers, payload, detector
+
+
+def test_named_singleton_retains_history_across_track_pause_and_reassociation(tmp_path):
+    c, home, h, p, _ = tracked_glasses_client(tmp_path)
+    registered=c.post(f'/api/v1/homes/{home}/objects',headers=h,json={'label':'glasses','display_name':'Reading glasses'}).json()['id']
+    for _ in range(3): r=c.post(f'/api/v1/homes/{home}/vision/frames',headers=h,json=p)
+    assert r.json()['observations'][0]['object_id']==registered
+    assert c.app.state.db.one('SELECT count(*) AS n FROM observations WHERE object_id=?',(registered,))['n']==1
+    # Simulate a capture pause without changing the arriving stable track ID.
+    if hasattr(c.app.state, 'vision_tracked_objects'):
+        for key,(obj,seen) in list(c.app.state.vision_tracked_objects.items()):
+            c.app.state.vision_tracked_objects[key]=(obj,seen-timedelta(seconds=13))
+    c.app.state.db.execute('UPDATE observations SET observed_at=?',((datetime.now(timezone.utc)-timedelta(seconds=13)).isoformat(),))
+    r=c.post(f'/api/v1/homes/{home}/vision/frames',headers=h,json=p)
+    assert r.json()['observations'][0]['object_id']==registered
+    assert len(c.app.state.db.many('SELECT id FROM objects WHERE home_id=? AND label=?',(home,'glasses')))==1
+    # A truly lost transient binding may associate only an unambiguous singleton.
+    if hasattr(c.app.state, 'vision_tracked_objects'): c.app.state.vision_tracked_objects.clear()
+    c.app.state.db.execute('UPDATE observations SET observed_at=?',((datetime.now(timezone.utc)-timedelta(seconds=13)).isoformat(),))
+    r=c.post(f'/api/v1/homes/{home}/vision/frames',headers=h,json=p)
+    assert r.json()['observations'][0]['object_id']==registered
+
+
+def test_ambiguous_named_objects_are_not_arbitrarily_assigned(tmp_path):
+    c, home, h, p, _ = tracked_glasses_client(tmp_path)
+    named={c.post(f'/api/v1/homes/{home}/objects',headers=h,json={'label':'glasses','display_name':name}).json()['id'] for name in ['Reading glasses','Spare glasses']}
+    for _ in range(3):r=c.post(f'/api/v1/homes/{home}/vision/frames',headers=h,json=p)
+    assert r.json()['observations'][0]['object_id'] not in named
+    assert all(c.app.state.db.one('SELECT count(*) AS n FROM observations WHERE object_id=?',(obj,))['n']==0 for obj in named)
+
+
+def test_duplicate_objects_do_not_starve_candidate_labels(tmp_path):
+    c, home, h, p, detector = tracked_glasses_client(tmp_path)
+    for i in range(21):
+        c.post(f'/api/v1/homes/{home}/objects',headers=h,json={'label':'glasses','display_name':f'Glasses {i}'})
+    c.post(f'/api/v1/homes/{home}/objects',headers=h,json={'label':'walker','display_name':'Walker'})
+    assert c.post(f'/api/v1/homes/{home}/vision/frames',headers=h,json=p).status_code==200
+    assert 'walker' in detector.labels
+    assert detector.labels.count('glasses')==1

@@ -127,6 +127,103 @@ def _semantic_candidate(
     }
 
 
+def _semantic_center_scene(fov: float = 60.0) -> tuple[CameraLocalizationRequest, np.ndarray]:
+    width, height = 640, 360
+    focal = 0.5 * width / np.tan(np.radians(fov) / 2.0)
+    camera_matrix = np.asarray(
+        [[focal, 0.0, width / 2.0], [0.0, focal, height / 2.0], [0.0, 0.0, 1.0]],
+        dtype=np.float64,
+    )
+    objects = [
+        ("bed-1", "bed", (0.0, -1.0, 0.0), (1.2, 0.6, 2.0)),
+        ("chair-1", "chair", (1.3, -0.8, -0.2), (0.6, 1.0, 0.6)),
+        ("table-1", "table", (-1.0, -1.0, 0.3), (1.0, 0.7, 0.7)),
+        ("storage-1", "storage", (0.5, -0.3, -1.0), (1.0, 2.0, 0.5)),
+    ]
+    true_center = np.asarray([0.2, 0.2, 2.0], dtype=np.float64)
+    true_rotation = np.diag([1.0, -1.0, -1.0])
+    true_rvec, _ = cv2.Rodrigues(true_rotation)
+    true_tvec = -(true_rotation @ true_center.reshape(3, 1))
+    world_points = np.asarray([item[2] for item in objects], dtype=np.float64)
+    projected, _ = cv2.projectPoints(world_points, true_rvec, true_tvec, camera_matrix, None)
+
+    request = _request(8, width, height)
+    request.fov_degrees = fov
+    request.room_zones = [
+        CameraLocalizationRoomZone.model_validate(
+            {
+                "id": "room",
+                "floor_y": -1.3,
+                "polygon": [
+                    {"x": -3.0, "z": -3.0},
+                    {"x": 3.0, "z": -3.0},
+                    {"x": 3.0, "z": 3.0},
+                    {"x": -3.0, "z": 3.0},
+                ],
+            }
+        )
+    ]
+    request.room_objects = [
+        CameraLocalizationRoomObject(
+            id=identifier,
+            label=label,
+            center={"x": center[0], "y": center[1], "z": center[2]},
+            dimensions={"x": dimensions[0], "y": dimensions[1], "z": dimensions[2]},
+            confidence=1.0,
+        )
+        for identifier, label, center, dimensions in objects
+    ]
+    request.object_detections = [
+        CameraLocalizationObjectDetection(
+            frame_index=0,
+            label=label,
+            confidence=0.9,
+            bbox=[float(u - 20.0), float(v - 20.0), float(u + 20.0), float(v + 20.0)],
+        )
+        for (_, label, _, _), ((u, v),) in zip(objects, projected)
+    ]
+    return request, true_center
+
+
+def _guided_match_scene(outlier_index: int | None = 6) -> dict:
+    rng = np.random.default_rng(23)
+    width, height = 640, 360
+    camera_matrix = np.asarray(
+        [[510.0, 0.0, width / 2.0], [0.0, 510.0, height / 2.0], [0.0, 0.0, 1.0]],
+        dtype=np.float64,
+    )
+    landmark_points = np.column_stack(
+        [
+            rng.uniform(-1.0, 1.0, 7),
+            rng.uniform(-0.7, 0.7, 7),
+            rng.uniform(-0.3, 0.3, 7),
+        ]
+    ).astype(np.float32)
+    true_rvec = np.asarray([[0.02], [-0.06], [0.01]], dtype=np.float64)
+    true_tvec = np.asarray([[0.05], [-0.03], [4.4]], dtype=np.float64)
+    projected, _ = cv2.projectPoints(landmark_points, true_rvec, true_tvec, camera_matrix, None)
+    pixels = projected.reshape(-1, 2)
+    pixels[:6] += rng.normal(0.0, 0.35, (6, 2))
+    if outlier_index is not None:
+        pixels[outlier_index] += np.asarray([95.0, -70.0])
+    keypoints = [SimpleNamespace(pt=tuple(pixel)) for pixel in pixels]
+    matches = [cv2.DMatch(_queryIdx=index, _trainIdx=index, _distance=8.0) for index in range(7)]
+    seed_pose = {
+        "rvec": true_rvec + np.asarray([[0.01], [-0.01], [0.008]]),
+        "tvec": true_tvec + np.asarray([[0.04], [-0.02], [0.06]]),
+        "camera_matrix": camera_matrix,
+        "fov_degrees": 64.0,
+    }
+    return {
+        "frame_width": width,
+        "frame_height": height,
+        "keypoints": keypoints,
+        "landmark_points": landmark_points,
+        "pose": seed_pose,
+        "matches": matches,
+    }
+
+
 class LocalizationTests(unittest.TestCase):
     def test_low_light_preprocessing_is_bounded_and_observable(self) -> None:
         image = np.full((120, 160, 3), 24, dtype=np.uint8)
@@ -1129,59 +1226,8 @@ class LocalizationTests(unittest.TestCase):
         np.testing.assert_allclose(_project_point(projection, point), source_pixel, atol=1e-6)
 
     def test_semantic_room_objects_provide_a_bounded_pose_seed(self) -> None:
-        width, height, fov = 640, 360, 60.0
-        focal = 0.5 * width / np.tan(np.radians(fov) / 2.0)
-        camera_matrix = np.asarray(
-            [[focal, 0.0, width / 2.0], [0.0, focal, height / 2.0], [0.0, 0.0, 1.0]],
-            dtype=np.float64,
-        )
-        objects = [
-            ("bed-1", "bed", (0.0, -1.0, 0.0), (1.2, 0.6, 2.0)),
-            ("chair-1", "chair", (1.3, -0.8, -0.2), (0.6, 1.0, 0.6)),
-            ("table-1", "table", (-1.0, -1.0, 0.3), (1.0, 0.7, 0.7)),
-            ("storage-1", "storage", (0.5, -0.3, -1.0), (1.0, 2.0, 0.5)),
-        ]
-        true_center = np.asarray([0.2, 0.2, 2.0], dtype=np.float64)
-        true_rotation = np.diag([1.0, -1.0, -1.0])
-        true_rvec, _ = cv2.Rodrigues(true_rotation)
-        true_tvec = -(true_rotation @ true_center.reshape(3, 1))
-        world_points = np.asarray([item[2] for item in objects], dtype=np.float64)
-        projected, _ = cv2.projectPoints(world_points, true_rvec, true_tvec, camera_matrix, None)
-
-        request = _request(8, width, height)
-        request.room_zones = [
-            CameraLocalizationRoomZone.model_validate(
-                {
-                    "id": "room",
-                    "floor_y": -1.3,
-                    "polygon": [
-                        {"x": -3.0, "z": -3.0},
-                        {"x": 3.0, "z": -3.0},
-                        {"x": 3.0, "z": 3.0},
-                        {"x": -3.0, "z": 3.0},
-                    ],
-                }
-            )
-        ]
-        request.room_objects = [
-            CameraLocalizationRoomObject(
-                id=identifier,
-                label=label,
-                center={"x": center[0], "y": center[1], "z": center[2]},
-                dimensions={"x": dimensions[0], "y": dimensions[1], "z": dimensions[2]},
-                confidence=1.0,
-            )
-            for identifier, label, center, dimensions in objects
-        ]
-        request.object_detections = [
-            CameraLocalizationObjectDetection(
-                frame_index=0,
-                label=label,
-                confidence=0.9,
-                bbox=[float(u - 20.0), float(v - 20.0), float(u + 20.0), float(v + 20.0)],
-            )
-            for (_, label, _, _), ((u, v),) in zip(objects, projected)
-        ]
+        width, height = 640, 360
+        request, true_center = _semantic_center_scene()
 
         seeds = _semantic_object_pose_seeds(request, frame_index=0, frame_width=width, frame_height=height)
 
@@ -1192,6 +1238,29 @@ class LocalizationTests(unittest.TestCase):
         self.assertEqual(best["semantic_object_match_count"], 3)
         self.assertNotIn("chair", best["semantic_object_labels"])
         self.assertEqual(best["semantic_object_anchor"], "center")
+
+    def test_minimal_semantic_roots_preserve_pose_across_fov_and_assignment_order(self) -> None:
+        # Three exact center correspondences have ambiguous minimal roots.
+        # Recover the upright branch without depending on SQPnP's root/order
+        # choices or using duplicated floor anchors as extra object evidence.
+        for fov in (54.0, 60.0, 74.0):
+            for reverse_order in (False, True):
+                with self.subTest(fov=fov, reverse_order=reverse_order):
+                    request, true_center = _semantic_center_scene(fov)
+                    if reverse_order:
+                        request.room_objects.reverse()
+                        request.object_detections.reverse()
+                    seeds = _semantic_object_pose_seeds(
+                        request, frame_index=0, frame_width=640, frame_height=360,
+                    )
+                    self.assertTrue(seeds)
+                    best = seeds[0]
+                    estimated = np.asarray(_camera_to_world(best["rvec"], best["tvec"]))
+                    np.testing.assert_allclose(estimated[:3, 3], true_center, atol=0.01)
+                    self.assertEqual(best["fov_degrees"], fov)
+                    self.assertEqual(best["semantic_object_inlier_count"], 3)
+                    self.assertEqual(best["semantic_object_anchor"], "center")
+                    self.assertTrue(_pose_scene_prior(estimated, request)["accepted"])
 
     def test_stable_movable_detection_can_seed_but_not_publish_semantic_pose(self) -> None:
         request = CameraLocalizationRequest.model_validate(
@@ -1854,49 +1923,34 @@ class LocalizationTests(unittest.TestCase):
         self.assertEqual(learned_query_zero.trainIdx, 0)
 
     def test_provisional_guided_pose_recovers_six_good_matches_with_one_outlier(self) -> None:
-        rng = np.random.default_rng(23)
-        width, height = 640, 360
-        camera_matrix = np.asarray(
-            [[510.0, 0.0, width / 2.0], [0.0, 510.0, height / 2.0], [0.0, 0.0, 1.0]],
-            dtype=np.float64,
-        )
-        landmark_points = np.column_stack(
-            [
-                rng.uniform(-1.0, 1.0, 7),
-                rng.uniform(-0.7, 0.7, 7),
-                rng.uniform(-0.3, 0.3, 7),
-            ]
-        ).astype(np.float32)
-        true_rvec = np.asarray([[0.02], [-0.06], [0.01]], dtype=np.float64)
-        true_tvec = np.asarray([[0.05], [-0.03], [4.4]], dtype=np.float64)
-        projected, _ = cv2.projectPoints(landmark_points, true_rvec, true_tvec, camera_matrix, None)
-        pixels = projected.reshape(-1, 2)
-        pixels[:6] += rng.normal(0.0, 0.35, (6, 2))
-        pixels[6] += np.asarray([95.0, -70.0])
-        keypoints = [SimpleNamespace(pt=tuple(pixel)) for pixel in pixels]
-        matches = [cv2.DMatch(_queryIdx=index, _trainIdx=index, _distance=8.0) for index in range(7)]
-        seed_pose = {
-            "rvec": true_rvec + np.asarray([[0.01], [-0.01], [0.008]]),
-            "tvec": true_tvec + np.asarray([[0.04], [-0.02], [0.06]]),
-            "camera_matrix": camera_matrix,
-            "fov_degrees": 64.0,
-        }
+        scene = _guided_match_scene()
 
-        provisional = _provisional_pose_from_guided_matches(
-            frame_width=width,
-            frame_height=height,
-            keypoints=keypoints,
-            landmark_points=landmark_points,
-            pose=seed_pose,
-            matches=matches,
-        )
+        provisional = _provisional_pose_from_guided_matches(**scene)
 
         self.assertIsNotNone(provisional)
         assert provisional is not None
         self.assertGreaterEqual(provisional["inlier_count"], 6)
         self.assertEqual(provisional["provisional_subset_size"], 6)
+        np.testing.assert_array_equal(provisional["inlier_indices"], np.arange(6))
+        self.assertGreaterEqual(provisional["provisional_hypothesis_pool_size"], 6)
         self.assertLess(provisional["mean_error"], 2.0)
+
+
+    def test_provisional_fit_support_tracks_rejected_and_clean_correspondences(self) -> None:
+        for outlier_index in (0, 3, 6, None):
+            with self.subTest(outlier_index=outlier_index):
+                provisional = _provisional_pose_from_guided_matches(
+                    **_guided_match_scene(outlier_index),
+                )
+                self.assertIsNotNone(provisional)
+                assert provisional is not None
+                expected = [index for index in range(7) if index != outlier_index]
+                np.testing.assert_array_equal(provisional["inlier_indices"], expected)
+                self.assertEqual(provisional["provisional_subset_size"], len(expected))
+                self.assertEqual(provisional["pool_size"], 7)
+                self.assertLess(provisional["mean_error"], 2.0)
 
 
 if __name__ == "__main__":
     unittest.main()
+
