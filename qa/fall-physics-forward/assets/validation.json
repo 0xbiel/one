@@ -1,0 +1,5 @@
+{
+  "replay_of_source_max_matrix_abs_error": 0,
+  "same_build_deterministic_tolerance_1e_6_pass": true,
+  "min_sampled_collision_mesh_z_m": 0.0021297894418239594
+}

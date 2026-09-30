@@ -1,0 +1,356 @@
+{
+  "schema": "one-bullet-ragdoll/v1",
+  "expected_fall": true,
+  "physics_engine": "Blender 4.3.2 Bullet rigid bodies",
+  "gravity_m_s2": [
+    0,
+    0,
+    -9.81
+  ],
+  "simulation_fps": 24,
+  "output_fps": 12,
+  "duration_s": 6,
+  "release_s": 1.0,
+  "initial_condition": "10 degree lateral lean, kinematic support through 0.9583s; released at 1s; no motion keyframes or applied forces after release",
+  "first_upper_body_floor_contact_proxy_s": 1.625,
+  "contact_definition": "Minimum transformed collision-mesh vertex z <= 0.015m, sampled at 24Hz. Geometric proxy, not solver contact impulse. Foot contact intentionally excluded from first upper-body contact.",
+  "bodies": {
+    "pelvis": {
+      "mass_kg": 11,
+      "collision_shape": "CONVEX_HULL"
+    },
+    "torso": {
+      "mass_kg": 27,
+      "collision_shape": "CONVEX_HULL"
+    },
+    "head": {
+      "mass_kg": 5,
+      "collision_shape": "CONVEX_HULL"
+    },
+    "l_thigh": {
+      "mass_kg": 7,
+      "collision_shape": "CONVEX_HULL"
+    },
+    "l_shin": {
+      "mass_kg": 3.3,
+      "collision_shape": "CONVEX_HULL"
+    },
+    "l_foot": {
+      "mass_kg": 1,
+      "collision_shape": "CONVEX_HULL"
+    },
+    "l_upperarm": {
+      "mass_kg": 2.2,
+      "collision_shape": "CONVEX_HULL"
+    },
+    "l_forearm": {
+      "mass_kg": 1.4,
+      "collision_shape": "CONVEX_HULL"
+    },
+    "l_hand": {
+      "mass_kg": 0.5,
+      "collision_shape": "CONVEX_HULL"
+    },
+    "r_thigh": {
+      "mass_kg": 7,
+      "collision_shape": "CONVEX_HULL"
+    },
+    "r_shin": {
+      "mass_kg": 3.3,
+      "collision_shape": "CONVEX_HULL"
+    },
+    "r_foot": {
+      "mass_kg": 1,
+      "collision_shape": "CONVEX_HULL"
+    },
+    "r_upperarm": {
+      "mass_kg": 2.2,
+      "collision_shape": "CONVEX_HULL"
+    },
+    "r_forearm": {
+      "mass_kg": 1.4,
+      "collision_shape": "CONVEX_HULL"
+    },
+    "r_hand": {
+      "mass_kg": 0.5,
+      "collision_shape": "CONVEX_HULL"
+    }
+  },
+  "joints": [
+    {
+      "name": "spine",
+      "a": "pelvis",
+      "b": "torso",
+      "angular_limits_degrees_xyz": [
+        [
+          -25,
+          35
+        ],
+        [
+          -25,
+          25
+        ],
+        [
+          -25,
+          25
+        ]
+      ]
+    },
+    {
+      "name": "neck",
+      "a": "torso",
+      "b": "head",
+      "angular_limits_degrees_xyz": [
+        [
+          -30,
+          40
+        ],
+        [
+          -35,
+          35
+        ],
+        [
+          -50,
+          50
+        ]
+      ]
+    },
+    {
+      "name": "l_hip",
+      "a": "pelvis",
+      "b": "l_thigh",
+      "angular_limits_degrees_xyz": [
+        [
+          -25,
+          90
+        ],
+        [
+          -35,
+          35
+        ],
+        [
+          -25,
+          25
+        ]
+      ]
+    },
+    {
+      "name": "l_knee",
+      "a": "l_thigh",
+      "b": "l_shin",
+      "angular_limits_degrees_xyz": [
+        [
+          -135,
+          3
+        ],
+        [
+          -2,
+          2
+        ],
+        [
+          -2,
+          2
+        ]
+      ]
+    },
+    {
+      "name": "l_ankle",
+      "a": "l_shin",
+      "b": "l_foot",
+      "angular_limits_degrees_xyz": [
+        [
+          -30,
+          30
+        ],
+        [
+          -15,
+          15
+        ],
+        [
+          -10,
+          10
+        ]
+      ]
+    },
+    {
+      "name": "l_shoulder",
+      "a": "torso",
+      "b": "l_upperarm",
+      "angular_limits_degrees_xyz": [
+        [
+          -80,
+          80
+        ],
+        [
+          -80,
+          80
+        ],
+        [
+          -60,
+          60
+        ]
+      ]
+    },
+    {
+      "name": "l_elbow",
+      "a": "l_upperarm",
+      "b": "l_forearm",
+      "angular_limits_degrees_xyz": [
+        [
+          -3,
+          135
+        ],
+        [
+          -2,
+          2
+        ],
+        [
+          -5,
+          5
+        ]
+      ]
+    },
+    {
+      "name": "l_wrist",
+      "a": "l_forearm",
+      "b": "l_hand",
+      "angular_limits_degrees_xyz": [
+        [
+          -35,
+          35
+        ],
+        [
+          -25,
+          25
+        ],
+        [
+          -20,
+          20
+        ]
+      ]
+    },
+    {
+      "name": "r_hip",
+      "a": "pelvis",
+      "b": "r_thigh",
+      "angular_limits_degrees_xyz": [
+        [
+          -25,
+          90
+        ],
+        [
+          -35,
+          35
+        ],
+        [
+          -25,
+          25
+        ]
+      ]
+    },
+    {
+      "name": "r_knee",
+      "a": "r_thigh",
+      "b": "r_shin",
+      "angular_limits_degrees_xyz": [
+        [
+          -135,
+          3
+        ],
+        [
+          -2,
+          2
+        ],
+        [
+          -2,
+          2
+        ]
+      ]
+    },
+    {
+      "name": "r_ankle",
+      "a": "r_shin",
+      "b": "r_foot",
+      "angular_limits_degrees_xyz": [
+        [
+          -30,
+          30
+        ],
+        [
+          -15,
+          15
+        ],
+        [
+          -10,
+          10
+        ]
+      ]
+    },
+    {
+      "name": "r_shoulder",
+      "a": "torso",
+      "b": "r_upperarm",
+      "angular_limits_degrees_xyz": [
+        [
+          -80,
+          80
+        ],
+        [
+          -80,
+          80
+        ],
+        [
+          -60,
+          60
+        ]
+      ]
+    },
+    {
+      "name": "r_elbow",
+      "a": "r_upperarm",
+      "b": "r_forearm",
+      "angular_limits_degrees_xyz": [
+        [
+          -3,
+          135
+        ],
+        [
+          -2,
+          2
+        ],
+        [
+          -5,
+          5
+        ]
+      ]
+    },
+    {
+      "name": "r_wrist",
+      "a": "r_forearm",
+      "b": "r_hand",
+      "angular_limits_degrees_xyz": [
+        [
+          -35,
+          35
+        ],
+        [
+          -25,
+          25
+        ],
+        [
+          -20,
+          20
+        ]
+      ]
+    }
+  ],
+  "limitations": [
+    "Stylized segmented adult; not photorealistic",
+    "Passive ragdoll; no active muscles, protective reflexes, cloth simulation, soft tissue or injury model",
+    "Deterministic sequential replay on this Blender build; cross-platform bitwise identity not guaranteed",
+    "Physical fall event is synthetic ground truth; detector predictions must be independently inferred from video"
+  ],
+  "video_file": "fall_physics_ragdoll.mp4",
+  "renderer": "Blender Eevee Next, 8 samples",
+  "video_sha256": "4af74ee70c6d5cff4d4339423274b89f00073169ba17d635e2407599fe604278"
+}
