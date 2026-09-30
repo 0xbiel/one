@@ -1,0 +1,1184 @@
+{
+  "checkpoint_commit": "79260042c86fde2772cc3b6f348911c1139d4ea3",
+  "base_main": "9c05becdc3af59b15092075c1eb1dc90e2ab9e70",
+  "included_files": [
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/README.md",
+      "bytes": 1425,
+      "sha256": "70274b888461adb8f380470ce9b9793bbe284b7d518bccd11810fe65e5be4c6f",
+      "git_blob_sha": "daca8975465a6ffc84df322ad57507201a701640"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/fixed_vocabulary_benchmark.json",
+      "bytes": 4096,
+      "sha256": "2b255b05610a6d3b0ddf3488ed7de8a54b015f6554fb5cdcd018da34ebfc07fd",
+      "git_blob_sha": "06bc4c645120df5c801fdcfc4c5a14b9655509a2"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/prepare_20fps.py",
+      "bytes": 1595,
+      "sha256": "30279324f112467300ee995f607d9cb8b7df9c210091d59ec5be892108f0a973",
+      "git_blob_sha": "b29fb0f64989094b1deb7b0ca8eefbf22f994624"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/README.txt",
+      "bytes": 8344,
+      "sha256": "29ab98105f3843b207aae21d3d8f99d03cf039c7be1e0602d29f0932ea0d4e0f",
+      "git_blob_sha": "f5d53def7901afe03359e18ea27fec76e0765604"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/full_integrity_checks.json",
+      "bytes": 529,
+      "sha256": "5c827650c62e2947a461e7005956f19b5d3bceecc67fb0d3b582febc521a001d",
+      "git_blob_sha": "b7fdcba3152ced96b165543ee0b3e89583d4c38c"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/download_dataset.py",
+      "bytes": 2117,
+      "sha256": "dd43713089742218cd710196878a461be11fe3a74818f6f08730510a1c499b94",
+      "git_blob_sha": "b6c96eb36190b8437d02a5342d12186d41700453"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/full_dataset_preparation_summary.json",
+      "bytes": 5253,
+      "sha256": "f3c1187dbbaab08d04697617415dfeef8d1f54395c6a096ba1bdad28eee8fe87",
+      "git_blob_sha": "2afe0cc68f2a1d25c54eb0555f6f0954cd01c388"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/requirements.lock.txt",
+      "bytes": 924,
+      "sha256": "55a2276a6ecec60bff22a704134f8a79e88b509e09dfd72fa68f4737f4c64b8d",
+      "git_blob_sha": "8d9f62c7f55b17e14aaaebf0c695ca5e8ceb175f"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/manifest20.json",
+      "bytes": 7493,
+      "sha256": "74bd85ea720288b5e4fed352c054d508498043e20e711ac47466b121b15ddc4b",
+      "git_blob_sha": "6b8fc18234686971a2be1b69a05e1bc52421cd1c"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/omitted-large-artifacts.json",
+      "bytes": 4457,
+      "sha256": "458c91bcc8e8771ef1d2b685855cd3ebd418be2ec0db6de793707701b5f9a4ec",
+      "git_blob_sha": "9dbc0a07de205e3b572d9fdf9b34a8e0efe302e3"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/benchmark_fixed_vocabulary.py",
+      "bytes": 4716,
+      "sha256": "53540062939411b955f8c27ce308afa30e9c6d683d8b75cf807fb023235f4c59",
+      "git_blob_sha": "de5c9ec6fa21e2da0dedfe3e016df59cc94e971e"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/cadence20_native_timestamps.json",
+      "bytes": 1697,
+      "sha256": "1aa59ad450ef24e6d4aa8e9bb1ed3ac7f4bc351af02e763fd92e5eec5d545ccb",
+      "git_blob_sha": "6e4a24f26ecf46328398ec019af252192548d2a9"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/manifest_downloaded.json",
+      "bytes": 19731,
+      "sha256": "00ba0af96e94ddeb553f9b84b070affb4e94ade9282ada421d029ae8825a746e",
+      "git_blob_sha": "789419186c81e986d160223f2db46946bc5c43f5"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/run_fast.py",
+      "bytes": 2363,
+      "sha256": "1212e3352a35d8405915c684ba12e160dc08043dc1b137bb91850c254b352e30",
+      "git_blob_sha": "1ef311f5701d34456cdf6c2a9d719ea95532269c"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/fixed-vocabulary-benchmark.json",
+      "bytes": 6441,
+      "sha256": "1b8dd1ed0ebaa6af0c0b1c56c79ca21837183bc83e77f0ae24e58cd5ce40f28f",
+      "git_blob_sha": "e0163d5b6c65233ab2d0cf0ef9dcbb89c2b28feb"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/full_aggregate-scores.json",
+      "bytes": 10107,
+      "sha256": "e11f2d7fce6231d38d60f72eb741439f4b0e92c6cd2b13dc53ecc4b42e97632f",
+      "git_blob_sha": "50b35004064204d87a63d4d4d805d51817107b7f"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/pilot_cadence_integrity_checks.json",
+      "bytes": 121,
+      "sha256": "4a0a0a894285f22197a0e7cf8bbd370ceb2a9a2ec693db057d528fd3464f6643",
+      "git_blob_sha": "8f5779f15229bfb665665c069ca6b9cd6578fb3b"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/summarize_full.py",
+      "bytes": 3023,
+      "sha256": "cc35ba014d0ac35149b43f992501a96ed8374da4b09a4663a539179bd7c33715",
+      "git_blob_sha": "e8bc687921ebeaeabb9b7f06fd99ebb630ad00f9"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/cadence20_phase_sensitivity.json",
+      "bytes": 110647,
+      "sha256": "4a40a74750f6053cab99e2635dd2f760462e527e31867adc3df321279b0d6bbb",
+      "git_blob_sha": "833a19cd882d6b5d03588d2029a5ade1186674eb"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/environment.json",
+      "bytes": 177,
+      "sha256": "d6eecb99cc002fc1964c4fd587df059b86d1b3d2de9bc8b6c5e228b77d00133b",
+      "git_blob_sha": "b5003457d9323d9c793923b1c2c9c90bb5aeb814"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/cadence20_aggregate-scores.json",
+      "bytes": 14579,
+      "sha256": "a870b0707ad29bafaad2b7a6b9e009916f81256880ed96f04fe16241c134ea37",
+      "git_blob_sha": "0917c8345a3b7482fbacfb9ee8220346437e9890"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/dataset_tree.json",
+      "bytes": 50586,
+      "sha256": "b71cb71159f18e73df683167d9543b2993393456387194dcebb0550799e29579",
+      "git_blob_sha": "eeaafe25f9df8091a052911a1cb60f6509bd1106"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/make_visuals.py",
+      "bytes": 3325,
+      "sha256": "ad066c78fd2548f021d5897abc95f26be4df5faa6a6dc39a48e3c4a7c8d5c9e7",
+      "git_blob_sha": "bfdefe6cf453ebc2b2079634ecac8ef556c9956e"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/license-provenance.json",
+      "bytes": 1861,
+      "sha256": "ea1ee1cb8e5d27f13175cff1e54af710f56430cbb9e4dcfc17ae8e8a222c0325",
+      "git_blob_sha": "18fd84b856e10b56771cfe510976154dac7c85db"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/analysis-summary.json",
+      "bytes": 16211,
+      "sha256": "9961260336059106a0d1489ef3aec10050d53162d07177b6923b08b2a3e58e03",
+      "git_blob_sha": "f8adc827e69276518b8be024b3ae5651702f6e36"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/full_cache_reuse.json",
+      "bytes": 86,
+      "sha256": "b26c87083f7dd68bf0498129d64a2dca9e5bd3b60254412f293d78fe748e4ef5",
+      "git_blob_sha": "72b67f0bf5222af6fb982be2fdf2670f1f9cae39"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/summarize_phases.py",
+      "bytes": 1121,
+      "sha256": "0324e3e90732e721128db7b4a023fd88958310525feefb27a8b5548b4824a15f",
+      "git_blob_sha": "696e52b168fa4ada473da43a27b7d00b1bd8ad41"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/full_phase_sensitivity.json",
+      "bytes": 28901,
+      "sha256": "be5db9fbc0319d3c2d26002418ef279986c804d53c8ccd080999fcc1685ed88f",
+      "git_blob_sha": "4ee975c3d27080f04082207d4537b139b5142cb2"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/full_analysis_summary.json",
+      "bytes": 11273,
+      "sha256": "7555028b2ec8649feb0726c3c341c1e0a425dbd16c47f7fa03e70ce451d353c4",
+      "git_blob_sha": "056acf8f14a241c07d22022433394a723f32cb57"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/manifest_preinference.json",
+      "bytes": 13262,
+      "sha256": "946a0ba50cb7d8cf2264fe6d147bbef4cb84c75115ceeab17cf425c851d3768f",
+      "git_blob_sha": "b0980d0bca06858706ad7ca6c88ef153d8968dd3"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/cache_equivalence_evaluation.json",
+      "bytes": 447,
+      "sha256": "b90b2ef0838debc30a2a38765ac28d12624a6ac67cbc2f89ad2cd8148898f0be",
+      "git_blob_sha": "370c60e74e4d4cc87a3fc1e6fe28e724565778db"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/ATTRIBUTION.md",
+      "bytes": 1575,
+      "sha256": "3b6381167c370941d6438ef7c0fff4d8f97abce8a90ca4407e6077230fef41e7",
+      "git_blob_sha": "481a96c0b09b492750525870f3315823df1d69a8"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/run_inference.py",
+      "bytes": 3296,
+      "sha256": "c3d879f18b3e073128ea29b55af976c7045f1d6a1cdc172c5452043f3735bec2",
+      "git_blob_sha": "04ee532fb7711b2420fe0202d0691cbab85a6746"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/fixed_vocabulary_predeclared.json",
+      "bytes": 789,
+      "sha256": "faa0b79d03e15043304fbef3885763ad25c6fd7c480f728f406f8b80b5b63633",
+      "git_blob_sha": "95c1cbae72f0571f4a117e33e496d3826a191997"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/cadence20_predeclared.json",
+      "bytes": 672,
+      "sha256": "d652a5561723d337805d7a3808bc37b728fc5afb7e956f33120e52354a750cce",
+      "git_blob_sha": "7d1a00a1d4742644b2c213a444f3e08352e54a29"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/full_manifest_preinference.json",
+      "bytes": 128388,
+      "sha256": "08d7fa1f2588b9760042696e98de8751476a6cf3e168c37d5d3bf4f10e20b021",
+      "git_blob_sha": "11af82a1a4fc8850c007faa401c36c6d28dc0820"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/cache_equivalence_development.json",
+      "bytes": 291,
+      "sha256": "48d1e7cde44b0a6b6784d623ae05afc3b6ed3181986953d679d094d41cfd3a3f",
+      "git_blob_sha": "8e9f02bd6237d6664152d081857d6294d642e0f9"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/source-manifest.json",
+      "bytes": 1254,
+      "sha256": "68be326be0bbd8e4c2699658a9967795fc2a6d909a6f66042d7306bc499b04dc",
+      "git_blob_sha": "307136b88cd44bdfacfff91b89f59e4e06fec42a"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/make_summary_image.py",
+      "bytes": 2642,
+      "sha256": "60ecc10cf22d0d73306c31d2f4b326a44adb8843d8618694d36abb42c6b52d4c",
+      "git_blob_sha": "58e9f7a022f0ce777cd752ef486992cde1c3270e"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/aggregate-scores.json",
+      "bytes": 7124,
+      "sha256": "625ce4d65969a98188ce2a365149feacdb0a930b75bc44aa56c10ce80a4a75c3",
+      "git_blob_sha": "f0c8852bda9f56bc7b789fa463c20a9bdf3f8df6"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/REPORT.txt",
+      "bytes": 18254,
+      "sha256": "cb88bd5ad80f11cd7320952e6ee96d3e5c53496f187e6ddbe6bafba2f8bcd91d",
+      "git_blob_sha": "e530061e1d5fa184bdb3edd438b3e98cc04685cc"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/runtime-inspection.md",
+      "bytes": 6124,
+      "sha256": "7e3753e4fb30cf65129fe5292334b81e906f56d8c8413ab9fb15887ecad48aed",
+      "git_blob_sha": "0d05030ef2221512521d36f2a62c56f39bafa502"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/full_manifest_downloaded.json",
+      "bytes": 205718,
+      "sha256": "c07085fbad3e4603d2808ec40ee064a2c90617b9ab3f6d8632d4530266acf460",
+      "git_blob_sha": "93589e3d6e92d4a43d178edc9ef94323e20e72d0"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/dataset-summary.json",
+      "bytes": 7226,
+      "sha256": "174bcb38a7421a686a7161faf15dee867460039e840eb956f74dbcd59d5a3fad",
+      "git_blob_sha": "37dfa93072078b49fc45bb0df649dd93c7818428"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/diagnostics.py",
+      "bytes": 1413,
+      "sha256": "97120f04aeaee79336dc3100c03f5723a86720dc8598c3b57b965884596ac9f2",
+      "git_blob_sha": "96b97c3acbce3bff8a7bd0a46c58e7b760099aac"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/prepare_frames.py",
+      "bytes": 1430,
+      "sha256": "4def27e67a9acefa84f33a8ee081ebd6dfe8973efecaed069da3bcb204c6265f",
+      "git_blob_sha": "4775f21359308839ba3b238d69afa5e61c8294d7"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/score.py",
+      "bytes": 5668,
+      "sha256": "163bb9f789b0c371d99019ddc9b12c1f906c3c03a5ff24146efe17a070def158",
+      "git_blob_sha": "6a4ade0b7eb188e92ee5a6bb68c4c6f4450be18e"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/integrity-checks.json",
+      "bytes": 804,
+      "sha256": "2665cee3312522cab6f353aee5752e9813c41a9ef5d6f6753585bde7411f60a9",
+      "git_blob_sha": "e23d9d12d38957fdd0c4c06d90c434e105d283ec"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/download_all.py",
+      "bytes": 11659,
+      "sha256": "225693c7f549be91a90899b94dbdc8712fc16439554c3bdcda563e1b50a39aa4",
+      "git_blob_sha": "5ba6d3d497f861a791d907fd9a4663d3c7fb8bc8"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/connected-rooms/environment.lock.txt",
+      "bytes": 1040,
+      "sha256": "3a9d6bbac482a0315e000a30aa36d1895caf66caa4b09442dac0c9159d0ad93e",
+      "git_blob_sha": "bc47a3a429805505a1dd58a7bf2c0bb5f2440eca"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/connected-rooms/results_summary.json",
+      "bytes": 23819,
+      "sha256": "0ad1c51fb223134147a3ff27ed9f6bb24d44c1555a73911f98a0069ec9998a47",
+      "git_blob_sha": "aec0d5466c077f4ddf9aa58761d274de9da2005f"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/connected-rooms/latency_summary.json",
+      "bytes": 250,
+      "sha256": "b928496c6dafadd681b09314bb0f6f5578b3f48c8e3a78e3d9286fcf811d6cc5",
+      "git_blob_sha": "091c92fca7cc0c29c37d93ebd9fa0c1dea2b3506"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/connected-rooms/source_integrity.json",
+      "bytes": 7712,
+      "sha256": "982a0ba5b0fcb71e726a9d8b1506ed4c1d9033cbb877fbf8bd7512471e3a643b",
+      "git_blob_sha": "ae6be987a900d0f1be258c13914177a8059ae31d"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/connected-rooms/original-run-README.md",
+      "bytes": 6457,
+      "sha256": "bc9c98c1e6a9f56a417817e040858b20f07303fa42ca2c8d0b20122ec4faad45",
+      "git_blob_sha": "9341dc7e62e1f5fcbde10d7f9f638cb1af43ff5d"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/connected-rooms/model_provenance.json",
+      "bytes": 572,
+      "sha256": "1c38f0e0dcd2fd2019eaaebfce99776a9aea9f72501a8073a5d2da08661310a4",
+      "git_blob_sha": "1e5006a44290168e7084fb9c82ba8bc87be045c5"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/connected-rooms/render_validation.json",
+      "bytes": 5006,
+      "sha256": "df141e79579003995b83d513799a124944bd64c544f7afd5d690ca5a0dbfe4b8",
+      "git_blob_sha": "3a00380731612fe0cf630fd86b21da94347eedcc"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/connected-rooms/request_validation.json",
+      "bytes": 7808,
+      "sha256": "4cf3ca7339f9a1157bb338c88019563f248b12abab0c30db065fb5decaee9d69",
+      "git_blob_sha": "519036ae25fb9d8fcea4ee2c20c502f75140aaa6"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/connected-rooms/frozen_design.json",
+      "bytes": 9849,
+      "sha256": "9d9ededcfb9af5d0faaa78b64223f8189e9615f2b585e5083c373c58aad59177",
+      "git_blob_sha": "8af5bc7e804bc745ca8cb76cd1a5f3979478992e"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/connected-rooms/RESULTS.md",
+      "bytes": 5840,
+      "sha256": "34bd54b91eb3b7d2c92b5cbeb79dba962268e6b06468ca1403d1687e7273f988",
+      "git_blob_sha": "f4a9970ac1a7b17e51bd48e3fc30fdd45981c96b"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/connected-rooms/backend_usdz_validation.json",
+      "bytes": 228,
+      "sha256": "6c6b4097fe5c1290ea1cf20b70ac3e8012b364b267698ec15c2dca288028f8a3",
+      "git_blob_sha": "ea11d693bf6228ef429e757f1369e02422fee7c4"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/dataset/LICENSE",
+      "bytes": 1067,
+      "sha256": "ab15c1660a04e4f064151734856ad5be23af79552e45afe53dba5b857bcb310b",
+      "git_blob_sha": "10d9a7981ac03470bbe8b6481b01436e91c3880a"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/clip-results/scores-pose_box_baseline-5.0.json",
+      "bytes": 13095,
+      "sha256": "c515b5c25577d2a9e8c3fcec645c6b6a321918b53e9c21c0c53d0c460b57a81a",
+      "git_blob_sha": "c105478fed021d6e3a5b370b3a4b8745ba9a1a80"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/clip-results/full_scores-world_baseline-0.7143.json",
+      "bytes": 56596,
+      "sha256": "04213ac38680dfdab23accc3f332cb6f78d28e7315957f14b87b1a72682c1917",
+      "git_blob_sha": "e4b76da790d88126184b7667c20c16926a53c8bf"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/clip-results/cadence20_scores-world_single_identity-0.7143.json",
+      "bytes": 4310,
+      "sha256": "2d87702d99eb16a9179aa93b735ccc9d1fce464f55868c263a2fea73398d9a49",
+      "git_blob_sha": "2c7caf4203a2c9899bd3b41ef73fc06562b1c7f2"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/clip-results/cadence20_scores-world_baseline-5.0.json",
+      "bytes": 4772,
+      "sha256": "0a66f1792efd5c19802ba8e54f955376884e59075ef04905c32718f91e8ecb2b",
+      "git_blob_sha": "4c5020b8626946cb0682256e6c31a5596dbf2834"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/clip-results/cadence20_scores-world_single_identity-20.0.json",
+      "bytes": 5298,
+      "sha256": "513ee76932cf13f72553dac879365d4622799112a3b77c7b6260ce3201d4e26c",
+      "git_blob_sha": "56e3f892fb5615974617f3de90f35edf5bd15de8"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/clip-results/scores-world_confidence_ablation-0.7143.json",
+      "bytes": 11743,
+      "sha256": "32bd33d328c87374d7d996eba666310515526fe002493c1b2158f9c431ec31eb",
+      "git_blob_sha": "7470a8e224ed01ebe9ced392786ce66dfd2686b5"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/clip-results/scores-world_confidence_ablation-5.0.json",
+      "bytes": 13549,
+      "sha256": "70a986aa2e6511d463b3c8c594e9f17a7f1c91590f50adcd6d395263ffc083f2",
+      "git_blob_sha": "0d2ef764ced7c1a6da6ac507f32b57b9b808874e"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/clip-results/full_scores-world_baseline-5.0.json",
+      "bytes": 63747,
+      "sha256": "fd87b71536cb3b2a6f3caf080ca91f82a523ec89828f0601feacbf1de721243b",
+      "git_blob_sha": "7f708cedc1f458452f276fe608636f17544e6c75"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/clip-results/cadence20_scores-world_duration_matched-0.7143.json",
+      "bytes": 4305,
+      "sha256": "fc5c28f94f28f80a093e3fca8042ecf126fb91d8b9766ab98844bc27563107d4",
+      "git_blob_sha": "7a2171f39165900bcce226e77c3dd83b83d97029"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/clip-results/cadence20_scores-world_confidence_ablation-5.0.json",
+      "bytes": 5137,
+      "sha256": "d63949768a2da37b498d7688ba2d3b0e1f7d3a1dacd520f4d328fd8b45a85a41",
+      "git_blob_sha": "98680b38c18366ad48d96b389ab012fef23daa24"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/clip-results/full_scores-world_single_identity-5.0.json",
+      "bytes": 65107,
+      "sha256": "7de211c4a98ec029e0589b52992b088b49fc38eb56695855e7705c3462f3f0ee",
+      "git_blob_sha": "8d101fead66a49a059533524eb2b3b3dc9ff9253"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/clip-results/cadence20_scores-pose_single_identity-5.0.json",
+      "bytes": 4956,
+      "sha256": "94eda32c6b3d936462973347c21e24290547d9e70cc18dbb3a49b43865177ce0",
+      "git_blob_sha": "2916842e05cf82664e8b30274b03231dc60964a1"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/clip-results/cadence20_scores-pose_single_identity-0.7143.json",
+      "bytes": 4314,
+      "sha256": "738af44a1834b2372f1c90eff469699aacaff645f655a539bbcfc4400cbd002b",
+      "git_blob_sha": "d64111ff0efd5c8a7b4da33ae9f8cdd5f808956d"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/clip-results/full_scores-world_confidence_ablation-0.7143.json",
+      "bytes": 58692,
+      "sha256": "2f26a5f775b1df2c410399757a457ffc501b9b398e7d6490c1b28eab20dc5093",
+      "git_blob_sha": "85763a36cc8425525e4f1b71d9bde82a4cdd95be"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/clip-results/cadence20_scores-pose_single_identity-20.0.json",
+      "bytes": 5315,
+      "sha256": "a7a498d3f2b30f33eefc8de823e7d9bc93dbc4d95d38f433a43c33742960d68c",
+      "git_blob_sha": "ff049938dcd22d347a5414313cff821b0d4b521f"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/clip-results/cadence20_scores-world_baseline-0.7143.json",
+      "bytes": 4209,
+      "sha256": "81b2dc7f1c04b3cbce099821155ea5a7446d9421bbbd70c7862a2cf65258ca6a",
+      "git_blob_sha": "f97f85ac7cc380d32441f8caa07dbb75a5563246"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/clip-results/full_scores-pose_box_baseline-5.0.json",
+      "bytes": 63446,
+      "sha256": "4ce614b55a2f08a8f0867ed4096cb51432caf7180989cde5ee6eaf0a200e5c87",
+      "git_blob_sha": "c3cefeb3156a0c7086dd2f60977c2cdc7046561b"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/clip-results/scores-pose_single_identity-5.0.json",
+      "bytes": 13584,
+      "sha256": "fbca41836ac16dbb332a3788961c74ef3febe253231a6899829fce7436bd2364",
+      "git_blob_sha": "d0756cbe57f68661a98df4702622762bc6ed206b"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/clip-results/scores-pose_box_baseline-0.7143.json",
+      "bytes": 11357,
+      "sha256": "7d5e68c7292815af4c973bf05618bd568e7e3d136e47dc36024ed97c61e7d1b1",
+      "git_blob_sha": "16db493434413a7ebe1cd40903fa8e76cc88c2ee"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/clip-results/cadence20_scores-world_baseline-20.0.json",
+      "bytes": 5215,
+      "sha256": "c652bdcf82d495c69c0b4714698704a51c923f6325ffb0746ee4d4a0de5467c2",
+      "git_blob_sha": "a2a49cd4501961500f425dbf035d6db3fb9ae04c"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/clip-results/cadence20_scores-world_confidence_ablation-0.7143.json",
+      "bytes": 4355,
+      "sha256": "4bc9d04c31a0f20aed38198d74bbef189ec27b3163baa8e4c2374637777c0f92",
+      "git_blob_sha": "38b468219250c698a24a0c9a1de65aaf0e7773f5"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/clip-results/full_scores-world_confidence_ablation-5.0.json",
+      "bytes": 66387,
+      "sha256": "101ca84d25dfc7ab433373545bf16813a7e7ee1ad86f1979ba13d91f2888d294",
+      "git_blob_sha": "b0d669d08a16644eccb0d9101763af2ab68105d4"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/clip-results/scores-world_baseline-5.0.json",
+      "bytes": 12917,
+      "sha256": "0b4cb0a4c1612c8299abcc04d9fbebdc956e66f90f9a44329509c03f54bb18c4",
+      "git_blob_sha": "859b7c7e129941c79f3fb2e5f11997fe51edb4b8"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/clip-results/cadence20_scores-world_confidence_ablation-20.0.json",
+      "bytes": 5604,
+      "sha256": "c6c9431bb7967bf7baf94d4737461f6c3f8019adb87b9acb3f5ad43fad089df0",
+      "git_blob_sha": "c93d43ba8c2ef3f1a2cb03a1fc2fa1cea8512655"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/clip-results/cadence20_scores-pose_duration_matched-0.7143.json",
+      "bytes": 4314,
+      "sha256": "b53c9570e3140804c4491906efd40ea02c8ea467ccc5a8d1db8815e80aacf937",
+      "git_blob_sha": "5d699c1f97fb765133fb4207a7face82149eddda"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/clip-results/cadence20_scores-pose_box_baseline-0.7143.json",
+      "bytes": 4266,
+      "sha256": "27776dc5d1cf7d32ab4392433566e3fa150c099310d6a211589fc195a759de05",
+      "git_blob_sha": "1e8553ff476610248a56aa09ede7543a37fb6a22"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/clip-results/scores-world_single_identity-5.0.json",
+      "bytes": 13117,
+      "sha256": "7d7c44fd083b10c2cad1e62901a8478a793698e0cca96fc0a9ce0ccd50293057",
+      "git_blob_sha": "a314d676a05ab370d51dc2f386c105c2d5cfaf7b"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/clip-results/scores-pose_single_identity-0.7143.json",
+      "bytes": 11487,
+      "sha256": "37e14f0303772d6d3d39854bd5d9bd83eaef279a7edb6d4c9df5c515e3d8e51a",
+      "git_blob_sha": "bc3a3f71af5d66c5a37466bd0556c5943777b2e2"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/clip-results/scores-world_baseline-0.7143.json",
+      "bytes": 11240,
+      "sha256": "dc504c0e2e268d5aec6f801eae06e0da987d402f844a273f8897527a44a717e7",
+      "git_blob_sha": "cb794683b11659fb6b87e1f76269c30bb9ee2519"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/clip-results/cadence20_scores-pose_box_baseline-5.0.json",
+      "bytes": 4946,
+      "sha256": "21dbcecc6e57b014bbce8b556d65f94c8289fa80fd3c3f2d96ab5bb28d0af420",
+      "git_blob_sha": "07cf5297ab4e91a8d139db6894af2d685d7f0825"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/clip-results/cadence20_scores-pose_duration_matched-20.0.json",
+      "bytes": 5077,
+      "sha256": "3ea08be76a1a22d0f62d7b200796e8a08a7aa88554b8bd41d7f365a1333d6eec",
+      "git_blob_sha": "a3da98221925d66c4a39010f1fd9ac05d5e0303e"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/clip-results/cadence20_scores-world_single_identity-5.0.json",
+      "bytes": 4965,
+      "sha256": "fe50cb15c0e11d1a7b689cd7c617080da28f2f946ea3b37090a9616b525c5e17",
+      "git_blob_sha": "90ca6cd979d90d420792a04c2b4ef87ba658ecb6"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/clip-results/full_scores-pose_single_identity-0.7143.json",
+      "bytes": 58106,
+      "sha256": "510a22e36f11c12ecba6c1ff47c339a3be548baaa9822dad6e5b26f0891f7c7d",
+      "git_blob_sha": "fb26e4b0a440c32c1f4201900bf86719ce67c202"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/clip-results/cadence20_scores-world_duration_matched-20.0.json",
+      "bytes": 4824,
+      "sha256": "978e87f7834c84a223e41c6c27ad306be45a62c6df03d43954d3f1aec11d0392",
+      "git_blob_sha": "0acac4c289197f8c216d7a0cede15c2628f27720"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/clip-results/full_scores-world_single_identity-0.7143.json",
+      "bytes": 58234,
+      "sha256": "9adfd52f763e7d9fe4e972c0595702b93e7d3014da0c31b416c4442746be9e98",
+      "git_blob_sha": "3eadbd66142f61a8ecfd2a00cb6ce2ec5f708c6e"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/clip-results/scores-world_single_identity-0.7143.json",
+      "bytes": 11655,
+      "sha256": "169c7100f89865918606f846476f564522c25994cb05146c8b15dace7e2f0364",
+      "git_blob_sha": "8023e869184faed4207cf8f6b89dc93f07839440"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/clip-results/full_scores-pose_box_baseline-0.7143.json",
+      "bytes": 57361,
+      "sha256": "08082464f8abb7d442444df33f15387f273520fc2f34498e12d200e65cbcb7cd",
+      "git_blob_sha": "0657d174550fc45a598b451aed6d68d605858079"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/clip-results/cadence20_scores-pose_box_baseline-20.0.json",
+      "bytes": 5311,
+      "sha256": "414c5ff13a1c9bcc9580df67cf12363a0dd33693add4b344bd115a73659be222",
+      "git_blob_sha": "972b9a1808bd10dd38870b0a55e025fbc4f01ce2"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/clip-results/cadence20_scores-world_duration_matched-5.0.json",
+      "bytes": 4868,
+      "sha256": "38d72a5d3873f013ba90dafc74acd8ef1c04286484773938d3c566d76b5fda65",
+      "git_blob_sha": "ee24a320e3b80983629ac56c4d0e06bf3091b0cd"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/clip-results/full_scores-pose_single_identity-5.0.json",
+      "bytes": 64606,
+      "sha256": "875e61141a1bb4cc5c683ee20fffb3c0135539542e8a72dbafd0f9aba27472c4",
+      "git_blob_sha": "3b1ae1c56f84dccd310c6686bcd29f0d976c2ab5"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/clip-results/cadence20_scores-pose_duration_matched-5.0.json",
+      "bytes": 4994,
+      "sha256": "9594a428c03802ec452fb61ca8a110cd11b44d637d7ec20b2b5fcbc7bbaff563",
+      "git_blob_sha": "51db9b71482b76cd205d8db35d52dd38ccc77553"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/previews/SOURCES.json",
+      "bytes": 2966,
+      "sha256": "41d96ddfe80543cddee628ff0ba5fa1ac5de149a6220feb2205499e8de947262",
+      "git_blob_sha": "df4cf27ff5a8f0f6e2435c713e640ea96dbebe22"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/models/README.md",
+      "bytes": 192,
+      "sha256": "6e6cb3968e7585f33c13e3c8c969b8c819b34662b4c5360608241f580d8cfc75",
+      "git_blob_sha": "5b5b66844faae14cbdf15f3dbdf9ab70a163636d"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/dataset/Subject 2/Fall.csv",
+      "bytes": 3309,
+      "sha256": "b6829461084e99183014ac72447ebd6879038e1093a23054f396de4426fbde60",
+      "git_blob_sha": "cab03b6b53b745b30f5b298ed38f1fb734ef60d4"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/dataset/Subject 2/ADL.csv",
+      "bytes": 3407,
+      "sha256": "c83c19c116e14d82f644040dc07bb14474486c501cb760275a7397837798ea04",
+      "git_blob_sha": "055d70d630c6dd7ab979700039b3e113b44d58eb"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/dataset/Subject 4/Fall.csv",
+      "bytes": 2399,
+      "sha256": "d8cbc7f404dcf0cf674f18fa4c963a382aa64e7c93f2053194915bd0bdb5b4e5",
+      "git_blob_sha": "31c1625bbf51eff2e5bd767455c400f50f5786e4"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/dataset/Subject 4/ADL.csv",
+      "bytes": 3092,
+      "sha256": "9b9a4aef43725126d8f8d9cf04a393ba98dfea9f30554e6391cc0584ea661c2d",
+      "git_blob_sha": "4d97c1ba3b3a43290529ae5c7be236322706816d"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/dataset/Subject 1/Fall.csv",
+      "bytes": 2491,
+      "sha256": "28e55e3fd60f791f02c821e91c2a64362a1dabdbd46a916279655eab83a49754",
+      "git_blob_sha": "2d840025af02560bed58e21bcd161fbf5b3f1969"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/dataset/Subject 1/ADL.csv",
+      "bytes": 2598,
+      "sha256": "9899703edb31776c5b837449f1a9c0efd9f1d84369f0b1443b63253abc38e3a2",
+      "git_blob_sha": "2f26cbeb71d0f5a2f3d804d728966bdf37f0a5a8"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/dataset/Subject 3/Fall.csv",
+      "bytes": 2943,
+      "sha256": "02a9a5f5c5f0b178510f6e512cf200b8f8a626ecea5c61a1e713046d73046470",
+      "git_blob_sha": "b2c4bd125a1e3e2c48b8f60a0e257dc2a3d2227e"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/dataset/Subject 3/ADL.csv",
+      "bytes": 2991,
+      "sha256": "e98afe16fb80677a06b7dd19769611cfed13e59eb0f85a7668ae22baf15bc3c2",
+      "git_blob_sha": "ff4ddf4658413d55d48c1e680fe5c40ce4707600"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/one/geometry_service/gpu_runtime.py",
+      "bytes": 439,
+      "sha256": "53bad9b34b7d3b046f693f5e4090eb8a987bbc8649cbe81ab56bd0ac09961d4b",
+      "git_blob_sha": "179c869c53e3b950ed649499289849cb1d2d7211"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/one/geometry_service/config.py",
+      "bytes": 4241,
+      "sha256": "e70395a0bc1b5a49f58f60ac43d80e3fa4fb6b8d0b71373fd32be9b2de362897",
+      "git_blob_sha": "81afc010ecc37f5104ac86b2dfc63489e7fa1261"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/one/geometry_service/real_vision.py",
+      "bytes": 2703,
+      "sha256": "e9af717a62e42557765b741468d8f60cb6dc9dc75030317629fe55d72ca0237c",
+      "git_blob_sha": "cdc6f3062cf180a2bb8a5fb2f495d446b928caf0"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/one/geometry_service/__init__.py",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "git_blob_sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/one/geometry_service/runtime.py",
+      "bytes": 13913,
+      "sha256": "a20a5905911569a7ac1745f8ae634ec8c66216dc60e2d9e69d52b858c879b73d",
+      "git_blob_sha": "68529149bd000488a68732efe1b9ceb22d49c72f"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/one/geometry_service/low_light.py",
+      "bytes": 3370,
+      "sha256": "936bf88c74024e36ca2630a32bd349facf7966d8d213eaf6ff2cdade3dcfeb98",
+      "git_blob_sha": "70cc26621e363fff59fcd236669268a50e7b8cee"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/one/geometry_service/model_config.yolo-world.json",
+      "bytes": 745,
+      "sha256": "22bd51d9c13a5350481f5fc1c8f221bcec0f80dcdfe4ed33833fb41adf677754",
+      "git_blob_sha": "1491fd165b7d7ab573eb6e7cdd8b44b4d99f3d17"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/one/app/fall.py",
+      "bytes": 7388,
+      "sha256": "cee9201ca2b58f02101fe2d87367e30aabc1b77816337a77fd0f3c0b3e1483a7",
+      "git_blob_sha": "5eb9165b08c2374f0f071f578d1d58cc32f7986b"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/one/app/vision.py",
+      "bytes": 12871,
+      "sha256": "704f03825077dff8da7519e7ff09d93a2d4bf9fcb47a9a047024e53f7de57296",
+      "git_blob_sha": "7cd63df2ddf625de421b24dfd7807619d9d38b66"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/one/app/__init__.py",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "git_blob_sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/connected-rooms/audit/wrong_room_failure_audit.json",
+      "bytes": 1436,
+      "sha256": "859d296a51b826b7f413fca9a27fa2a13a6b9f78f38f316bf4c2342c81ffb6c2",
+      "git_blob_sha": "6a8d7a07bb1de76e893c453aa2137f64624cbe30"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/connected-rooms/audit/independent_final_validation.json",
+      "bytes": 26193,
+      "sha256": "82c48dba4e5847a3c01fc7f26d7bde7fc61a419c39d38ac6decf408753b4a1e1",
+      "git_blob_sha": "34fc1ae114aa9c36bb0bcc8ce70739f976224808"
+    },
+    {
+      "path": "qa/connected-home-localization/README.md",
+      "bytes": 4305,
+      "sha256": "3055657ead0238414c91881fe1334812befd91c3321425153188be5923af3f91",
+      "git_blob_sha": "374a1c4019cc9a96e83f95c467ff23f4893541b8"
+    },
+    {
+      "path": "qa/connected-home-localization/audit/audit_room_assignment.py",
+      "bytes": 10164,
+      "sha256": "3257f8616c9ff72270105fea6c0d15d6d31df3a188a44b900b34c872fd7f9cde",
+      "git_blob_sha": "1c30e8fc4c546217a469217e3ab62e784ac8b15b"
+    },
+    {
+      "path": "qa/connected-home-localization/audit/build_connected_native_fixture.py",
+      "bytes": 8008,
+      "sha256": "50534309fa4fd187224226256543441881ea9fb24ebb733b38c0851dbaff267f",
+      "git_blob_sha": "d0de1a2560e26b9952788bfa5b8dc23af6831f94"
+    },
+    {
+      "path": "qa/connected-home-localization/audit/independent_final_validation.json",
+      "bytes": 26193,
+      "sha256": "82c48dba4e5847a3c01fc7f26d7bde7fc61a419c39d38ac6decf408753b4a1e1",
+      "git_blob_sha": "34fc1ae114aa9c36bb0bcc8ce70739f976224808"
+    },
+    {
+      "path": "qa/connected-home-localization/audit/independent_final_validation.py",
+      "bytes": 11873,
+      "sha256": "3d88b3b41b5959be3ddd3865c90f226382b73249f0a2dedd72a9ca30fa245514",
+      "git_blob_sha": "08b3ec14cea2d3dfbfe297b58c5d6acd6daf0519"
+    },
+    {
+      "path": "qa/connected-home-localization/audit/last_run_stdout.json",
+      "bytes": 8148,
+      "sha256": "15ce472270f1a05d3103fb36c07b0aeee599b02720d0a01fe751ebf0eacae101",
+      "git_blob_sha": "9a193d36fc1d5f88d1a444f1dab410fb85e71b9f"
+    },
+    {
+      "path": "qa/connected-home-localization/audit/room_assignment_audit_results.json",
+      "bytes": 8148,
+      "sha256": "65bf8a3d598fffc4f4066ad3651f05d3d937b13d31919bf4875ad23c0705bfb9",
+      "git_blob_sha": "5c67114e577308f8dab1d11b275e649a4d0f92f8"
+    },
+    {
+      "path": "qa/connected-home-localization/audit/wrong_room_failure_audit.json",
+      "bytes": 1436,
+      "sha256": "859d296a51b826b7f413fca9a27fa2a13a6b9f78f38f316bf4c2342c81ffb6c2",
+      "git_blob_sha": "6a8d7a07bb1de76e893c453aa2137f64624cbe30"
+    },
+    {
+      "path": "qa/connected-home-localization/pilot/README.md",
+      "bytes": 6309,
+      "sha256": "15bf73c1d9562bc79c2e386abcfc49b0e2501efd93b6ad40b9c9717311d7d5d6",
+      "git_blob_sha": "3260f85c13371e31743a68a4fe64bd7ecc594164"
+    },
+    {
+      "path": "qa/connected-home-localization/pilot/RESULTS.md",
+      "bytes": 5840,
+      "sha256": "34bd54b91eb3b7d2c92b5cbeb79dba962268e6b06468ca1403d1687e7273f988",
+      "git_blob_sha": "f4a9970ac1a7b17e51bd48e3fc30fdd45981c96b"
+    },
+    {
+      "path": "qa/connected-home-localization/pilot/backend_usdz_validation.json",
+      "bytes": 228,
+      "sha256": "6c6b4097fe5c1290ea1cf20b70ac3e8012b364b267698ec15c2dca288028f8a3",
+      "git_blob_sha": "ea11d693bf6228ef429e757f1369e02422fee7c4"
+    },
+    {
+      "path": "qa/connected-home-localization/pilot/base_scene.py",
+      "bytes": 6358,
+      "sha256": "fc01b887f82a5beedec0ac1b18026d5df530d3cccc70dfd83287c35da07e40fe",
+      "git_blob_sha": "2f08addcbaeade1f536a652df1fd4b5255196946"
+    },
+    {
+      "path": "qa/connected-home-localization/pilot/benchmark_serial.py",
+      "bytes": 2398,
+      "sha256": "248b76f39caeb93c23f39d6a380fffbd8cb500cca6d00b1066ee89d14a4de6b7",
+      "git_blob_sha": "7426c42bf4099a0f2211cc887c5e05fb6c0562ae"
+    },
+    {
+      "path": "qa/connected-home-localization/pilot/build_connected.py",
+      "bytes": 8237,
+      "sha256": "a1ba8af018acb6cf5572bdb1c91abc4d3ff4fa7ff2e0aee14369c348f2180ebf",
+      "git_blob_sha": "4cfb44ef376ba17a07975c7fa4f4967e3287d431"
+    },
+    {
+      "path": "qa/connected-home-localization/pilot/detect.py",
+      "bytes": 2094,
+      "sha256": "f41d7127037a276cd203dfdd90ac983ceb5cdd3d9b87f075ecf6b22beb73f1ac",
+      "git_blob_sha": "402b62bd0975eec94f2bccc0220b41a6d775d1d7"
+    },
+    {
+      "path": "qa/connected-home-localization/pilot/detector_diagnostics.json",
+      "bytes": 49442,
+      "sha256": "45046927583d4a5c88a19db6021fe44973640d9e7fc59e6b4e4f3b0ceca22c1a",
+      "git_blob_sha": "f2f1248b2cd38717ac8cbe812103a20d45b75647"
+    },
+    {
+      "path": "qa/connected-home-localization/pilot/environment.lock.txt",
+      "bytes": 1040,
+      "sha256": "3a9d6bbac482a0315e000a30aa36d1895caf66caa4b09442dac0c9159d0ad93e",
+      "git_blob_sha": "bc47a3a429805505a1dd58a7bf2c0bb5f2440eca"
+    },
+    {
+      "path": "qa/connected-home-localization/pilot/fixtures/connected_home/evaluator_groundtruth.json",
+      "bytes": 35500,
+      "sha256": "b86490cb8bf692d1e728a4ebba1919766c840b442c1997549b1f202680ee1632",
+      "git_blob_sha": "c28ea80baa430e87bf7eb39f21b148f62edd6387"
+    },
+    {
+      "path": "qa/connected-home-localization/pilot/fixtures/connected_home/normalized_geometry.json",
+      "bytes": 42791,
+      "sha256": "c557d8cd51a643228cd251c3643614e3056556565dda803256fc500848ec6a89",
+      "git_blob_sha": "c295b2819d9c3e965fb160b36c37829976e98eb6"
+    },
+    {
+      "path": "qa/connected-home-localization/pilot/fixtures/connected_home/normalized_scan.json",
+      "bytes": 50913,
+      "sha256": "fe6e00b5bd1557d4a1dccd36fc5a400e604e4f02b1e6aa9d4d5976eded963fb2",
+      "git_blob_sha": "d2adbed9f0c4286f284664f391883e268095d256"
+    },
+    {
+      "path": "qa/connected-home-localization/pilot/fixtures/connected_home/normalized_scan_validation.json",
+      "bytes": 3412,
+      "sha256": "7474ec2f310dcb67b26a03a577019819bcbb10034760ba1458be472adfa56bce",
+      "git_blob_sha": "3896502d6fa8c25a9d1d3f8aa19aeab2456bed32"
+    },
+    {
+      "path": "qa/connected-home-localization/pilot/fixtures/connected_home/query_east_north_0_detections.json",
+      "bytes": 2545,
+      "sha256": "d526417935b7975b93e8263781dc619ee646118dc393601e3631d10acd42c20b",
+      "git_blob_sha": "5894787cc2c59b08469a1c2b626ef378d7a2ed7d"
+    },
+    {
+      "path": "qa/connected-home-localization/pilot/fixtures/connected_home/query_east_north_1_detections.json",
+      "bytes": 2055,
+      "sha256": "0da448c8bc3d897b08ef3780af629ec337651e18145174efbe6df4e0fbd515ef",
+      "git_blob_sha": "9ad1f7518fd8dff3963f7c0184c5a492ff210eed"
+    },
+    {
+      "path": "qa/connected-home-localization/pilot/fixtures/connected_home/query_east_south_0_detections.json",
+      "bytes": 2544,
+      "sha256": "07814568470f0066b505b7d4124d1d33f65007fa09fc20f7051266413b1dd270",
+      "git_blob_sha": "c4c80d54fbb21859dd953cb425c4f0de88234383"
+    },
+    {
+      "path": "qa/connected-home-localization/pilot/fixtures/connected_home/query_east_south_1_detections.json",
+      "bytes": 2684,
+      "sha256": "f0e68fdf5e8f51aaba8ac2860e8022c08a0332ff92c069e0fec0ec8cf2925a58",
+      "git_blob_sha": "a5979fbb270c336181149ab70ac2cc9ccf027396"
+    },
+    {
+      "path": "qa/connected-home-localization/pilot/fixtures/connected_home/query_transition_0_detections.json",
+      "bytes": 315,
+      "sha256": "21ceabd5e60d35340c3221b9eaa0e2ddcdc3879e09588824ec4b4cde2dff85fc",
+      "git_blob_sha": "19c59595e6474dfa6d8363023009b7fa5ff33018"
+    },
+    {
+      "path": "qa/connected-home-localization/pilot/fixtures/connected_home/query_transition_1_detections.json",
+      "bytes": 3978,
+      "sha256": "5c971429d07f5a6709e926b0b9106bc1849551e2f83d7957d27b59f313b2aaad",
+      "git_blob_sha": "b24fa49c9d9e0e6970e0dc03fcc56e6490303e6d"
+    },
+    {
+      "path": "qa/connected-home-localization/pilot/fixtures/connected_home/query_transition_2_detections.json",
+      "bytes": 3785,
+      "sha256": "51fece68db48f12ac9e192aea9e1f2c7bd0f7b1381a55e48b0443c149ded7527",
+      "git_blob_sha": "17a03399475bcb0c9a43c5a0ffbcd62c17997a71"
+    },
+    {
+      "path": "qa/connected-home-localization/pilot/fixtures/connected_home/query_transition_3_detections.json",
+      "bytes": 3025,
+      "sha256": "51e2724a6f322fa10cdd2819b41d70373b61c8c8e3d3a1dc9491607a6bca750e",
+      "git_blob_sha": "aa7f0833fc8a10737a9c54a4b36e636426a1ce2c"
+    },
+    {
+      "path": "qa/connected-home-localization/pilot/fixtures/connected_home/query_west_north_0_detections.json",
+      "bytes": 2222,
+      "sha256": "25a9a1339d752522571957bc4ed8159702480f863fbc89aebfe2f7502b8e9338",
+      "git_blob_sha": "f563f015463aa5a4569a6c951f49821cc2f11d68"
+    },
+    {
+      "path": "qa/connected-home-localization/pilot/fixtures/connected_home/query_west_north_1_detections.json",
+      "bytes": 3149,
+      "sha256": "9ffda9a96cb1a8ab89fbff08d1a06fd0f7b92613e8b080976aa25d90c0b566c8",
+      "git_blob_sha": "43ffd263879d38011eb2676ba31a49b3f0d13a61"
+    },
+    {
+      "path": "qa/connected-home-localization/pilot/fixtures/connected_home/query_west_south_0_detections.json",
+      "bytes": 2220,
+      "sha256": "fcd939a910fef81fae2b97c695399207680f442144a1b96a1735abdb9f5bd7ab",
+      "git_blob_sha": "6057c9dae5cd8ac5bb428f4eac8ce935eccf8895"
+    },
+    {
+      "path": "qa/connected-home-localization/pilot/fixtures/connected_home/query_west_south_1_detections.json",
+      "bytes": 3142,
+      "sha256": "92a605bfbddd7dc1de55719f726c6516af7a258cff90da803997cf9e4832fb76",
+      "git_blob_sha": "5cd424a3d039540d1e4ff158a4278ff55cee891a"
+    },
+    {
+      "path": "qa/connected-home-localization/pilot/fixtures/connected_home/scan.json",
+      "bytes": 27308,
+      "sha256": "466675969816c12928f07affa880d16f3f315f194289e281d70106de6fb276c2",
+      "git_blob_sha": "64fb4d14107a61e75e19fe3bc8cdea2c4d0b209e"
+    },
+    {
+      "path": "qa/connected-home-localization/pilot/fixtures/connected_home/scan_validation.json",
+      "bytes": 240,
+      "sha256": "a85491d197b985d5f265a37a452a9649d6751497338d0fcbeb47e6a83e336e82",
+      "git_blob_sha": "f9f516477bf348ff085c115770524567b8c1d448"
+    },
+    {
+      "path": "qa/connected-home-localization/pilot/fixtures/connected_home/structural_boxes.json",
+      "bytes": 3005,
+      "sha256": "49339dd35db88bdfac947fc2c90251cafcb02cd35477b76b8933558e5502b61d",
+      "git_blob_sha": "f5e6faecd75f12a68f7f04fb2e4f7242e05369e2"
+    },
+    {
+      "path": "qa/connected-home-localization/pilot/frozen_design.json",
+      "bytes": 9849,
+      "sha256": "9d9ededcfb9af5d0faaa78b64223f8189e9615f2b585e5083c373c58aad59177",
+      "git_blob_sha": "8af5bc7e804bc745ca8cb76cd1a5f3979478992e"
+    },
+    {
+      "path": "qa/connected-home-localization/pilot/latency_summary.json",
+      "bytes": 250,
+      "sha256": "b928496c6dafadd681b09314bb0f6f5578b3f48c8e3a78e3d9286fcf811d6cc5",
+      "git_blob_sha": "091c92fca7cc0c29c37d93ebd9fa0c1dea2b3506"
+    },
+    {
+      "path": "qa/connected-home-localization/pilot/make_contact_sheet.py",
+      "bytes": 1238,
+      "sha256": "7c91c14c18ea9a0955d02f6b3d5157ad82781b63acea938e67ec1373a8b01bc5",
+      "git_blob_sha": "48574526cb5de71ea488a2366a92a266e95cec36"
+    },
+    {
+      "path": "qa/connected-home-localization/pilot/make_result_visual.py",
+      "bytes": 3232,
+      "sha256": "387bf3144c5fdb49e6edfc7775059d21818d91040562b85f535ae4bc5d0b86f6",
+      "git_blob_sha": "ad971f781e38e43f1452f14de9c59aac9aea261d"
+    },
+    {
+      "path": "qa/connected-home-localization/pilot/manifest.json",
+      "bytes": 6886,
+      "sha256": "755f20992fecf5d43b223302293d0d7f80bd61618694b53c4a4ce8ee370e7c23",
+      "git_blob_sha": "8f3aceda65d633f69f764c4099ee263956f6e88a"
+    },
+    {
+      "path": "qa/connected-home-localization/pilot/model_provenance.json",
+      "bytes": 572,
+      "sha256": "1c38f0e0dcd2fd2019eaaebfce99776a9aea9f72501a8073a5d2da08661310a4",
+      "git_blob_sha": "1e5006a44290168e7084fb9c82ba8bc87be045c5"
+    },
+    {
+      "path": "qa/connected-home-localization/pilot/package_connected.py",
+      "bytes": 1809,
+      "sha256": "3c237786961f80c923814ebf1ee1b1524f7650f636a4c962ec1686708e43d03c",
+      "git_blob_sha": "1731b56414ac49e9734b6d8887973db85fec0a73"
+    },
+    {
+      "path": "qa/connected-home-localization/pilot/prepare_connected.py",
+      "bytes": 3655,
+      "sha256": "0ef18743996b83ce142112c413a608b7ec8bcb68efcddc53d79ca519f2cb38c4",
+      "git_blob_sha": "197efa88a4a4ff5c7618b39eccf06abf5d23cd32"
+    },
+    {
+      "path": "qa/connected-home-localization/pilot/render_validation.json",
+      "bytes": 5006,
+      "sha256": "df141e79579003995b83d513799a124944bd64c544f7afd5d690ca5a0dbfe4b8",
+      "git_blob_sha": "3a00380731612fe0cf630fd86b21da94347eedcc"
+    },
+    {
+      "path": "qa/connected-home-localization/pilot/request_validation.json",
+      "bytes": 7808,
+      "sha256": "4cf3ca7339f9a1157bb338c88019563f248b12abab0c30db065fb5decaee9d69",
+      "git_blob_sha": "519036ae25fb9d8fcea4ee2c20c502f75140aaa6"
+    },
+    {
+      "path": "qa/connected-home-localization/pilot/results_summary.json",
+      "bytes": 23819,
+      "sha256": "0ad1c51fb223134147a3ff27ed9f6bb24d44c1555a73911f98a0069ec9998a47",
+      "git_blob_sha": "aec0d5466c077f4ddf9aa58761d274de9da2005f"
+    },
+    {
+      "path": "qa/connected-home-localization/pilot/run_single.py",
+      "bytes": 1673,
+      "sha256": "b3ec6eaf427c3aed6d606420697a4b90383baf8f82deea84eee74f053140ba6b",
+      "git_blob_sha": "a2614d9a7d358c95224740f1e01692e2b1c6d38a"
+    },
+    {
+      "path": "qa/connected-home-localization/pilot/scoring_only.json",
+      "bytes": 6669,
+      "sha256": "ab4749ec9ea9cfc89fc552327d2da43ad77d64847920a856a95ba1bfbda65c23",
+      "git_blob_sha": "8052edef36988425365095c73742cac0c22b6b78"
+    },
+    {
+      "path": "qa/connected-home-localization/pilot/source_integrity.json",
+      "bytes": 7712,
+      "sha256": "982a0ba5b0fcb71e726a9d8b1506ed4c1d9033cbb877fbf8bd7512471e3a643b",
+      "git_blob_sha": "ae6be987a900d0f1be258c13914177a8059ae31d"
+    },
+    {
+      "path": "qa/connected-home-localization/pilot/summarize_connected.py",
+      "bytes": 2831,
+      "sha256": "5ed8351a0a990d758115943d5e7c81a07b629c08dda1374dc672d74cb4653ff2",
+      "git_blob_sha": "6283de4aa249b97d0a18726166963307d6428679"
+    },
+    {
+      "path": "qa/connected-home-localization/restore_replay.py",
+      "bytes": 2672,
+      "sha256": "2876ab1dd42a5c59dcb14b578966fedcc842bb72e5f174679f0ae3b1f3a932b9",
+      "git_blob_sha": "5bc4b4b7917386fc0245c4f9afd70868c51a354b"
+    },
+    {
+      "path": "qa/connected-home-localization/source_integrity.json",
+      "bytes": 7712,
+      "sha256": "982a0ba5b0fcb71e726a9d8b1506ed4c1d9033cbb877fbf8bd7512471e3a643b",
+      "git_blob_sha": "ae6be987a900d0f1be258c13914177a8059ae31d"
+    },
+    {
+      "path": "qa/connected-home-localization/replay/replay_manifest.json",
+      "bytes": 134777,
+      "sha256": "72f091e06f1d6cc31ca2be7d76bdaccf49e4652cf1783247b82637bed16b9284",
+      "git_blob_sha": "4454a07aa323aa394163148f4100563ded9c7779"
+    },
+    {
+      "path": "qa/connected-home-localization/replay/run_metadata.json",
+      "bytes": 78405,
+      "sha256": "01c21c85d85b3b663e55c840b861e0c1fbd74b6c0455301248d466b5afa069c6",
+      "git_blob_sha": "0a5105040a8c9190f872088ac775d0042f265c58"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/ONE-fall-detection-investigation.docx",
+      "bytes": 47107,
+      "sha256": "c330918005eaab570db74ee9b2e16b9c715f7c4be0995782efed1916f23715a9",
+      "git_blob_sha": "04416800994a03e869b2a9f121cc32d1bc12b4e2"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/previews/s4_fall_10.jpg",
+      "bytes": 65510,
+      "sha256": "472c83e0e7ba81e84b76e855e3c784d1f70598bc50fd970a9ec27081eca1d134",
+      "git_blob_sha": "2db035115f8413b5d2e67f8ef6b846c7eb05b002"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/previews/s3_fall_16.jpg",
+      "bytes": 74893,
+      "sha256": "d155fe2c4a233f4a0083ee245d12dd75518ccc5d53f5bb978f2ae0e4b962a215",
+      "git_blob_sha": "05e33fc32e5fc73898dd487c35a4770cd09e1cdb"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/previews/benchmark-summary.png",
+      "bytes": 114942,
+      "sha256": "266e2df02e269130b6233ad4bdb43691d9dc67f83848f9598d8843ec972f3df3",
+      "git_blob_sha": "12917e6e211176404809fcbf301f1c667a132192"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/previews/s3_fall_16.mp4",
+      "bytes": 32457,
+      "sha256": "84a8fff4dd5294d5a84554d4b897bae5fdb6b630c524b0f6192fd7b850d7b20f",
+      "git_blob_sha": "f464277a911c2ea93efbbcec5a52d6c8433471a3"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/previews/s4_adl_05.mp4",
+      "bytes": 42863,
+      "sha256": "940d88c598c2386f53a079ecbd57c40a947c32fc271fec9a8d2ea11ef677d638",
+      "git_blob_sha": "365e8a50d9ba75e624e87097d54f2968134ce0a5"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/previews/s2_fall_04.mp4",
+      "bytes": 48638,
+      "sha256": "2758706859739d865146c9e80c6fe5547b382a509c9a0df521a87b2db837db85",
+      "git_blob_sha": "46aff24bd81270e7f1c81f81334d32793d327b1f"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/previews/s4_adl_05.jpg",
+      "bytes": 63508,
+      "sha256": "3b66adab94d0e44b8366a6b20cc1b5a769964fab5986ad933333644feb6c7b4e",
+      "git_blob_sha": "cfcba5bf3a32d313af6ed2cc96fce27181af3c06"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/previews/s3_fall_13.jpg",
+      "bytes": 88448,
+      "sha256": "f31bdedd57a5a41e11c9a9952d6fb094da4dc79da789051037b054b908482b66",
+      "git_blob_sha": "434ca9e3d861c55991e06bdc139d97aaa3347b99"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/previews/s2_fall_04.jpg",
+      "bytes": 83282,
+      "sha256": "53d5db431f267179151989072f1784bcb7bb41621a78038a32d1e87e5e60fe13",
+      "git_blob_sha": "732bb36d37a8ee7b8664732bf1bc3ab2d644df67"
+    },
+    {
+      "path": "qa/real-falls-connected-home-2026-09-30/fall-detection/previews/s3_adl_08.jpg",
+      "bytes": 79928,
+      "sha256": "201e65e7c413fa4c49ee8594fc46c589b572c37dbd94a25ca7a940ed25bb3a25",
+      "git_blob_sha": "193f7a15ccb92141b4e1f2fa7e1673b3dbe06e1a"
+    },
+    {
+      "path": "qa/connected-home-localization/pilot/fixtures/connected_home/connected_home_simple_boxes.usdz",
+      "bytes": 5014,
+      "sha256": "d59c9b989966a730ca261d7b7b6a6fcd54e7f33be1567bde21492d5a0115278e",
+      "git_blob_sha": "978fa1d496f3eda1822bde477b1daa4f0b85d975"
+    },
+    {
+      "path": "qa/connected-home-localization/pilot/fixtures/connected_home/query_east_south_1.jpg",
+      "bytes": 63999,
+      "sha256": "b423c40545f9f8c7e7a12ea5bcedfe917e72e1766389d8e2630c6658b39cc1e2",
+      "git_blob_sha": "03824159731cab106708455de1b0436e38fc7fde"
+    },
+    {
+      "path": "qa/connected-home-localization/pilot/fixtures/connected_home/query_transition_0.jpg",
+      "bytes": 52296,
+      "sha256": "d109d2c84b1425b0823ff6e4bd944cb8e2c34315be4b9590b2bf2920bf8ad9bc",
+      "git_blob_sha": "b8989c64018586c1677471655903cfe756be8858"
+    },
+    {
+      "path": "qa/connected-home-localization/pilot/fixtures/connected_home/query_transition_3.jpg",
+      "bytes": 66565,
+      "sha256": "f180e6aa3e6eab7c3f14a1a9c2faea5e7caed2b7d985dd4490c8343a59f7ed13",
+      "git_blob_sha": "ba7af5de61d4058104b21b21c5f39fdcc819feb5"
+    },
+    {
+      "path": "qa/connected-home-localization/pilot/fixtures/connected_home/query_west_south_0.jpg",
+      "bytes": 60929,
+      "sha256": "558ab834a5bf76768ade7ded38e03945f7e09457a7019cef4630196d85868b6a",
+      "git_blob_sha": "df8c1d083107e083b7dccaa5ad4d3cb2bc9248f1"
+    },
+    {
+      "path": "qa/connected-home-localization/pilot/localization_results.png",
+      "bytes": 85009,
+      "sha256": "edc0264e3f0ff680d439737456ada8a04693fe3354393481fd3bc662ffcd3e52",
+      "git_blob_sha": "9a675815359c66f3be22ee796c98fc94b154a90f"
+    }
+  ],
+  "verified_remote_blob_matches": 196,
+  "scope": "QA-only files; publication-scope notes and this manifest are added after the checked checkpoint"
+}

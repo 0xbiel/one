@@ -5,7 +5,15 @@ ROOT=Path(__file__).resolve().parent
 
 def digest(b):return hashlib.sha256(b).hexdigest()
 def main():
- p=argparse.ArgumentParser();p.add_argument('--check-only',action='store_true');args=p.parse_args();r=ROOT/'replay';m=json.loads((r/'replay_manifest.json').read_text());pieces=[]
+ p=argparse.ArgumentParser();p.add_argument('--check-only',action='store_true');args=p.parse_args();r=ROOT/'replay'
+ if not (r/'replay_manifest.json').is_file():
+  raise SystemExit('Exact no-model replay is unavailable in this compact checkout: payloads were omitted. See omitted_payloads.json and FRESH_RUN.md. A fresh model run is a different workflow.')
+ m=json.loads((r/'replay_manifest.json').read_text())
+ required=[r/'run_metadata.json']+[r/x['file'] for x in m['chunks']]+[r/f['file'] for c in m['cases'] for f in c['frames']]+[r/'raw_results'/f"{c['case']}.json.gz" for c in m['cases']]
+ missing=sorted({str(x.relative_to(ROOT)) for x in required if not x.is_file()})
+ if missing:
+  raise SystemExit('Exact no-model replay payloads are missing ('+str(len(missing))+' files). See omitted_payloads.json and FRESH_RUN.md. First missing: '+missing[0])
+ pieces=[]
  for item in m['chunks']:
   data=(r/item['file']).read_bytes();assert digest(data)==item['sha256'];assert len(data)==item['bytes'];pieces.append(data)
  packed=b''.join(pieces);assert digest(packed)==m['common_gzip_sha256'];common=json.loads(gzip.decompress(packed));metadata=json.loads((r/'run_metadata.json').read_text())

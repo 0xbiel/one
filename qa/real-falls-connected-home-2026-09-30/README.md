@@ -9,9 +9,11 @@ This draft is for reviewing measured limitations and choosing the next experimen
 
 ## Portable evidence and previews
 
-- [Connected-home exact replay and source scene](../connected-home-localization/README.md)
+- [Connected-home generation recipe and replay inventory](../connected-home-localization/README.md)
 - [Real-fall editable report](fall-detection/ONE-fall-detection-investigation.docx)
 - [Fall benchmark overview](fall-detection/previews/benchmark-summary.png)
 - [Selected licensed examples](fall-detection/previews/)
 
 Each directory documents reconstruction and deliberate large-file exclusions.
+
+See [publication scope](PUBLICATION.md) for included artifacts and omitted exact-replay payloads.

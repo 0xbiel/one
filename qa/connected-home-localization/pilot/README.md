@@ -1,3 +1,5 @@
+> Publication availability: this is a compact QA checkout. Exact replay payloads and most original images/depth are omitted. See [../README.md](../README.md), [../omitted_payloads.json](../omitted_payloads.json) and the fresh-model recipe [../FRESH_RUN.md](../FRESH_RUN.md). Historical results and validation receipts were produced before this publication reduction.
+
 # Connected-home camera-localization pilot
 
 A procedural 14m x 10m home with four deliberately similar furnished rooms, a continuous 2m hallway, four 1.2m x 2.2m doorway openings and 2.8m walls. This is a synthetic regression fixture, not a real scan or a real-device acceptance test.
@@ -36,8 +38,6 @@ A single serial process evaluates one case at a time; the watchdog starts immedi
 
 Remaining limits include real ARKit drift, real LiDAR noise, severe object motion/occlusion, rolling shutter, lens distortion, other camera lenses, map upload persistence, and real-room deployment. This pilot is intentionally bounded.
 
-## Retained evaluation bundle
+## Fresh reproduction
 
-The final bundle has `pilot/`, `one/` (pinned worker and audit source), and `audit/`. Extract the four `connected_home_requests_*.zip` files **inside `pilot/`**, producing `pilot/inputs/`. Each part contains six exact frozen request payloads; `pilot/manifest.json` is the complete authority. Run with a suitable environment matching `environment.lock.txt` and `PYTHONPATH` pointing to `one/`, e.g. `python benchmark_serial.py --source ../one --label rerun` from `pilot/`. Use a fresh output label; existing results are never reused. The source snapshot is sufficient for the worker/normalizer audit, not a complete runnable HTTP application checkout.
-
-After a fresh run, `python summarize_connected.py --label rerun` writes `rerun_summary.json` without replacing retained current results.
+Use the published generation and scoring scripts through [FRESH_RUN.md](../FRESH_RUN.md) in an isolated working copy. A fresh render/model run may differ from the measured run. The original byte-exact inputs and raw result payloads are not present in this compact GitHub checkout.
