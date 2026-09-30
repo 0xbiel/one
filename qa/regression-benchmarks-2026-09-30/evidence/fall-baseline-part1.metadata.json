@@ -1,0 +1,28 @@
+{
+  "code_commit": "e6abb03a803f403371626cfc2636c831308d71a3",
+  "model_name": "yolov8s-worldv2-indoor-objects-v1",
+  "model_sha256": "9b2c17ab6124a913e9b3a5c170617920d91b0f01111a8479da69f00e2cf27792",
+  "input_kind": "rendered_rgb_frames",
+  "inference_fps": 10,
+  "clip_sha256": {
+    "fall_side": "ddc52bfb8c4dd8a89e2e6fc951b9c7a8126bb2146bc39ab8bda7716cc95beac4",
+    "fall_occluded": "765a391c1fea8c68e00a66c1467920d3e11ee7f6db1f6113b6b9b92541cce44f"
+  },
+  "clock": "production clocks use fixed 10fps capture timestamps to separate playback from CPU throughput",
+  "thresholds": {
+    "detection": 0.2,
+    "fall_min_confidence": 0.55,
+    "stability_hits": 3,
+    "fall_confirmation_hits": 3
+  },
+  "inference_calls": 117,
+  "replayed_frames": 160,
+  "memoization": "only exact JPEG bytes + dimensions + labels; every frame still traverses production tracker/API",
+  "device": "cpu",
+  "threads": 2,
+  "image_input": "decoded MP4 frames, re-encoded JPEG quality95; no annotation inputs",
+  "memoized_harness_measured_processing_fps": 0.631436318295234,
+  "memoized_harness_latency_median_s": 1.896471910499713,
+  "memoized_harness_latency_p95_s": 2.694963623000149,
+  "counter_correction": "Person metrics computed from exact label==person in saved real detections; unrelated household labels excluded."
+}

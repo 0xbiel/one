@@ -1,0 +1,28 @@
+{
+  "scope": "partial controlled image benchmark; only completed clips",
+  "baseline": "e6abb03a803f403371626cfc2636c831308d71a3",
+  "candidate": "334235b6737e8ed56f0b0085aadea3d3eff53e95",
+  "candidate_method": "same genuine model predictions replayed through candidateAPI, not an independent second image-inference run",
+  "clips": [
+    {
+      "clip": "fall_side",
+      "frames": 80,
+      "expected_fall": true,
+      "baseline_events": 0,
+      "candidate_events": 0,
+      "person_frames": 26,
+      "stable_person_frames": 24,
+      "outcome": "missed fall"
+    },
+    {
+      "clip": "fall_occluded",
+      "frames": 80,
+      "expected_fall": true,
+      "baseline_events": 0,
+      "candidate_events": 0,
+      "person_frames": 26,
+      "stable_person_frames": 24,
+      "outcome": "missed fall"
+    }
+  ]
+}

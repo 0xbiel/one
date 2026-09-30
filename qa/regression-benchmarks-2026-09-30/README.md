@@ -16,7 +16,7 @@ Rejected implementation: `7d4ad2e4224aba38d461607fc0cac5f43607d70f` (PR #1, unme
 The four association cases overlap one test in the first row; do not add these totals.
 Geometry production code is byte-identical in #1/#2. Maximum camera-center axis error in the original semantic-seed fixture improved from 0.5289 m to floating-point zero. This is an exact synthetic fixture, not an empirical real-camera accuracy claim. The provisional fit retained six correct inliers and 0.3796 px residual; its fitted subset diagnostic was corrected from seven to six. No original tolerances or acceptance gates were relaxed.
 
-#2 backend run: **91 passed, 2 PostgreSQL tests skipped locally**. CI runs PostgreSQL separately and has passed for #2; exact final CI and full benchmark results will be appended. #1 CI passed 151 tests but independent review still caught named-object identity loss, demonstrating that green tests alone were insufficient.
+#2 complete backend+geometry run: **152 passed, 2 PostgreSQL tests skipped locally**. Its backend-only subset has 91 passed. CI runs PostgreSQL separately and has passed for #2; exact final CI and full benchmark results will be appended. #1 CI passed 151 tests but independent review still caught named-object identity loss, demonstrating that green tests alone were insufficient.
 
 ## Identity limits
 
@@ -37,3 +37,7 @@ Controlled seven-clip generators, labels, manifest, hashes and scorer are under 
 ## Reproduce
 
 Use Python 3.12 and the checked environment locks; CPU Torch can be installed from the official PyTorch CPU wheel index. Run `OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 pytest` for backend and geometry. The dependency locks describe the measured environment; future version ranges in the package are not a frozen benchmark environment. Model weights are downloaded from the official Ultralytics assets release and are not committed.
+
+## Physics clip results
+
+Both full Bullet clips completed genuine image inference: lateral72frames and forward72frames, each12fps. Neither produced a fall event (0/2 physics falls signaled). Paired downstream replay of the same real model predictions on corrected code also produced no events. Exact detection coverage and raw results are in evidence/fall-physics-*.jsonl. The detector still loses the person; physically simulated input did not solve the visual-recognition gap.
