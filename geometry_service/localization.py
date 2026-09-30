@@ -1663,7 +1663,7 @@ def _provisional_pose_from_guided_matches(
             rvec = np.asarray(pose["rvec"], dtype=np.float64).copy()
             tvec = np.asarray(pose["tvec"], dtype=np.float64).copy()
             try:
-                ok, rvec, tvec, _ = cv2.solvePnPRansac(
+                ok, rvec, tvec, ransac_inliers = cv2.solvePnPRansac(
                     object_points[subset],
                     image_points[subset],
                     camera_matrix,
@@ -1681,6 +1681,11 @@ def _provisional_pose_from_guided_matches(
             if not ok:
                 continue
 
+            fit_indices = (
+                subset[np.asarray(ransac_inliers).reshape(-1)]
+                if ransac_inliers is not None else subset
+            )
+
             # Score every original correspondence, including the omitted one.
             # A leave-one-out solve is useful only if at least six observations
             # from the actual pool agree with it; omitting a point never creates
@@ -1690,6 +1695,9 @@ def _provisional_pose_from_guided_matches(
             inlier_indices = np.flatnonzero(residuals <= 8.0)
             if len(inlier_indices) < 6:
                 continue
+            # RANSAC's input pool can contain rejected matches. Record the
+            # actual subset used for the final fit, not the size of that pool.
+            refinement_indices = inlier_indices.copy()
             try:
                 rvec, tvec = cv2.solvePnPRefineLM(
                     object_points[inlier_indices],
@@ -1699,6 +1707,7 @@ def _provisional_pose_from_guided_matches(
                     rvec,
                     tvec,
                 )
+                fit_indices = refinement_indices
                 projected, _ = cv2.projectPoints(object_points, rvec, tvec, camera_matrix, None)
                 residuals = np.linalg.norm(projected.reshape(-1, 2) - image_points, axis=1)
                 inlier_indices = np.flatnonzero(residuals <= 8.0)
@@ -1727,7 +1736,8 @@ def _provisional_pose_from_guided_matches(
                     "world_spread_m": float(np.linalg.norm(np.ptp(inlier_object_points, axis=0))),
                     "positive_depth_ratio": positive_depth_ratio,
                     "search_prior_provisional_refinement": True,
-                    "provisional_subset_size": int(len(subset)),
+                    "provisional_subset_size": int(len(fit_indices)),
+                    "provisional_hypothesis_pool_size": int(len(subset)),
                     "provisional_seed_independent": not use_extrinsic_guess,
                 }
             )
@@ -3002,17 +3012,17 @@ def _semantic_object_pose_seeds(
                 continue
             for camera_matrix, _intrinsics_source, fov_degrees in fov_hypotheses:
                 if len(object_array) == 3:
-                    # OpenCV's solvePnPRansac wrapper rejects three points even
-                    # though the SQPnP solver supports the minimal case. Keep
-                    # every returned solution as a seed and let the RoomPlan
-                    # scene prior plus fresh ORB refinement reject ambiguity.
+                    # Three points can have several exactly fitting poses.
+                    # SQPnP may return only an upside-down branch even when a
+                    # physically valid root exists. AP3P enumerates those roots
+                    # so the unchanged scene gates can choose plausible seeds.
                     try:
-                        ok, rvecs, tvecs, _ = cv2.solvePnPGeneric(
+                        ok, rvecs, tvecs = cv2.solveP3P(
                             object_array,
                             image_array,
                             camera_matrix,
                             np.zeros((4, 1), dtype=np.float64),
-                            flags=cv2.SOLVEPNP_SQPNP,
+                            flags=cv2.SOLVEPNP_AP3P,
                         )
                     except cv2.error:
                         continue
@@ -3075,6 +3085,13 @@ def _semantic_object_pose_seeds(
                             "positive_depth_ratio": positive_depth_ratio,
                             "semantic_object_seed": True,
                             "semantic_object_match_count": len(assignment),
+                            # Center and floor-contact anchors from the same
+                            # detector box are correlated, not independent
+                            # object observations. Do not double their support.
+                            "semantic_object_inlier_count": len({
+                                int(index) // (2 if anchor_kind == "center+floor-contact" else 1)
+                                for index in inlier_indices
+                            }),
                             "semantic_object_labels": sorted(set(labels)),
                             "semantic_object_anchor": anchor_kind,
                             "semantic_object_confidence": round(float(np.mean(confidences)), 6),
@@ -3092,11 +3109,20 @@ def _semantic_object_pose_seeds(
         )
         for seed in seeds
     ]
+    preferred_fov = payload.search_prior.fov_degrees if payload.search_prior else payload.fov_degrees
+    if preferred_fov is None:
+        preferred_fov = payload.fov_degrees
     seeds.sort(
         key=lambda item: (
             _semantic_cuboid_rank(item.get("semantic_cuboid") or {}),
-            item["inlier_count"],
-            -item["mean_error"],
+            item["semantic_object_inlier_count"],
+            # Minimal solutions can all fit to floating-point precision at
+            # different FOVs. Sub-millipixel noise is not calibration evidence;
+            # use the supplied hint only to break these equally fitting cases.
+            -round(float(item["mean_error"]), 3),
+            -abs(float(item["fov_degrees"]) - float(preferred_fov))
+            if preferred_fov is not None and item["fov_degrees"] is not None else 0.0,
+            item["semantic_object_anchor"] == "center",
             item["semantic_object_confidence"],
         ),
         reverse=True,
