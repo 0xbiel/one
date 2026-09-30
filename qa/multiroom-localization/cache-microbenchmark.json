@@ -1,0 +1,49 @@
+{
+  "development_only": true,
+  "queries": 3290,
+  "landmarks": 7743,
+  "retained_array_bytes": 671056,
+  "fallback_rows": 324,
+  "results": [
+    {
+      "pose": 0,
+      "old_seconds": 0.9752405539984466,
+      "new_seconds": 0.4530256180005381,
+      "exact_matches": 806,
+      "speedup": 2.152727164310801,
+      "cache_cold": true
+    },
+    {
+      "pose": 1,
+      "old_seconds": 0.9387370129988994,
+      "new_seconds": 0.15255058799994003,
+      "exact_matches": 803,
+      "speedup": 6.153611240090851,
+      "cache_cold": false
+    },
+    {
+      "pose": 2,
+      "old_seconds": 0.9103034909985581,
+      "new_seconds": 0.15074170300067635,
+      "exact_matches": 797,
+      "speedup": 6.038829818676479,
+      "cache_cold": false
+    },
+    {
+      "pose": 3,
+      "old_seconds": 0.9259581540009094,
+      "new_seconds": 0.1787504979984078,
+      "exact_matches": 789,
+      "speedup": 5.180171044945325,
+      "cache_cold": false
+    },
+    {
+      "pose": 4,
+      "old_seconds": 1.0036114290014666,
+      "new_seconds": 0.18031400200015923,
+      "exact_matches": 777,
+      "speedup": 5.56590956813537,
+      "cache_cold": false
+    }
+  ]
+}

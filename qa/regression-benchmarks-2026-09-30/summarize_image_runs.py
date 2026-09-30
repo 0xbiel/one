@@ -5,12 +5,14 @@ p=argparse.ArgumentParser();p.add_argument('--baseline',nargs='+',required=True)
 assert len(a.baseline)==len(a.candidate)
 manifest=json.loads(Path(a.manifest).read_text());cases={c['id']:dict(c,frames=80,fps=10,source='controlled_choreography') for c in manifest['clips']}
 cases.update({name:dict(id=name,expected_fall=True,fall_onset_s=1,frames=72,fps=12,source='Bullet_physics') for name in ['fall_physics_ragdoll','fall_physics_forward']})
-all_rows={};out=[]
+all_rows={};out=[];shared_model_sha256=None
 for before_path,after_path in zip(a.baseline,a.candidate):
  b=Path(before_path);c=Path(after_path);before=[json.loads(s) for s in b.read_text().splitlines()];after=[json.loads(s) for s in c.read_text().splitlines()];meta=json.loads(c.with_suffix('.metadata.json').read_text());bm=json.loads(b.with_suffix('.metadata.json').read_text())
  assert meta['source_inference_sha256']==hashlib.sha256(b.read_bytes()).hexdigest()
  assert bm['input_kind']=='rendered_rgb_frames' and meta['input_kind']=='recorded_real_image_predictions'
  assert meta['model_sha256']==bm['model_sha256']
+ if shared_model_sha256 is None:shared_model_sha256=bm['model_sha256']
+ assert bm['model_sha256']==shared_model_sha256, 'All run pairs must use one frozen checkpoint'
  assert len(before)==len(after)
  for br,cr in zip(before,after):
   assert (br['clip_id'],br['frame_index'],br['timestamp_s'])==(cr['clip_id'],cr['frame_index'],cr['timestamp_s'])
@@ -32,5 +34,5 @@ for key,case in cases.items():
 counts={}
 for group in ['controlled_choreography','Bullet_physics','all']:
  selected=[r for r in out if group=='all' or r['source']==group];counts[group]={version:{k:sum(r[version]['outcome']==k for r in selected) for k in ['TP','FN','FP','TN']} for version in ['baseline','candidate_replay']}
-result={'method':'Genuine baseline YOLO-World RGB inference through production API; exact same inferred predictions replayed through candidate API. Not a second independent image-model run. No GT boxes loaded. Source video hashes checked by replay.','model_sha256':bm['model_sha256'],'claim_scope':'Nine synthetic fixtures only; no clinical/real-world validation, no safety improvement or deployment throughput claim.','counts':counts,'clips':out}
+result={'method':'Genuine baseline YOLO-World RGB inference through production API; exact same inferred predictions replayed through candidate API. Not a second independent image-model run. No GT boxes loaded. Source video hashes checked by replay.','model_sha256':shared_model_sha256,'claim_scope':'Nine synthetic fixtures only; no clinical/real-world validation, no safety improvement or deployment throughput claim.','counts':counts,'clips':out}
 Path(a.output).write_text(json.dumps(result,indent=2));print(json.dumps(counts,indent=2))

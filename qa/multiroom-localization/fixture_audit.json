@@ -1,0 +1,6 @@
+{
+  "initial_detector_provenance_mismatch": "Mirrored query frame0 JPEG hash differed while re-encoded frame1 hash agreed. All renderer sessions then verified terminal; reran actual detector for every final JPEG, regenerated every payload.",
+  "changed_payloads_after_detector_rerun": [],
+  "final_detector_hash_checks": 48,
+  "passed": true
+}
