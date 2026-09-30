@@ -1033,6 +1033,7 @@ def make_app(
 
     app.state.db, app.state.store, app.state.clip_store, app.state.template_store, app.state.bus, app.state.settings, app.state.vision = db, store, clip_store, template_store, bus, settings, vision
     app.state.vision_person_objects = {}
+    app.state.vision_tracked_objects = {}
     app.state.vision_person_identity = {}
     app.state.fall_detector = FallDetectionTracker()
     app.state.geometry_service = geometry
@@ -4549,6 +4550,20 @@ def make_app(
             object_id = live_person_object_id(home_id, camera_id, track_id, map_id=map_id, x=x, z=z)
             if identity.get("status") == "matched":
                 object_id = bind_person_identity(home_id, object_id, identity)
+        elif isinstance(track_id, int) and track_id > 0:
+            # Track IDs are local to one camera. A label describes a class,
+            # not an individual object: two tables must keep separate histories.
+            now = datetime.now(timezone.utc)
+            tracks = app.state.vision_tracked_objects
+            for key, (_object_id, last_seen) in list(tracks.items()):
+                if (now - last_seen).total_seconds() > 12:
+                    tracks.pop(key, None)
+            key = (home_id, camera_id, label, track_id)
+            existing = tracks.get(key)
+            object_id = existing[0] if existing else str(uuid.uuid4())
+            if existing is None:
+                db.execute("INSERT INTO objects(id,home_id,label,display_name,enabled,created_at,care_recipient_id) VALUES (?,?,?,?,?,?,NULL)", (object_id, home_id, label, label.replace("_", " ").title(), 1, now_iso()))
+            tracks[key] = (object_id, now)
         else:
             object_row = db.one("SELECT * FROM objects WHERE home_id=? AND lower(label)=? AND enabled=1 ORDER BY created_at LIMIT 1", (home_id, label))
             if object_row is None:
@@ -5574,3 +5589,4 @@ def make_app(
 
 
 app = make_app()
+

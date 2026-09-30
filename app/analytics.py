@@ -32,8 +32,10 @@ def _trend(values: list[int]) -> str:
     if non_zero == 0 or len(values) < 4:
         return "unknown"
     midpoint = len(values) // 2
-    earlier = sum(values[:midpoint])
-    later = sum(values[midpoint:])
+    # Compare per-day rates, not totals from unequal halves (odd windows).
+    # Cross-multiplication keeps the comparison exact for integer counts.
+    earlier = sum(values[:midpoint]) * (len(values) - midpoint)
+    later = sum(values[midpoint:]) * midpoint
     if earlier == later:
         return "stable"
     if later > earlier:
@@ -56,7 +58,7 @@ def _filter_clause(care_recipient_id: str | None, subject_user_id: str | None) -
 def fall_analytics(db, home_id: str, *, window_days: int = 30, care_recipient_id: str | None = None) -> dict:
     now = datetime.now(timezone.utc).replace(microsecond=0)
     window_days = max(7, min(int(window_days), 90))
-    cutoff = (now - timedelta(days=window_days - 1)).isoformat()
+    cutoff = (now - timedelta(days=window_days - 1)).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
     recipient_clause, recipient_params = _filter_clause(care_recipient_id, None)
     rows = db.many(
         f"SELECT id,status,confidence,explanation,first_seen_at,last_seen_at FROM events "
@@ -103,7 +105,7 @@ def daily_check_in_analytics(
 ) -> dict:
     now = datetime.now(timezone.utc).replace(microsecond=0)
     window_days = max(7, min(int(window_days), 90))
-    cutoff = (now - timedelta(days=window_days - 1)).isoformat()
+    cutoff = (now - timedelta(days=window_days - 1)).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
     if care_recipient_id:
         target_clause, target_params = " AND care_recipient_id=?", (care_recipient_id,)
     elif subject_user_id:
@@ -164,7 +166,7 @@ def care_analytics(
         care_recipient_id=care_recipient_id,
         subject_user_id=subject_user_id,
     )
-    cutoff = (datetime.now(timezone.utc) - timedelta(days=window_days - 1)).replace(microsecond=0).isoformat()
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=window_days - 1)).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
     event_filter = " AND care_recipient_id=?" if care_recipient_id else ""
     event_params = (home_id, cutoff, care_recipient_id) if care_recipient_id else (home_id, cutoff)
     event_rows = db.many(
@@ -185,3 +187,4 @@ def care_analytics(
             "Detection quality depends on camera coverage, consent, lighting, and the selected time window.",
         ],
     }
+
