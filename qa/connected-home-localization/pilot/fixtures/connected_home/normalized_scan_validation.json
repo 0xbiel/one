@@ -1,0 +1,116 @@
+{
+  "synthetic": true,
+  "is_native_capture": false,
+  "is_lidar_capture": false,
+  "purpose": "Shape-compatible synthetic fixture for the actual ONE backend normalizer; no production upload",
+  "schema_discriminator_caveat": "producer=native-ios and framework=RoomPlan are required literals, not evidence of native capture",
+  "input_paths_read": [
+    "scan.json",
+    "structural_boxes.json"
+  ],
+  "input_sha256": {
+    "scan.json": "466675969816c12928f07affa880d16f3f315f194289e281d70106de6fb276c2",
+    "structural_boxes.json": "49339dd35db88bdfac947fc2c90251cafcb02cd35477b76b8933558e5502b61d"
+  },
+  "output_sha256": {
+    "normalized_scan.json": "fe6e00b5bd1557d4a1dccd36fc5a400e604e4f02b1e6aa9d4d5976eded963fb2",
+    "normalized_geometry.json": "c557d8cd51a643228cd251c3643614e3056556565dda803256fc500848ec6a89"
+  },
+  "backend_source_sha256": "48ff7a686d7a228cb5c22d6e617786d475d0303938cdfc97361ef974fbd1b880",
+  "contract_validation": "passed",
+  "saved_file_roundtrip": "passed",
+  "normalizer_zone_count": 5,
+  "normalizer_zone_ids": [
+    "west_south",
+    "west_north",
+    "east_south",
+    "east_north",
+    "hallway"
+  ],
+  "normalizer_matches_input_polygons_and_floor_heights": true,
+  "counts": {
+    "floors": 5,
+    "walls": 16,
+    "objects": 32,
+    "openings": 4,
+    "doors": 0,
+    "windows": 0,
+    "sections": 5
+  },
+  "doorway_clearance": {
+    "passed": true,
+    "method": "positive-volume AABB overlap, tolerance 1e-6m",
+    "object_opening_pairs_checked": 128,
+    "openings": [
+      {
+        "opening_id": "opening_-1_-2.5",
+        "center": {
+          "x": -1,
+          "y": 1.1,
+          "z": -2.5
+        },
+        "dimensions": {
+          "x": 0.12,
+          "y": 2.2,
+          "z": 1.2
+        },
+        "object_count_checked": 32,
+        "obstructions": []
+      },
+      {
+        "opening_id": "opening_-1_2.5",
+        "center": {
+          "x": -1,
+          "y": 1.1,
+          "z": 2.5
+        },
+        "dimensions": {
+          "x": 0.12,
+          "y": 2.2,
+          "z": 1.2
+        },
+        "object_count_checked": 32,
+        "obstructions": []
+      },
+      {
+        "opening_id": "opening_1_-2.5",
+        "center": {
+          "x": 1,
+          "y": 1.1,
+          "z": -2.5
+        },
+        "dimensions": {
+          "x": 0.12,
+          "y": 2.2,
+          "z": 1.2
+        },
+        "object_count_checked": 32,
+        "obstructions": []
+      },
+      {
+        "opening_id": "opening_1_2.5",
+        "center": {
+          "x": 1,
+          "y": 1.1,
+          "z": 2.5
+        },
+        "dimensions": {
+          "x": 0.12,
+          "y": 2.2,
+          "z": 1.2
+        },
+        "object_count_checked": 32,
+        "obstructions": []
+      }
+    ]
+  },
+  "modeling_notes": [
+    "Four rooms plus one hallway in the supplied generated home",
+    "The single display-floor cuboid is split into five native-shaped floor surface polygons",
+    "Wall surfaces are source cuboid midplanes; source thickness remains in dimensions",
+    "Four doorway voids under the source lintels are represented as openings, not invented door leaves",
+    "Floor polygon surfaces remain at scan floor_y=0; dimensions.y is nominal slab thickness",
+    "RoomPlanMapIn upload metadata is intentionally absent: truthful native/LiDAR provenance cannot be claimed",
+    "No evaluator ground truth, query pose, query-room label, or image was read"
+  ]
+}

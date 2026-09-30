@@ -1,0 +1,145 @@
+[
+  {
+    "label": "sofa",
+    "confidence": 0.915917,
+    "bbox": [
+      95.193,
+      147.203,
+      282.863,
+      232.67
+    ],
+    "frame_index": 0
+  },
+  {
+    "label": "lamp",
+    "confidence": 0.818787,
+    "bbox": [
+      281.809,
+      86.066,
+      317.39,
+      231.778
+    ],
+    "frame_index": 0
+  },
+  {
+    "label": "desk",
+    "confidence": 0.481119,
+    "bbox": [
+      344.746,
+      193.064,
+      479.988,
+      360.0
+    ],
+    "frame_index": 0
+  },
+  {
+    "label": "table",
+    "confidence": 0.401409,
+    "bbox": [
+      38.308,
+      196.929,
+      213.951,
+      289.651
+    ],
+    "frame_index": 0
+  },
+  {
+    "label": "desk",
+    "confidence": 0.268788,
+    "bbox": [
+      40.078,
+      195.969,
+      214.373,
+      290.384
+    ],
+    "frame_index": 0
+  },
+  {
+    "label": "sofa",
+    "confidence": 0.228866,
+    "bbox": [
+      333.754,
+      154.921,
+      479.995,
+      308.583
+    ],
+    "frame_index": 0
+  },
+  {
+    "label": "sofa",
+    "confidence": 0.142661,
+    "bbox": [
+      332.703,
+      155.305,
+      479.85,
+      263.396
+    ],
+    "frame_index": 0
+  },
+  {
+    "label": "sofa",
+    "confidence": 0.921772,
+    "bbox": [
+      94.739,
+      147.215,
+      282.578,
+      232.655
+    ],
+    "frame_index": 1
+  },
+  {
+    "label": "lamp",
+    "confidence": 0.808122,
+    "bbox": [
+      282.303,
+      85.951,
+      317.488,
+      231.906
+    ],
+    "frame_index": 1
+  },
+  {
+    "label": "desk",
+    "confidence": 0.405041,
+    "bbox": [
+      344.512,
+      193.33,
+      479.989,
+      359.975
+    ],
+    "frame_index": 1
+  },
+  {
+    "label": "table",
+    "confidence": 0.336339,
+    "bbox": [
+      38.201,
+      196.991,
+      213.742,
+      289.7
+    ],
+    "frame_index": 1
+  },
+  {
+    "label": "desk",
+    "confidence": 0.323861,
+    "bbox": [
+      40.159,
+      195.576,
+      213.354,
+      290.691
+    ],
+    "frame_index": 1
+  },
+  {
+    "label": "sofa",
+    "confidence": 0.293798,
+    "bbox": [
+      333.375,
+      155.812,
+      479.917,
+      310.997
+    ],
+    "frame_index": 1
+  }
+]

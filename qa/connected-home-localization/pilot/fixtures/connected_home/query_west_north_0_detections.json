@@ -1,0 +1,156 @@
+[
+  {
+    "label": "sofa",
+    "confidence": 0.92393,
+    "bbox": [
+      14.288,
+      141.16,
+      247.681,
+      253.19
+    ],
+    "frame_index": 0
+  },
+  {
+    "label": "lamp",
+    "confidence": 0.796668,
+    "bbox": [
+      235.023,
+      82.671,
+      267.385,
+      212.084
+    ],
+    "frame_index": 0
+  },
+  {
+    "label": "desk",
+    "confidence": 0.597459,
+    "bbox": [
+      369.406,
+      171.52,
+      480.0,
+      301.276
+    ],
+    "frame_index": 0
+  },
+  {
+    "label": "desk",
+    "confidence": 0.500036,
+    "bbox": [
+      96.789,
+      212.566,
+      281.455,
+      337.125
+    ],
+    "frame_index": 0
+  },
+  {
+    "label": "cabinet",
+    "confidence": 0.386211,
+    "bbox": [
+      262.562,
+      135.203,
+      364.943,
+      202.655
+    ],
+    "frame_index": 0
+  },
+  {
+    "label": "chair",
+    "confidence": 0.344827,
+    "bbox": [
+      352.243,
+      148.554,
+      395.103,
+      226.997
+    ],
+    "frame_index": 0
+  },
+  {
+    "label": "chair",
+    "confidence": 0.315453,
+    "bbox": [
+      352.315,
+      148.997,
+      409.177,
+      250.873
+    ],
+    "frame_index": 0
+  },
+  {
+    "label": "sofa",
+    "confidence": 0.923328,
+    "bbox": [
+      14.177,
+      140.927,
+      247.471,
+      254.033
+    ],
+    "frame_index": 1
+  },
+  {
+    "label": "lamp",
+    "confidence": 0.781497,
+    "bbox": [
+      235.924,
+      82.693,
+      267.096,
+      212.073
+    ],
+    "frame_index": 1
+  },
+  {
+    "label": "desk",
+    "confidence": 0.557418,
+    "bbox": [
+      368.405,
+      171.531,
+      480.0,
+      301.22
+    ],
+    "frame_index": 1
+  },
+  {
+    "label": "desk",
+    "confidence": 0.490918,
+    "bbox": [
+      96.833,
+      212.332,
+      281.373,
+      337.089
+    ],
+    "frame_index": 1
+  },
+  {
+    "label": "cabinet",
+    "confidence": 0.342898,
+    "bbox": [
+      264.712,
+      135.228,
+      365.104,
+      202.49
+    ],
+    "frame_index": 1
+  },
+  {
+    "label": "chair",
+    "confidence": 0.335653,
+    "bbox": [
+      352.204,
+      148.247,
+      395.253,
+      226.526
+    ],
+    "frame_index": 1
+  },
+  {
+    "label": "chair",
+    "confidence": 0.285409,
+    "bbox": [
+      352.285,
+      148.642,
+      408.759,
+      250.847
+    ],
+    "frame_index": 1
+  }
+]

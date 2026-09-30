@@ -1,0 +1,107 @@
+[
+  {
+    "name": "full_inference_pose_evaluation.jsonl",
+    "bytes": 9899948,
+    "sha256": "da75171fec9835e3b59d36b63e5dc60757eb02b264c7a4f8aaa2a928facd18e6",
+    "published": false,
+    "reason": "Large artifact omitted; regenerate with scripts or use compact previews and editable report"
+  },
+  {
+    "name": "full_inference_world_evaluation.jsonl",
+    "bytes": 2073491,
+    "sha256": "f24bdfb420dc2bd65fa869682d1112f68ff8a1709b515dfa31fa7904668415a5",
+    "published": false,
+    "reason": "Large artifact omitted; regenerate with scripts or use compact previews and editable report"
+  },
+  {
+    "name": "inference_pose_development.jsonl",
+    "bytes": 372081,
+    "sha256": "437cef369780ece659285c22941529bb68301cefe09cb36fe4f75d973b7f8cf3",
+    "published": false,
+    "reason": "Large artifact omitted; regenerate with scripts or use compact previews and editable report"
+  },
+  {
+    "name": "inference_world_development.jsonl",
+    "bytes": 71592,
+    "sha256": "e671ce96a318aae97fb92d6e373daaff4f60e2f780c84049329986fc57f89f4b",
+    "published": false,
+    "reason": "Large artifact omitted; regenerate with scripts or use compact previews and editable report"
+  },
+  {
+    "name": "cadence20_inference_pose_development.jsonl",
+    "bytes": 491218,
+    "sha256": "9ab05b2c4d8db4a84583a2b41586ee5579ad3f644e5f39a6332e9cd739ca1877",
+    "published": false,
+    "reason": "Large artifact omitted; regenerate with scripts or use compact previews and editable report"
+  },
+  {
+    "name": "inference_world_evaluation.jsonl",
+    "bytes": 289352,
+    "sha256": "cc5b5cb6da87c96cd4647641638a8b33abd2e3ff01f7435a466deb12aea805ec",
+    "published": false,
+    "reason": "Large artifact omitted; regenerate with scripts or use compact previews and editable report"
+  },
+  {
+    "name": "full_inference_world_development.jsonl",
+    "bytes": 356105,
+    "sha256": "0aaac29357b59147b3c576217c745831b441eb7d5040f9b2e0fd8a31ec844e3b",
+    "published": false,
+    "reason": "Large artifact omitted; regenerate with scripts or use compact previews and editable report"
+  },
+  {
+    "name": "full_inference_pose_development.jsonl",
+    "bytes": 1527096,
+    "sha256": "281b77c0846cef8e446abb77f931351b850f7c7baeaca58763ffd0325a76e80e",
+    "published": false,
+    "reason": "Large artifact omitted; regenerate with scripts or use compact previews and editable report"
+  },
+  {
+    "name": "cadence20_inference_pose_evaluation.jsonl",
+    "bytes": 1977654,
+    "sha256": "1e6bdb95f5932d1ed22d149882530fa188b395feef076a62265edbbe3e8bb9ec",
+    "published": false,
+    "reason": "Large artifact omitted; regenerate with scripts or use compact previews and editable report"
+  },
+  {
+    "name": "cadence20_inference_world_evaluation.jsonl",
+    "bytes": 470501,
+    "sha256": "d9602fa7a1bf87898d541af2957691902c0850699c070f6104358d04ff8e5c2d",
+    "published": false,
+    "reason": "Large artifact omitted; regenerate with scripts or use compact previews and editable report"
+  },
+  {
+    "name": "inference_pose_evaluation.jsonl",
+    "bytes": 1442442,
+    "sha256": "a243bef7db3c7ca1eb3489957d570483efb7f5b094a1b377f923dff942ee94da",
+    "published": false,
+    "reason": "Large artifact omitted; regenerate with scripts or use compact previews and editable report"
+  },
+  {
+    "name": "cadence20_inference_world_development.jsonl",
+    "bytes": 118065,
+    "sha256": "0162b66d1d4beead6ad4a20efb910131d3ec20762f98facd92b07d4c41b3a9ea",
+    "published": false,
+    "reason": "Large artifact omitted; regenerate with scripts or use compact previews and editable report"
+  },
+  {
+    "name": "ONE-real-fall-reproducibility.zip",
+    "bytes": 6341819,
+    "sha256": "ab7558a4f8138984c1f749b0911bee861ecf5206517ec23e76fd0f8b557c3c7b",
+    "published": false,
+    "reason": "Large artifact omitted; regenerate with scripts or use compact previews and editable report"
+  },
+  {
+    "name": "ONE-fall-detection-investigation.pdf",
+    "bytes": 209931,
+    "sha256": "146b53256d3f48adba333850d23fd9e05e9eafa8e45832f37ff33837049319ea",
+    "published": false,
+    "reason": "Large artifact omitted; regenerate with scripts or use compact previews and editable report"
+  },
+  {
+    "name": "ONE-real-fall-pilot-diagnostics.mp4",
+    "bytes": 2706594,
+    "sha256": "10e4964b10e446183ca825b9d14d7ad7e666b07b157a0b5d7ef2ea991f4944ae",
+    "published": false,
+    "reason": "Large artifact omitted; regenerate with scripts or use compact previews and editable report"
+  }
+]

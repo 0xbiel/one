@@ -1,0 +1,56 @@
+[
+  {
+    "id": "s2_fall_04",
+    "source": "https://github.com/ekramalam/GMDCSA24-A-Dataset-for-Human-Fall-Detection-in-Videos/blob/5abac7693229900cf80f722e878fbb119211fc1c/Subject%202/Fall/04.mp4",
+    "dataset_license": "CC BY 4.0",
+    "dataset_doi": "10.5281/zenodo.13354453",
+    "author": "Ekram Alam et al. (2024)",
+    "changes": "5Hz sampled annotated diagnostic; still taken at clip midpoint; video downscaled to768px and compressed; speed preserved",
+    "original_label": "Fall"
+  },
+  {
+    "id": "s3_fall_13",
+    "source": "https://github.com/ekramalam/GMDCSA24-A-Dataset-for-Human-Fall-Detection-in-Videos/blob/5abac7693229900cf80f722e878fbb119211fc1c/Subject%203/Fall/13.mp4",
+    "dataset_license": "CC BY 4.0",
+    "dataset_doi": "10.5281/zenodo.13354453",
+    "author": "Ekram Alam et al. (2024)",
+    "changes": "5Hz sampled annotated diagnostic; still taken at clip midpoint; video downscaled to768px and compressed; speed preserved",
+    "original_label": "Fall"
+  },
+  {
+    "id": "s3_fall_16",
+    "source": "https://github.com/ekramalam/GMDCSA24-A-Dataset-for-Human-Fall-Detection-in-Videos/blob/5abac7693229900cf80f722e878fbb119211fc1c/Subject%203/Fall/16.mp4",
+    "dataset_license": "CC BY 4.0",
+    "dataset_doi": "10.5281/zenodo.13354453",
+    "author": "Ekram Alam et al. (2024)",
+    "changes": "5Hz sampled annotated diagnostic; still taken at clip midpoint; video downscaled to768px and compressed; speed preserved",
+    "original_label": "Fall"
+  },
+  {
+    "id": "s4_fall_10",
+    "source": "https://github.com/ekramalam/GMDCSA24-A-Dataset-for-Human-Fall-Detection-in-Videos/blob/5abac7693229900cf80f722e878fbb119211fc1c/Subject%204/Fall/10.mp4",
+    "dataset_license": "CC BY 4.0",
+    "dataset_doi": "10.5281/zenodo.13354453",
+    "author": "Ekram Alam et al. (2024)",
+    "changes": "5Hz sampled annotated diagnostic; still taken at clip midpoint; video downscaled to768px and compressed; speed preserved",
+    "original_label": "Fall"
+  },
+  {
+    "id": "s4_adl_05",
+    "source": "https://github.com/ekramalam/GMDCSA24-A-Dataset-for-Human-Fall-Detection-in-Videos/blob/5abac7693229900cf80f722e878fbb119211fc1c/Subject%204/ADL/05.mp4",
+    "dataset_license": "CC BY 4.0",
+    "dataset_doi": "10.5281/zenodo.13354453",
+    "author": "Ekram Alam et al. (2024)",
+    "changes": "5Hz sampled annotated diagnostic; still taken at clip midpoint; video downscaled to768px and compressed; speed preserved",
+    "original_label": "ADL"
+  },
+  {
+    "id": "s3_adl_08",
+    "source": "https://github.com/ekramalam/GMDCSA24-A-Dataset-for-Human-Fall-Detection-in-Videos/blob/5abac7693229900cf80f722e878fbb119211fc1c/Subject%203/ADL/08.mp4",
+    "dataset_license": "CC BY 4.0",
+    "dataset_doi": "10.5281/zenodo.13354453",
+    "author": "Ekram Alam et al. (2024)",
+    "changes": "5Hz sampled annotated diagnostic; still taken at clip midpoint; video downscaled to768px and compressed; speed preserved",
+    "original_label": "ADL"
+  }
+]

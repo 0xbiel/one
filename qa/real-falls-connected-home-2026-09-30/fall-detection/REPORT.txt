@@ -249,9 +249,10 @@ Pinned sources and licenses
 ONE backend source: 9c05becdc3af59b15092075c1eb1dc90e2ab9e70. Frontend inspected:
 84e21f90f53213c79775168ee0491019ad1f1400. The replay uses the fixed eleven-label default profile; a live
 home with registered objects may request a different vocabulary. [3]
-GMDCSA-24 repository revision: 5abac7693229900cf80f722e878fbb119211fc1c. The repository carries an MIT
-license, copyright 2024 Ekram Alam. Preserve the full copyright and permission notice with redistributed dataset
-material or substantial portions. The publication is separately CC BY 4.0. [1, 2]
+GMDCSA-24 v2.1 is pinned to 5abac7693229900cf80f722e878fbb119211fc1c. Its Zenodo record licenses the
+dataset under CC BY 4.0 and notes revised CSV activity timings. Cite that v2.1 record and the paper. The
+repository separately carries an MIT notice, copyright 2024 Ekram Alam; preserve that notice with reproduced
+repository material. [1, 2, 5]
 
 Weights and software
 yolov8s-worldv2.pt SHA256
@@ -276,16 +277,16 @@ Limits that affect decisions
 Short staged clips, coarse onset annotations, uncertain actor mapping, overlapping pilot exposure, one missing
 onset and no verified person-level fall annotations constrain the conclusions. One CSV lists s2_adl_04 as 70
 seconds; its decoded duration is about 7.84 seconds. Native timestamps and decoded durations are used where
-metadata conflicts. No repository changes, pull request or deployment are part of this investigation.
+metadata conflicts. This investigation makes no production-code changes, merge or deployment.
 
 Sources and companion evidence
 [1] Alam et al 2024 GMDCSA 24 paper
-[2] Pinned GMDCSA 24 dataset and MIT license
+[2] Ekram Alam 2024 GMDCSA-24 v2.1 dataset and CC BY 4.0 license
 [3] Pinned ONE backend source
 [4] Ultralytics YOLO World documentation
+[5] Pinned GitHub repository and separate MIT notice
 Paper DOI: 10.1016/j.dib.2024.110892. Companion evidence includes per-clip manifests and hashes, source snapshots, inference outputs,
 scores, protocol declarations, runtime benchmarks and the pilot diagnostic contact sheet and video.
-
 
 
 

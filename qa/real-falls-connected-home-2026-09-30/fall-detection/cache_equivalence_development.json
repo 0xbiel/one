@@ -1,0 +1,1 @@
+{"equal":true,"before":[{"label":"person","confidence":0.888606,"bbox":[132.725,45.52,232.387,302.318]}],"after":[{"label":"person","confidence":0.888606,"bbox":[132.725,45.52,232.387,302.318]}],"change":"Only identical CLIP prompt embeddings memoized; production runtime source unchanged"}

@@ -1,0 +1,309 @@
+{
+  "scope": "Synthetic contract and actual-helper checks only; no image localization run, no accuracy claim",
+  "source_commit_reported_by_parent": "9c05becdc3af59b15092075c1eb1dc90e2ab9e70",
+  "execution": "Contracts imported normally; actual helper function AST executed unchanged without full module imports",
+  "source_sha256": {
+    "geometry_service/localization.py": "92949c252f315eca9d240aaad6979a4f1ae8031dc5e0e74d01092b364d9ae9f7",
+    "app/main.py": "b5213c639caccb8912652c9089ccd39314fd15d7cff4869dbf18f59ef169fccf",
+    "geometry_service/contracts.py": "e27c3e92751d3ca36c63ce06f5003784b59b1da8894c2aa5fe7377c516106e95",
+    "app/roomplan.py": "59f101aaba0d3418901f984fe22cd263c1a8b755e43743a2fab7266cab44acbf"
+  },
+  "passed": true,
+  "check_count": 19,
+  "checks": [
+    {
+      "case": "room_id_omitted_validates",
+      "passed": true
+    },
+    {
+      "case": "room_id_extra_is_forbidden",
+      "passed": true
+    },
+    {
+      "case": "response_has_no_top_level_room_assignment",
+      "passed": true
+    },
+    {
+      "case": "room-a_interior",
+      "synthetic_estimate_xyz": [
+        1.5,
+        1.6,
+        2
+      ],
+      "worker": {
+        "accepted": true,
+        "reason": "physically_plausible",
+        "zone_id": "room-a",
+        "camera_height_above_floor_m": 1.6,
+        "distance_from_room_polygon_m": 0.0,
+        "camera_up_alignment": 1.0
+      },
+      "backend": {
+        "accepted": true,
+        "reason": "within_roomplan_bounds",
+        "zone_id": "room-a",
+        "camera_height_above_floor_m": 1.6,
+        "distance_from_room_polygon_m": 0.0
+      },
+      "passed": true
+    },
+    {
+      "case": "room-b_interior",
+      "synthetic_estimate_xyz": [
+        4.5,
+        1.6,
+        2
+      ],
+      "worker": {
+        "accepted": true,
+        "reason": "physically_plausible",
+        "zone_id": "room-b",
+        "camera_height_above_floor_m": 1.6,
+        "distance_from_room_polygon_m": 0.0,
+        "camera_up_alignment": 1.0
+      },
+      "backend": {
+        "accepted": true,
+        "reason": "within_roomplan_bounds",
+        "zone_id": "room-b",
+        "camera_height_above_floor_m": 1.6,
+        "distance_from_room_polygon_m": 0.0
+      },
+      "passed": true
+    },
+    {
+      "case": "room-c_interior",
+      "synthetic_estimate_xyz": [
+        7.5,
+        1.6,
+        2
+      ],
+      "worker": {
+        "accepted": true,
+        "reason": "physically_plausible",
+        "zone_id": "room-c",
+        "camera_height_above_floor_m": 1.6,
+        "distance_from_room_polygon_m": 0.0,
+        "camera_up_alignment": 1.0
+      },
+      "backend": {
+        "accepted": true,
+        "reason": "within_roomplan_bounds",
+        "zone_id": "room-c",
+        "camera_height_above_floor_m": 1.6,
+        "distance_from_room_polygon_m": 0.0
+      },
+      "passed": true
+    },
+    {
+      "case": "hallway_interior",
+      "synthetic_estimate_xyz": [
+        4.5,
+        1.6,
+        -1
+      ],
+      "worker": {
+        "accepted": true,
+        "reason": "physically_plausible",
+        "zone_id": "hallway",
+        "camera_height_above_floor_m": 1.6,
+        "distance_from_room_polygon_m": 0.0,
+        "camera_up_alignment": 1.0
+      },
+      "backend": {
+        "accepted": true,
+        "reason": "within_roomplan_bounds",
+        "zone_id": "hallway",
+        "camera_height_above_floor_m": 1.6,
+        "distance_from_room_polygon_m": 0.0
+      },
+      "passed": true
+    },
+    {
+      "case": "shared_doorway_first_zone_wins",
+      "synthetic_estimate_xyz": [
+        1.5,
+        1.6,
+        0
+      ],
+      "worker": {
+        "accepted": true,
+        "reason": "physically_plausible",
+        "zone_id": "room-a",
+        "camera_height_above_floor_m": 1.6,
+        "distance_from_room_polygon_m": 0.0,
+        "camera_up_alignment": 1.0
+      },
+      "backend": {
+        "accepted": true,
+        "reason": "within_roomplan_bounds",
+        "zone_id": "room-a",
+        "camera_height_above_floor_m": 1.6,
+        "distance_from_room_polygon_m": 0.0
+      },
+      "passed": true
+    },
+    {
+      "case": "shared_doorway_reversed_order_changes_room",
+      "synthetic_estimate_xyz": [
+        1.5,
+        1.6,
+        0
+      ],
+      "worker": {
+        "accepted": true,
+        "reason": "physically_plausible",
+        "zone_id": "hallway",
+        "camera_height_above_floor_m": 1.6,
+        "distance_from_room_polygon_m": 0.0,
+        "camera_up_alignment": 1.0
+      },
+      "backend": {
+        "accepted": true,
+        "reason": "within_roomplan_bounds",
+        "zone_id": "hallway",
+        "camera_height_above_floor_m": 1.6,
+        "distance_from_room_polygon_m": 0.0
+      },
+      "passed": true
+    },
+    {
+      "case": "outside_0.5m_still_accepted",
+      "synthetic_estimate_xyz": [
+        9.5,
+        1.6,
+        2
+      ],
+      "worker": {
+        "accepted": true,
+        "reason": "physically_plausible",
+        "zone_id": "room-c",
+        "camera_height_above_floor_m": 1.6,
+        "distance_from_room_polygon_m": 0.5,
+        "camera_up_alignment": 1.0
+      },
+      "backend": {
+        "accepted": true,
+        "reason": "within_roomplan_bounds",
+        "zone_id": "room-c",
+        "camera_height_above_floor_m": 1.6,
+        "distance_from_room_polygon_m": 0.5
+      },
+      "passed": true
+    },
+    {
+      "case": "outside_0.8m_rejected",
+      "synthetic_estimate_xyz": [
+        9.8,
+        1.6,
+        2
+      ],
+      "worker": {
+        "accepted": false,
+        "reason": "outside_roomplan_bounds",
+        "zone_id": "room-c",
+        "camera_height_above_floor_m": 1.6,
+        "distance_from_room_polygon_m": 0.8,
+        "camera_up_alignment": 1.0
+      },
+      "backend": {
+        "accepted": false,
+        "reason": "pose_outside_roomplan_bounds",
+        "zone_id": "room-c",
+        "camera_height_above_floor_m": 1.6,
+        "distance_from_room_polygon_m": 0.8
+      },
+      "passed": true
+    },
+    {
+      "case": "no_zones_no_assignment",
+      "synthetic_estimate_xyz": [
+        4.5,
+        1.6,
+        2
+      ],
+      "worker": {
+        "accepted": true,
+        "reason": "upright",
+        "camera_up_alignment": 1.0
+      },
+      "backend": {
+        "accepted": true,
+        "reason": "room_zone_prior_unavailable"
+      },
+      "passed": true
+    },
+    {
+      "case": "overlapping_stories_nearest_xz_ignores_height",
+      "synthetic_estimate_xyz": [
+        1.5,
+        5.6,
+        2
+      ],
+      "worker": {
+        "accepted": false,
+        "reason": "outside_roomplan_bounds",
+        "zone_id": "lower",
+        "camera_height_above_floor_m": 5.6,
+        "distance_from_room_polygon_m": 0.0,
+        "camera_up_alignment": 1.0
+      },
+      "backend": {
+        "accepted": false,
+        "reason": "pose_outside_roomplan_bounds",
+        "zone_id": "lower",
+        "camera_height_above_floor_m": 5.6,
+        "distance_from_room_polygon_m": 0.0
+      },
+      "passed": true
+    },
+    {
+      "case": "four_floor_surfaces_create_four_zones",
+      "zone_ids": [
+        "room-a",
+        "room-b",
+        "room-c",
+        "hallway"
+      ],
+      "passed": true
+    },
+    {
+      "case": "wall_only_scan_collapses_into_one_convex_hull",
+      "zone_ids": [
+        "room-1"
+      ],
+      "passed": true
+    },
+    {
+      "case": "unassigned_camera_uses_full_canonical_home",
+      "passed": true
+    },
+    {
+      "case": "stored_camera_room_selects_fragment",
+      "passed": true
+    },
+    {
+      "case": "adapter_scores_final_pose_not_stale_diagnostic",
+      "result": {
+        "assigned_zone_id": "hallway",
+        "final_pose_scene_prior": {
+          "accepted": true,
+          "reason": "physically_plausible",
+          "zone_id": "hallway",
+          "camera_height_above_floor_m": 1.6,
+          "distance_from_room_polygon_m": 0.0,
+          "camera_up_alignment": 1.0
+        }
+      },
+      "passed": true
+    },
+    {
+      "case": "adapter_preserves_solver_abstention",
+      "result": {
+        "assigned_zone_id": null,
+        "reason": "solver_abstained"
+      },
+      "passed": true
+    }
+  ]
+}
