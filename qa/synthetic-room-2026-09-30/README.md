@@ -6,12 +6,12 @@ Regenerated assets reconstructed from the earlier scene recipe. These are new by
 
 ![Room preview](assets/room_preview.jpg)
 
-![Camera render](assets/room_camera.png)
+![Camera render](assets/room_camera.jpg)
 
-![Cutaway overview](assets/room_overview.png)
+![Cutaway overview](assets/room_overview.jpg)
 
 - [Download USDZ](assets/room.usdz) (open file, then Download raw file)
-- [Editable Blender scene](assets/room.blend)
+- Editable Blender source is recreated locally by generate.py; the larger .blend is not committed
 - [Asset validation](assets/validation.json)
 - [Authored object placements](assets/semantic_objects.json)
 
@@ -19,7 +19,7 @@ The 6 by 5 meter room includes sofa, coffee table, dining table, two chairs, cab
 
 ## Reproduce
 
-Use Blender 4.3.2 and Python with usd-core 26.8:
+Use Blender 4.3.2 and Python with usd-core 26.8 and Pillow:
 
     blender -b -t 8 --python qa/synthetic-room-2026-09-30/generate.py
     python qa/synthetic-room-2026-09-30/package_usdz.py
@@ -35,3 +35,7 @@ The held-out query used RGB plus known intrinsics only. Its reference map used r
 The earlier test found the two genuine tables collapsed into one last-seen record: non-person object lookup is label-only, followed by a five-second per-object throttle (app/main.py lines 4552–4563 at the tested commit). Two other suppressed detections were false positives; 7 detections becoming 4 observations did not mean 3 genuine objects lost.
 
 No application changes, model weights, real personal data, or native LiDAR capture are included. Authored semantic placements are synthetic; a USDZ alone does not provide ONE's required normalized RoomPlan scan or RGB-D localization references.
+
+## Current regenerated asset checks
+
+The committed USDZ contains 121 meshes, uses meters and Y-up, and passes all 28 available OpenUSD validators with no errors. Its ZIP members are uncompressed and 64-byte aligned. See validation.json for the exact USDZ SHA256. Full-resolution renders are delivered as compact JPEGs; local generation also produces lossless PNGs. Application tests were not rerun for this artifact-only branch.

@@ -12,3 +12,8 @@ with zipfile.ZipFile(O/'room.usdz') as z:
   assert item.compress_type==0
   with open(O/'room.usdz','rb') as f:f.seek(item.header_offset+26);nl,el=struct.unpack('<HH',f.read(4));assert(item.header_offset+30+nl+el)%64==0
 result=dict(regenerated=True,meshes=sum(p.IsA(UsdGeom.Mesh) for p in v.Traverse()),usd_validators=len(names),validator_names=names,errors=[],meters_per_unit=UsdGeom.GetStageMetersPerUnit(v),up_axis=UsdGeom.GetStageUpAxis(v),sha256=hashlib.sha256((O/'room.usdz').read_bytes()).hexdigest());(O/'validation.json').write_text(json.dumps(result,indent=2));print(result)
+
+# Lossless originals remain local; publish compact full-resolution display copies.
+from PIL import Image
+for name in ["room_camera", "room_overview"]:
+    Image.open(O / (name + ".png")).convert("RGB").save(O / (name + ".jpg"), quality=90)

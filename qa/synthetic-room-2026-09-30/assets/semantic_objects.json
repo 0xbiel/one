@@ -1,0 +1,344 @@
+{
+  "regenerated": true,
+  "not_original_benchmark_bytes": true,
+  "units": "meters",
+  "up_axis": "Y",
+  "objects": [
+    {
+      "id": "sofa",
+      "category": "sofa",
+      "center": {
+        "x": -1.05,
+        "y": 0.48,
+        "z": -1.75
+      },
+      "dimensions": {
+        "x": 2.4,
+        "y": 0.96,
+        "z": 1
+      },
+      "transform": [
+        [
+          1,
+          0,
+          0,
+          -1.05
+        ],
+        [
+          0,
+          1,
+          0,
+          0.48
+        ],
+        [
+          0,
+          0,
+          1,
+          -1.75
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "confidence": "high",
+      "instance_index": 1
+    },
+    {
+      "id": "coffee_table",
+      "category": "table",
+      "center": {
+        "x": -0.8,
+        "y": 0.27,
+        "z": -0.15
+      },
+      "dimensions": {
+        "x": 1.4,
+        "y": 0.54,
+        "z": 0.75
+      },
+      "transform": [
+        [
+          1,
+          0,
+          0,
+          -0.8
+        ],
+        [
+          0,
+          1,
+          0,
+          0.27
+        ],
+        [
+          0,
+          0,
+          1,
+          -0.15
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "confidence": "high",
+      "instance_index": 2
+    },
+    {
+      "id": "dining_table",
+      "category": "table",
+      "center": {
+        "x": 1.85,
+        "y": 0.4,
+        "z": 0.3
+      },
+      "dimensions": {
+        "x": 1.35,
+        "y": 0.8,
+        "z": 1.1
+      },
+      "transform": [
+        [
+          1,
+          0,
+          0,
+          1.85
+        ],
+        [
+          0,
+          1,
+          0,
+          0.4
+        ],
+        [
+          0,
+          0,
+          1,
+          0.3
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "confidence": "high",
+      "instance_index": 3
+    },
+    {
+      "id": "chair_3",
+      "category": "chair",
+      "center": {
+        "x": 1.85,
+        "y": 0.48,
+        "z": 1.2
+      },
+      "dimensions": {
+        "x": 0.55,
+        "y": 0.96,
+        "z": 0.6
+      },
+      "transform": [
+        [
+          1,
+          0,
+          0,
+          1.85
+        ],
+        [
+          0,
+          1,
+          0,
+          0.48
+        ],
+        [
+          0,
+          0,
+          1,
+          1.2
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "confidence": "high",
+      "instance_index": 4
+    },
+    {
+      "id": "chair_4",
+      "category": "chair",
+      "center": {
+        "x": 1.85,
+        "y": 0.48,
+        "z": -0.65
+      },
+      "dimensions": {
+        "x": 0.55,
+        "y": 0.96,
+        "z": 0.6
+      },
+      "transform": [
+        [
+          1,
+          0,
+          0,
+          1.85
+        ],
+        [
+          0,
+          1,
+          0,
+          0.48
+        ],
+        [
+          0,
+          0,
+          1,
+          -0.65
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "confidence": "high",
+      "instance_index": 5
+    },
+    {
+      "id": "cabinet",
+      "category": "storage",
+      "center": {
+        "x": 1.75,
+        "y": 0.5,
+        "z": -2.15
+      },
+      "dimensions": {
+        "x": 1.6,
+        "y": 1,
+        "z": 0.55
+      },
+      "transform": [
+        [
+          1,
+          0,
+          0,
+          1.75
+        ],
+        [
+          0,
+          1,
+          0,
+          0.5
+        ],
+        [
+          0,
+          0,
+          1,
+          -2.15
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "confidence": "high",
+      "instance_index": 6
+    },
+    {
+      "id": "television",
+      "category": "television",
+      "center": {
+        "x": -2.88,
+        "y": 1.25,
+        "z": 0.1
+      },
+      "dimensions": {
+        "x": 0.12,
+        "y": 0.9,
+        "z": 1.5
+      },
+      "transform": [
+        [
+          1,
+          0,
+          0,
+          -2.88
+        ],
+        [
+          0,
+          1,
+          0,
+          1.25
+        ],
+        [
+          0,
+          0,
+          1,
+          0.1
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "confidence": "high",
+      "instance_index": 7
+    },
+    {
+      "id": "floor_lamp",
+      "category": "lamp",
+      "center": {
+        "x": 0.5,
+        "y": 0.9,
+        "z": -1.9
+      },
+      "dimensions": {
+        "x": 0.42,
+        "y": 1.8,
+        "z": 0.42
+      },
+      "transform": [
+        [
+          1,
+          0,
+          0,
+          0.5
+        ],
+        [
+          0,
+          1,
+          0,
+          0.9
+        ],
+        [
+          0,
+          0,
+          1,
+          -1.9
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "confidence": "high",
+      "instance_index": 8
+    }
+  ]
+}
