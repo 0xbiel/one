@@ -628,6 +628,7 @@ def test_camera_map_observation_and_sse_schema(tmp_path):
     assert scene.status_code == 200 and scene.json()["sceneId"] == room_map["id"]
     objects = c.get(f"/api/v1/homes/{home}/objects/last-seen", headers=h)
     assert objects.status_code == 200 and objects.json()["data"][0]["lastSeenAt"]
+    assert objects.json()["data"][0]["careRecipientId"] is None
     with c.stream("GET", f"/api/v1/homes/{home}/events/stream?once=true", headers=h) as response:
         assert response.status_code == 200
         assert next(response.iter_lines()).startswith(": connected")
@@ -646,6 +647,15 @@ def test_events_filter_care_recipient_and_keep_household_separate(tmp_path):
     assert {item["id"] for item in c.get(base, headers=h).json()["data"]} == {"first-event", "household-event"}
     assert {item["id"] for item in c.get(base + "&include_household=false", headers=h).json()["data"]} == {"first-event"}
     assert c.get(f"/api/v1/homes/{home}/events?care_recipient_id=unknown", headers=h).status_code == 404
+
+
+def test_last_seen_objects_expose_recorded_care_recipient(tmp_path):
+    c = client(tmp_path); token, home = auth(c); h = {"Authorization": f"Bearer {token}"}
+    recipient = c.post(f"/api/v1/homes/{home}/care-recipients", headers=h, json={"display_name": "First"}).json()["data"]["id"]
+    obj = c.post(f"/api/v1/homes/{home}/objects", headers=h, json={"label": "glasses"}).json()
+    c.app.state.db.execute("UPDATE objects SET care_recipient_id=? WHERE id=? AND home_id=?", (recipient, obj["id"], home))
+    rows = c.get(f"/api/v1/homes/{home}/objects/last-seen", headers=h).json()["data"]
+    assert next(item for item in rows if item["id"] == obj["id"])["careRecipientId"] == recipient
 
 
 def test_caregiver_can_remove_camera_without_erasing_history(tmp_path):

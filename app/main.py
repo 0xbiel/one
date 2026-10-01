@@ -4310,13 +4310,13 @@ def make_app(
         observed_at = row.get("observed_at")
         x, y, z = row.get("x"), row.get("y"), row.get("z")
         observation_id = row.get("observation_id")
-        event = db.one("SELECT id FROM events WHERE home_id=? AND evidence_json LIKE ? ORDER BY last_seen_at DESC LIMIT 1", (row["home_id"], f"%{observation_id}%")) if observation_id else None
+        event = db.one("SELECT id, care_recipient_id FROM events WHERE home_id=? AND evidence_json LIKE ? ORDER BY last_seen_at DESC LIMIT 1", (row["home_id"], f"%{observation_id}%")) if observation_id else None
         zone = roomplan_zone_for_point(row.get("map_id"), row["home_id"], x, z)
         presence_state = None
         identity_status = "anonymous"
         identity_name = None
         identity_confidence = row.get("identity_confidence")
-        recipient_id = row.get("care_recipient_id")
+        recipient_id = row.get("latest_care_recipient_id") or row.get("care_recipient_id") or (event.get("care_recipient_id") if event else None)
         if str(row.get("label") or "").strip().lower() == "person":
             identity_status = "unknown"
             identity_name = "Unknown person"
@@ -4342,6 +4342,7 @@ def make_app(
             "worldPoint": {"x": x, "y": y, "z": z} if x is not None and y is not None and z is not None else None,
             "mapId": row.get("map_id"),
             "cameraId": row.get("camera_id"),
+            "careRecipientId": recipient_id,
             "roomId": zone.get("id") if zone else None,
             "presenceState": presence_state,
             "identity": {"status": identity_status, "displayName": identity_name, "careRecipientId": recipient_id, "confidence": identity_confidence} if str(row.get("label") or "").strip().lower() == "person" else None,
@@ -4357,7 +4358,7 @@ def make_app(
             SELECT o.*, latest.id observation_id, latest.camera_id, latest.map_id,
                    latest.x, latest.y, latest.z, latest.uncertainty_m,
                    latest.confidence, latest.detector_version, latest.observed_at
-                   ,latest.care_recipient_id, latest.identity_confidence
+                   ,latest.care_recipient_id AS latest_care_recipient_id, latest.identity_confidence
             FROM objects o
             LEFT JOIN observations latest ON latest.id = (
                 SELECT ob.id FROM observations ob
