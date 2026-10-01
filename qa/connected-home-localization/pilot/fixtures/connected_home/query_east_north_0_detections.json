@@ -1,0 +1,178 @@
+[
+  {
+    "label": "sofa",
+    "confidence": 0.921988,
+    "bbox": [
+      13.906,
+      141.23,
+      248.03,
+      251.251
+    ],
+    "frame_index": 0
+  },
+  {
+    "label": "lamp",
+    "confidence": 0.790948,
+    "bbox": [
+      236.009,
+      82.76,
+      267.366,
+      212.276
+    ],
+    "frame_index": 0
+  },
+  {
+    "label": "desk",
+    "confidence": 0.689382,
+    "bbox": [
+      366.597,
+      172.028,
+      480.0,
+      302.157
+    ],
+    "frame_index": 0
+  },
+  {
+    "label": "desk",
+    "confidence": 0.506199,
+    "bbox": [
+      96.693,
+      212.094,
+      281.458,
+      337.562
+    ],
+    "frame_index": 0
+  },
+  {
+    "label": "television",
+    "confidence": 0.468704,
+    "bbox": [
+      445.431,
+      91.87,
+      480.0,
+      190.229
+    ],
+    "frame_index": 0
+  },
+  {
+    "label": "chair",
+    "confidence": 0.399431,
+    "bbox": [
+      353.078,
+      148.459,
+      413.749,
+      253.144
+    ],
+    "frame_index": 0
+  },
+  {
+    "label": "cabinet",
+    "confidence": 0.363982,
+    "bbox": [
+      262.936,
+      135.113,
+      364.191,
+      203.106
+    ],
+    "frame_index": 0
+  },
+  {
+    "label": "chair",
+    "confidence": 0.107489,
+    "bbox": [
+      352.438,
+      148.44,
+      395.085,
+      228.064
+    ],
+    "frame_index": 0
+  },
+  {
+    "label": "sofa",
+    "confidence": 0.913767,
+    "bbox": [
+      14.077,
+      140.924,
+      247.816,
+      252.277
+    ],
+    "frame_index": 1
+  },
+  {
+    "label": "lamp",
+    "confidence": 0.781489,
+    "bbox": [
+      236.339,
+      82.714,
+      267.337,
+      212.334
+    ],
+    "frame_index": 1
+  },
+  {
+    "label": "desk",
+    "confidence": 0.680907,
+    "bbox": [
+      365.816,
+      171.775,
+      480.0,
+      302.043
+    ],
+    "frame_index": 1
+  },
+  {
+    "label": "desk",
+    "confidence": 0.500839,
+    "bbox": [
+      96.758,
+      212.017,
+      281.667,
+      337.866
+    ],
+    "frame_index": 1
+  },
+  {
+    "label": "television",
+    "confidence": 0.445713,
+    "bbox": [
+      445.441,
+      91.879,
+      480.0,
+      190.502
+    ],
+    "frame_index": 1
+  },
+  {
+    "label": "chair",
+    "confidence": 0.356123,
+    "bbox": [
+      352.911,
+      148.031,
+      413.785,
+      251.465
+    ],
+    "frame_index": 1
+  },
+  {
+    "label": "cabinet",
+    "confidence": 0.338506,
+    "bbox": [
+      263.184,
+      135.3,
+      364.303,
+      202.813
+    ],
+    "frame_index": 1
+  },
+  {
+    "label": "chair",
+    "confidence": 0.118899,
+    "bbox": [
+      352.115,
+      148.054,
+      395.235,
+      228.168
+    ],
+    "frame_index": 1
+  }
+]

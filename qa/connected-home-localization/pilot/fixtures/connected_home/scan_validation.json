@@ -1,0 +1,11 @@
+{
+  "boxes": 49,
+  "semantic_boxes": 32,
+  "structural_boxes": 17,
+  "meshes": 0,
+  "meters_per_unit": 1,
+  "up_axis": "Y",
+  "validators": 28,
+  "errors": [],
+  "sha256": "d59c9b989966a730ca261d7b7b6a6fcd54e7f33be1567bde21492d5a0115278e"
+}

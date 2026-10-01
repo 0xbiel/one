@@ -1,0 +1,222 @@
+[
+  {
+    "label": "sofa",
+    "confidence": 0.914227,
+    "bbox": [
+      95.887,
+      147.43,
+      281.728,
+      234.469
+    ],
+    "frame_index": 0
+  },
+  {
+    "label": "lamp",
+    "confidence": 0.810803,
+    "bbox": [
+      281.1,
+      86.041,
+      317.672,
+      232.044
+    ],
+    "frame_index": 0
+  },
+  {
+    "label": "desk",
+    "confidence": 0.44691,
+    "bbox": [
+      345.548,
+      195.542,
+      480.0,
+      359.963
+    ],
+    "frame_index": 0
+  },
+  {
+    "label": "desk",
+    "confidence": 0.406819,
+    "bbox": [
+      40.514,
+      196.07,
+      213.948,
+      290.187
+    ],
+    "frame_index": 0
+  },
+  {
+    "label": "window",
+    "confidence": 0.323282,
+    "bbox": [
+      0.006,
+      93.708,
+      25.127,
+      175.695
+    ],
+    "frame_index": 0
+  },
+  {
+    "label": "sofa",
+    "confidence": 0.294526,
+    "bbox": [
+      334.628,
+      157.144,
+      480.0,
+      305.897
+    ],
+    "frame_index": 0
+  },
+  {
+    "label": "table",
+    "confidence": 0.284131,
+    "bbox": [
+      39.13,
+      197.627,
+      213.615,
+      290.465
+    ],
+    "frame_index": 0
+  },
+  {
+    "label": "couch",
+    "confidence": 0.207977,
+    "bbox": [
+      94.969,
+      146.83,
+      282.635,
+      233.223
+    ],
+    "frame_index": 0
+  },
+  {
+    "label": "mirror",
+    "confidence": 0.116479,
+    "bbox": [
+      0.0,
+      94.591,
+      24.644,
+      174.157
+    ],
+    "frame_index": 0
+  },
+  {
+    "label": "sofa",
+    "confidence": 0.102672,
+    "bbox": [
+      334.176,
+      157.777,
+      480.0,
+      232.44
+    ],
+    "frame_index": 0
+  },
+  {
+    "label": "sofa",
+    "confidence": 0.918577,
+    "bbox": [
+      94.849,
+      147.034,
+      282.397,
+      234.764
+    ],
+    "frame_index": 1
+  },
+  {
+    "label": "lamp",
+    "confidence": 0.802145,
+    "bbox": [
+      281.308,
+      85.99,
+      316.562,
+      231.901
+    ],
+    "frame_index": 1
+  },
+  {
+    "label": "desk",
+    "confidence": 0.428242,
+    "bbox": [
+      40.642,
+      195.608,
+      213.98,
+      290.295
+    ],
+    "frame_index": 1
+  },
+  {
+    "label": "desk",
+    "confidence": 0.383221,
+    "bbox": [
+      345.016,
+      193.534,
+      480.0,
+      360.0
+    ],
+    "frame_index": 1
+  },
+  {
+    "label": "sofa",
+    "confidence": 0.353779,
+    "bbox": [
+      335.312,
+      156.475,
+      479.999,
+      307.949
+    ],
+    "frame_index": 1
+  },
+  {
+    "label": "window",
+    "confidence": 0.351177,
+    "bbox": [
+      0.005,
+      93.526,
+      25.164,
+      175.841
+    ],
+    "frame_index": 1
+  },
+  {
+    "label": "table",
+    "confidence": 0.277377,
+    "bbox": [
+      39.025,
+      197.178,
+      213.652,
+      290.502
+    ],
+    "frame_index": 1
+  },
+  {
+    "label": "couch",
+    "confidence": 0.218855,
+    "bbox": [
+      95.169,
+      146.825,
+      282.819,
+      233.618
+    ],
+    "frame_index": 1
+  },
+  {
+    "label": "sofa",
+    "confidence": 0.108986,
+    "bbox": [
+      334.741,
+      157.579,
+      480.0,
+      232.958
+    ],
+    "frame_index": 1
+  },
+  {
+    "label": "mirror",
+    "confidence": 0.106833,
+    "bbox": [
+      0.0,
+      94.129,
+      24.858,
+      175.323
+    ],
+    "frame_index": 1
+  }
+]

@@ -1,0 +1,295 @@
+ONE fall detection investigation
+Real video evidence and the 20 fps question
+30 September 2026 • Technical research report
+
+The current fall rule needs stronger temporal activity reasoning and a measured inference cadence. The
+evidence does not establish that swapping in a pose detector, or simply sending more frames, will solve the
+missed falls and false alarms.
+Across 128 evaluation clips, the existing ONE path at 5 Hz detected 37 of 63 annotated falls and triggered on 5 of
+65 daily-activity clips. At the idealized current 1.4-second interval, it detected 2 of 63 falls. These are offline,
+cold-start clip results, not estimates of continuous deployment reliability.
+
+Main evaluation results
+                                                                                                                          Median
+           Method and cadence                          TP      FN       FP      TN      Precision         Recall
+                                                                                                                         latency s
+
+           ONE at 5 Hz                                 37      26       5       60        88.1%           58.7%            1.20
+
+           ONE every 1.4 s                              2      61       0       65       100.0%            3.2%            3.90
+
+           Pose boxes at 5 Hz                          30      33       5       60        85.7%           47.6%            1.40
+
+           Pose boxes every 1.4 s                       3      60       0       65       100.0%            4.8%            3.70
+
+
+128 evaluation clips: 63 Fall and 65 activities of daily living (ADL). TP/FN are detected/missed fall clips; FP/TN are alerted/quiet ADL clips.
+Latency uses known-onset detected falls: 36 and 2 for ONE; 29 and 3 for pose, respectively. It excludes processing and network delay.
+
+What the evidence supports
+Sampling matters. The browser currently submits at most one JPEG every 1.4 seconds and skips a tick while a
+request is active. A camera stream at 20 fps does not mean the backend receives or processes 20 frames per
+second.
+Twenty Hz did not improve recall in the paired test. On the same nine evaluation clips, 5 Hz and 20 Hz each
+detected 2 of 4 falls; false-positive ADL clips increased from 1 of 5 to 2 of 5. The result is a small diagnostic
+comparison, not a general ranking of frame rates.
+Pose remains an open research option. At 5 Hz, pose boxes detected 30 of 63 falls, versus 37 for ONE, with five
+false-positive ADL clips for each. The same tracker and box rule were used; a trained temporal skeleton classifier
+was not tested.
+Recommended next step: compare time-based temporal logic and activity models under realistic capture-to-
+alert timing, including continuous pre-fall history and long non-fall recordings. Preserve a separate evaluation
+set before choosing thresholds.
+
+
+
+
+                                                                                                          ONE fall detection investigation | 1
+
+
+Dataset and evaluation protocol
+Accuracy was evaluated on public GMDCSA-24 RGB videos of consenting actors staging falls and daily activities
+at home. Scenes include low light, seated and chair falls, partial views, lying down, bending, exercise and bed
+activities. [1, 2]
+
+        Partition               Subject folders        Fall       ADL         Clips         Samples at 5 Hz
+
+        Development                    1               16          16          32                1,007
+
+        Evaluation                   2 to 4            63          65          128               5,432
+
+        Total                        1 to 4            79          81          160               6,439
+
+
+All 160 video hashes match the pinned revision. They contain 34,172 native frames and about 21.5 minutes of
+material. Both models completed all 6,439 samples with no missing or duplicate frame IDs. The manifest yields
+79 Fall and 81 ADL clips, reversing the paper’s reported totals; the manifest governs scoring.
+
+Partitioning and prior exposure
+Methods were fixed before the initial evaluation. No weights were trained or fine-tuned, and no held-out
+threshold tuning was performed. The expanded set includes the earlier 32-clip pilot; results beyond the pilot are
+reported separately.
+The split is by subject folder. The paper describes four actors in its main text but three in its ethics statement;
+identities were not independently verified. Treat this as folder-separated evaluation, without a guarantee of
+person independence. [1]
+
+Replay and scoring
+Each clip resets detector-associated tracking and fall state. Frames are resized to a maximum dimension of 640
+pixels and encoded at JPEG quality 58, approximating the browser canvas quality of 0.58. The real low-light
+preprocessing, detector, stability tracker and fall rule are replayed offline using source timestamps. This is not a
+full HTTP or app deployment test.
+A fall clip is positive when the rule emits an alert at or after the source fall onset minus 0.2 seconds; ADL is
+positive for any alert. These are clip-level event labels, not person-localized fall ground truth. Latency is the first
+qualifying alert time minus the annotation time. One fall clip, s4_fall_15, lacks onset timing: it remains in
+classification counts and is omitted from latency.
+
+Cold start changes the interpretation
+Three observations need a minimum span of 2.8 seconds at the 1.4-second interval, 0.4 seconds at 5 Hz and 0.1
+seconds at 20 Hz. Of 62 evaluation falls with onset timing, 41 begin before 2.8 seconds; neither detector path
+caught any of these at the 1.4-second interval. These results do not estimate continuous-monitoring
+performance.
+
+
+
+
+                                                                                        ONE fall detection investigation | 2
+
+
+Expanded results and diagnostic comparisons
+The following diagnostics retain the same clip labels and scoring rule. They isolate potential failure mechanisms
+but are not production-ready alternatives.
+
+                                                                                                                   Median
+          Method and cadence                        TP      FN      FP     TN       Precision       Recall
+                                                                                                                  latency s
+
+          ONE at 5 Hz                               37      26      5      60        88.1%          58.7%            1.20
+
+          One identity at 5 Hz                      40      23      5      60        88.9%          63.5%            1.20
+
+          Confidence gate removed at 5 Hz           41      22      5      60        89.1%          65.1%            1.20
+
+          Pose boxes at 5 Hz                        30      33      5      60        85.7%          47.6%            1.40
+
+          Pose with one identity at 5 Hz            33      30      7      58        82.5%          52.4%            1.40
+
+
+Identity diagnostic: force one ID onto the highest-confidence person prediction. Confidence diagnostic: keep detector outputs above the
+0.20 detection floor, but bypass the fall rule’s 0.55 gate. Neither is a deployment recommendation.
+
+What the ablations show
+For ONE, forcing one identity recovered three additional falls; removing the confidence gate recovered four,
+with unchanged false-positive clip counts. For pose, forcing one identity recovered three falls but added two
+false-positive clips. Association and confidence gating contribute to misses, but most missed falls remained.
+These diagnostics do not establish safety on multiple people or long non-fall recordings.
+The pilot had 8 development and 24 evaluation clips. ONE detected 9 of 12 falls at 5 Hz with one false-positive
+ADL clip. The expanded results provide a less favorable and more useful basis for the next experiment.
+
+Variation within the expanded set
+On the 104 evaluation clips beyond the pilot, ONE detected 28 of 51 falls and alerted on 4 of 53 ADL clips. Pose
+boxes detected 22 of 51 and alerted on 3 of 53. These additional examples account for the lower full-set recall.
+For clips marked night, ONE detected 5 of 11 falls and pose boxes 4 of 11. By day, they detected 32 of 52 and 26
+of 52, respectively. Scene and activity also vary, so this comparison does not isolate lighting as a cause.
+
+Metrics that should not be overread
+Each base detector path has five false-positive ADL clips containing seven alerts. Counting each false alert but
+only one detection per fall clip gives 84.1% precision for ONE and 81.1% for pose, versus 88.1% and 85.7% by
+clip. The artificial fall prevalence means neither estimates alert quality in an occupied home. False-positive clips
+do not estimate false alarms per camera-day.
+Counts of frames containing a person prediction are coverage diagnostics, not person-detection recall. There are
+no verified person boxes for that claim, and the pose model sometimes labels hanging clothes as another
+person. Reported event latency excludes processing, network and UI delay, and only includes detected falls.
+
+
+
+
+                                                                                                    ONE fall detection investigation | 3
+
+
+Faster sampling and runtime feasibility
+Twelve clips were selected before 20 Hz inference: three development and nine evaluation. The evaluation
+subset has four falls and five ADL clips, with 1,287 samples. Lower cadences use paired subsamples of the same
+cached detector outputs.
+
+                                                                                                                      Median
+           Method and cadence                        TP      FN      FP      TN      Precision        Recall
+                                                                                                                     latency s
+
+           ONE every 1.4 s                            0       4       0       5          —             0.0%             —
+
+           ONE at 5 Hz                                2       2       1       4        66.7%          50.0%            3.25
+
+           ONE at 20 Hz                               2       2       2       3        50.0%          50.0%            0.75
+
+           ONE at 20 Hz with 9 hits                   1       3       1       4        50.0%          25.0%            1.15
+
+
+Nine-clip subset only. One fall changes recall by 25 percentage points. Latency is conditional on detection and excludes processing delay.
+A dash means undefined.
+
+Keeping three hits while increasing cadence shortens the rule’s minimum evidence span. The separate nine-hit
+diagnostic at 20 Hz restores a 0.4-second minimum span, but does not make every aspect of the temporal logic
+duration-invariant. It detected one fall and raised one false-positive clip. Higher cadence alone did not resolve
+the activity ambiguity.
+All nine evaluation videos have native gaps below 50 ms. The three development videos have a few larger gaps,
+where resampling may hold a frame. Twenty-nine full-set videos are about 15 fps and cannot supply 20
+independent observations per second.
+On the full set, shifting the 1.4-second sampling grid across seven phase offsets produced only 0 to 2 detected
+falls for ONE and 0 to 3 for pose, with no false-positive ADL clips.
+
+Measured CPU cost
+
+ Runtime path                                                                Per frame time                Approximate reciprocal
+
+ Current path on four blank smoke frames                                      2.01 to 2.18 s                     About 0.5 fps
+
+ Exact-vocabulary embedding cache                                                 267.9 ms                          3.7 fps
+
+ Static prompt configuration                                                      147.6 ms                          6.8 fps
+
+
+Shared Linux CPU, AMD EPYC 9V74, two Torch threads. The last two times are means from one predeclared development frame, two
+warmups and ten repetitions. Smoke timings are a different workload and are not directly comparable.
+
+Static prompts matched parsed detections exactly on five predeclared development frames and cut mean per-
+frame time by about 45% versus the cached comparison path. This is limited equivalence evidence, not a
+universal guarantee. Timing includes JPEG decode, low-light processing and inference; it excludes capture, HTTP,
+tracking, persistence, display, file read, resize and JPEG encoding.
+Serial 20 Hz inference needs roughly 50 ms per frame; this CPU path averaged 148 ms. Benchmark the complete
+request path on deployment hardware before changing cadence. No Mac, GPU or end-to-end throughput result
+is claimed.
+
+
+
+
+                                                                                                      ONE fall detection investigation | 4
+
+
+Observed failure mechanisms and next experiments
+Low confidence after the fall
+In pilot clip s3_fall_16, the detector produced eight upright, one transition and nine low-posture boxes above its
+0.20 floor. Only the upright boxes survived the fall rule’s 0.55 confidence gate. Removing that gate recovered
+the fall. The next test should assess calibrated confidence and low-light temporal evidence while measuring
+additional false alarms.
+
+Seated and partial views
+Clip s3_fall_13 began in a low seated posture and stayed low through the fall; lowering confidence did not
+recover it. The code can fall back to the previous center when no upright reference exists, so an upright
+observation is not an absolute prerequisite. Its box geometry still lacks a useful transition here. The partial chair
+fall s4_fall_10 remained missed after either the identity or confidence diagnostic.
+
+Ordinary activity that resembles a fall
+The push-up clip s4_adl_05 triggered both ONE and the pose-box path at 4.4 seconds in the 5 Hz pilot replay.
+Better person detection does not remove this activity-specificity problem. A falling body and deliberate exercise
+can share a low box and downward movement.
+
+Experiments to run before choosing an approach
+1 Measure the live timing path. Record capture, upload, inference, tracking and alert timestamps, skipped
+requests, queue age and p50/p95 latency. Compare 5, 10 and 20 Hz targets on the actual deployment hardware
+using newest-frame processing rather than an accumulating queue.
+2 Make evidence duration explicit. Compare time-based stabilization and fall-confirmation windows, with
+continuous pre-roll, against the unchanged rule. Isolate cadence from the amount of temporal evidence instead
+of reusing an unqualified frame count.
+3 Compare temporal representations. Evaluate RGB motion, tracked box trajectories and a trained temporal
+skeleton classifier on the same partitions. Include seated falls, occlusion, low light, bed transitions and exercise.
+Pose should earn its role through this comparison.
+4 Use a fresh external evaluation. Preserve untouched people and environments before tuning. Add long ADL
+streams and report false alarms per camera-hour, missed falls, onset latency and performance by scenario. Use
+repeated runs or multiple seeds for trained models.
+None of these findings establishes medical or emergency-response reliability. The investigation is evidence for
+the next engineering experiment, not a production fix or a safety validation.
+
+
+
+
+                                                                                       ONE fall detection investigation | 5
+
+
+Reproducibility and limits
+Pinned sources and licenses
+ONE backend source: 9c05becdc3af59b15092075c1eb1dc90e2ab9e70. Frontend inspected:
+84e21f90f53213c79775168ee0491019ad1f1400. The replay uses the fixed eleven-label default profile; a live
+home with registered objects may request a different vocabulary. [3]
+GMDCSA-24 v2.1 is pinned to 5abac7693229900cf80f722e878fbb119211fc1c. Its Zenodo record licenses the
+dataset under CC BY 4.0 and notes revised CSV activity timings. Cite that v2.1 record and the paper. The
+repository separately carries an MIT notice, copyright 2024 Ekram Alam; preserve that notice with reproduced
+repository material. [1, 2, 5]
+
+Weights and software
+yolov8s-worldv2.pt SHA256
+9b2c17ab6124a913e9b3a5c170617920d91b0f01111a8479da69f00e2cf27792
+
+yolo11n-pose.pt SHA256
+869e83fcdffdc7371fa4e34cd8e51c838cc729571d1635e5141e3075e9319dc0
+
+CLIP ViT B 32 SHA256
+40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af
+
+Both YOLO checkpoints came from official Ultralytics v8.4.0 assets. CLIP fork revision:
+a13192f8cb767260d7dfd98c843b0716593169e7. Runtime: Python 3.12.14, Torch 2.14.0+cpu, torchvision
+0.29.0+cpu, Ultralytics 8.4.168, OpenCV 4.14.0 and NumPy 2.5.2. The companion lockfile records exact
+packages. [4]
+Detector settings: 384 by 640 input, 0.20 detection floor and 100 maximum detections. Tracker: three hits, IoU
+at least 0.20. Fall rule: person confidence at least 0.55; box width and height each at least 8% of frame
+dimensions; upright height/width at least 1.20; low at most 0.95; vertical-center drop at least 0.07 of frame
+height; three low confirmations within four seconds.
+
+Limits that affect decisions
+Short staged clips, coarse onset annotations, uncertain actor mapping, overlapping pilot exposure, one missing
+onset and no verified person-level fall annotations constrain the conclusions. One CSV lists s2_adl_04 as 70
+seconds; its decoded duration is about 7.84 seconds. Native timestamps and decoded durations are used where
+metadata conflicts. This investigation makes no production-code changes, merge or deployment.
+
+Sources and companion evidence
+[1] Alam et al 2024 GMDCSA 24 paper
+[2] Ekram Alam 2024 GMDCSA-24 v2.1 dataset and CC BY 4.0 license
+[3] Pinned ONE backend source
+[4] Ultralytics YOLO World documentation
+[5] Pinned GitHub repository and separate MIT notice
+Paper DOI: 10.1016/j.dib.2024.110892. Companion evidence includes per-clip manifests and hashes, source snapshots, inference outputs,
+scores, protocol declarations, runtime benchmarks and the pilot diagnostic contact sheet and video.
+
+
+
+                                                                                                  ONE fall detection investigation | 6
+
+

@@ -1,0 +1,55 @@
+{
+  "evaluated_commit": "5abac7693229900cf80f722e878fbb119211fc1c",
+  "matching_tag": {
+    "name": "v2.1",
+    "zipball_url": "https://api.github.com/repos/ekramalam/GMDCSA24-A-Dataset-for-Human-Fall-Detection-in-Videos/zipball/refs/tags/v2.1",
+    "tarball_url": "https://api.github.com/repos/ekramalam/GMDCSA24-A-Dataset-for-Human-Fall-Detection-in-Videos/tarball/refs/tags/v2.1",
+    "commit": {
+      "sha": "5abac7693229900cf80f722e878fbb119211fc1c",
+      "url": "https://api.github.com/repos/ekramalam/GMDCSA24-A-Dataset-for-Human-Fall-Detection-in-Videos/commits/5abac7693229900cf80f722e878fbb119211fc1c"
+    },
+    "node_id": "REF_kwDOLVZspa5yZWZzL3RhZ3MvdjIuMQ"
+  },
+  "dataset_record_url": "https://zenodo.org/api/records/13354453",
+  "dataset_metadata": {
+    "title": "ekramalam/GMDCSA24-A-Dataset-for-Human-Fall-Detection-in-Videos: 2.1",
+    "doi": "10.5281/zenodo.13354453",
+    "publication_date": "2024-08-21",
+    "description": "<p>Some modifications have been made to CSV files. Now, CSV files contain classes and their start and time also.</p>",
+    "access_right": "open",
+    "creators": [
+      {
+        "name": "Ekram Alam",
+        "affiliation": "Gour Mahavidyalaya"
+      }
+    ],
+    "related_identifiers": [
+      {
+        "identifier": "https://github.com/ekramalam/GMDCSA24-A-Dataset-for-Human-Fall-Detection-in-Videos/tree/v2.1",
+        "relation": "isSupplementTo",
+        "resource_type": "software",
+        "scheme": "url"
+      }
+    ],
+    "version": "v2.1",
+    "resource_type": {
+      "title": "Dataset",
+      "type": "dataset"
+    },
+    "license": {
+      "id": "cc-by-4.0"
+    },
+    "relations": {
+      "version": [
+        {
+          "index": 6,
+          "is_last": true,
+          "parent": {
+            "pid_type": "recid",
+            "pid_value": "10889140"
+          }
+        }
+      ]
+    }
+  }
+}

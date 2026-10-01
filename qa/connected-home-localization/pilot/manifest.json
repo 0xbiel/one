@@ -1,0 +1,194 @@
+[
+  {
+    "case": "query_west_south_0_clean",
+    "split": "dev",
+    "condition": "clean",
+    "query": "query_west_south_0",
+    "input": "inputs/query_west_south_0_clean.json",
+    "sha256": "e89d7fbf0411557866067be7c7327f175d17c69e615fb426a725d5c9307b31cc"
+  },
+  {
+    "case": "query_west_south_0_unknown_intrinsics",
+    "split": "dev",
+    "condition": "unknown_intrinsics",
+    "query": "query_west_south_0",
+    "input": "inputs/query_west_south_0_unknown_intrinsics.json",
+    "sha256": "6549a067df075baf7e8d52952401bc59212ff09ab11862a1b6f5874e08dd4c4b"
+  },
+  {
+    "case": "query_west_south_1_clean",
+    "split": "dev",
+    "condition": "clean",
+    "query": "query_west_south_1",
+    "input": "inputs/query_west_south_1_clean.json",
+    "sha256": "455abf9e1e46211f8b8dcfc06c2e1ea88a741763c8a2b13e0b0956ab8db73547"
+  },
+  {
+    "case": "query_west_south_1_unknown_intrinsics",
+    "split": "dev",
+    "condition": "unknown_intrinsics",
+    "query": "query_west_south_1",
+    "input": "inputs/query_west_south_1_unknown_intrinsics.json",
+    "sha256": "75f0208727328e77b09275a9e2546b6a23463b5343b35de299ffba5b129740df"
+  },
+  {
+    "case": "query_west_north_0_clean",
+    "split": "heldout",
+    "condition": "clean",
+    "query": "query_west_north_0",
+    "input": "inputs/query_west_north_0_clean.json",
+    "sha256": "0e77f15575c337f309faa03a932f93ba750db5f5aeb5af2053265dbb50a3b2cb"
+  },
+  {
+    "case": "query_west_north_0_unknown_intrinsics",
+    "split": "heldout",
+    "condition": "unknown_intrinsics",
+    "query": "query_west_north_0",
+    "input": "inputs/query_west_north_0_unknown_intrinsics.json",
+    "sha256": "75717a29060e21351d199b7cce53ed48d1d9541ecb15b22d3222886357ecc058"
+  },
+  {
+    "case": "query_west_north_1_clean",
+    "split": "heldout",
+    "condition": "clean",
+    "query": "query_west_north_1",
+    "input": "inputs/query_west_north_1_clean.json",
+    "sha256": "25ceef114fb8238f58af02ce9f67aebc564ec20ab7fc90570aa3b70876a1233c"
+  },
+  {
+    "case": "query_west_north_1_unknown_intrinsics",
+    "split": "heldout",
+    "condition": "unknown_intrinsics",
+    "query": "query_west_north_1",
+    "input": "inputs/query_west_north_1_unknown_intrinsics.json",
+    "sha256": "f7228d31e1e5ee11d37b963e13422e1e94d678a4cf176a2c281d6ea34310cbac"
+  },
+  {
+    "case": "query_east_south_0_clean",
+    "split": "heldout",
+    "condition": "clean",
+    "query": "query_east_south_0",
+    "input": "inputs/query_east_south_0_clean.json",
+    "sha256": "c36ed705a3f3b7ca86138bc615d60758a07b5c3f93e01b72f5ab6d61e2c3414d"
+  },
+  {
+    "case": "query_east_south_0_unknown_intrinsics",
+    "split": "heldout",
+    "condition": "unknown_intrinsics",
+    "query": "query_east_south_0",
+    "input": "inputs/query_east_south_0_unknown_intrinsics.json",
+    "sha256": "8161b191e59a4a6a2852c4b1337de03ea669fc1df44110d06c861e52673fb6f1"
+  },
+  {
+    "case": "query_east_south_1_clean",
+    "split": "heldout",
+    "condition": "clean",
+    "query": "query_east_south_1",
+    "input": "inputs/query_east_south_1_clean.json",
+    "sha256": "f34af4b8fc9d9c7fd617d215340099346519078fba074f0a6ab28a121a56f398"
+  },
+  {
+    "case": "query_east_south_1_unknown_intrinsics",
+    "split": "heldout",
+    "condition": "unknown_intrinsics",
+    "query": "query_east_south_1",
+    "input": "inputs/query_east_south_1_unknown_intrinsics.json",
+    "sha256": "765e36a6da5f1c413a0431fe9b2c617bd81d03ed99756410ad19371d9578afea"
+  },
+  {
+    "case": "query_east_north_0_clean",
+    "split": "heldout",
+    "condition": "clean",
+    "query": "query_east_north_0",
+    "input": "inputs/query_east_north_0_clean.json",
+    "sha256": "efbee932a5c0fddc3cc7d20ef40626fbcbb860a0737b915a4c38ca7375f04066"
+  },
+  {
+    "case": "query_east_north_0_unknown_intrinsics",
+    "split": "heldout",
+    "condition": "unknown_intrinsics",
+    "query": "query_east_north_0",
+    "input": "inputs/query_east_north_0_unknown_intrinsics.json",
+    "sha256": "88dd213d408c66574d99d46cb5365a72cb7b4b1172371100ec6603e30fa5a903"
+  },
+  {
+    "case": "query_east_north_1_clean",
+    "split": "heldout",
+    "condition": "clean",
+    "query": "query_east_north_1",
+    "input": "inputs/query_east_north_1_clean.json",
+    "sha256": "cbf9b412e5d3322c1e36818afdb0dde559654569af1a9bfa531f29095d547054"
+  },
+  {
+    "case": "query_east_north_1_unknown_intrinsics",
+    "split": "heldout",
+    "condition": "unknown_intrinsics",
+    "query": "query_east_north_1",
+    "input": "inputs/query_east_north_1_unknown_intrinsics.json",
+    "sha256": "21cce370c7e00abe313882eea0ef207c5b9889acaa83e097340bd36d96df9c2f"
+  },
+  {
+    "case": "query_transition_0_clean",
+    "split": "heldout",
+    "condition": "clean",
+    "query": "query_transition_0",
+    "input": "inputs/query_transition_0_clean.json",
+    "sha256": "5008b81eb4874e9bb9a4f66bce4c1dba0204e7176e3e2a50f90662ef5531b5a3"
+  },
+  {
+    "case": "query_transition_0_unknown_intrinsics",
+    "split": "heldout",
+    "condition": "unknown_intrinsics",
+    "query": "query_transition_0",
+    "input": "inputs/query_transition_0_unknown_intrinsics.json",
+    "sha256": "b1a2288b04bf09b3bc16c0e4a794894595077f27f4c9b1cfd026a21bf8241251"
+  },
+  {
+    "case": "query_transition_1_clean",
+    "split": "heldout",
+    "condition": "clean",
+    "query": "query_transition_1",
+    "input": "inputs/query_transition_1_clean.json",
+    "sha256": "32cb14fc28e99a36e1db45bd534b396e2048746f3b2156015166f1b4bd9fa1e5"
+  },
+  {
+    "case": "query_transition_1_unknown_intrinsics",
+    "split": "heldout",
+    "condition": "unknown_intrinsics",
+    "query": "query_transition_1",
+    "input": "inputs/query_transition_1_unknown_intrinsics.json",
+    "sha256": "4568cb35ce45dbe593f896ccc6a3149cfd3fde10c52648c233ac80755cab364d"
+  },
+  {
+    "case": "query_transition_2_clean",
+    "split": "heldout",
+    "condition": "clean",
+    "query": "query_transition_2",
+    "input": "inputs/query_transition_2_clean.json",
+    "sha256": "aee84c8648c1da874c84f74dcfd8b7f697e8eb2aedc3dafe4d6ca0e802a0f3da"
+  },
+  {
+    "case": "query_transition_2_unknown_intrinsics",
+    "split": "heldout",
+    "condition": "unknown_intrinsics",
+    "query": "query_transition_2",
+    "input": "inputs/query_transition_2_unknown_intrinsics.json",
+    "sha256": "86e5481340bdcfbc734ed16dbafa12fdc4e0fcab8fe78ae587871009a6c376e0"
+  },
+  {
+    "case": "query_transition_3_clean",
+    "split": "heldout",
+    "condition": "clean",
+    "query": "query_transition_3",
+    "input": "inputs/query_transition_3_clean.json",
+    "sha256": "a98cc07f523b540001ee954c5a116494a3010be84cc87cf1a4efde017ce3fdeb"
+  },
+  {
+    "case": "query_transition_3_unknown_intrinsics",
+    "split": "heldout",
+    "condition": "unknown_intrinsics",
+    "query": "query_transition_3",
+    "input": "inputs/query_transition_3_unknown_intrinsics.json",
+    "sha256": "0dee1abde26bee19d464bdface5503233bb7c095dddfbbf43bf4f0030d8f6899"
+  }
+]

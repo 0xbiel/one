@@ -1,0 +1,984 @@
+{
+  "passed": true,
+  "errors": [],
+  "independent_of_summarize_connected_py": true,
+  "no_solver_rerun": true,
+  "source_commit": "9c05becdc3af59b15092075c1eb1dc90e2ab9e70",
+  "source_files_checked": 36,
+  "request_hashes_verified": 24,
+  "result_source_fingerprints_verified": 24,
+  "same_full_landmark_index_in_all_requests": true,
+  "input_contract_and_no_query_pose_room_prior_anchors_checked": true,
+  "request_frames_only_rgb_width_height": true,
+  "reference_view_count": 20,
+  "landmarks_per_view": 400,
+  "split_cases": {
+    "dev": 4,
+    "heldout": 20
+  },
+  "split_unique_poses": {
+    "heldout": 10,
+    "dev": 2
+  },
+  "timeouts_errors_unavailable_abstentions": 0,
+  "maximum_solver_seconds": 129.2134278399999,
+  "thresholds": {
+    "tight_m": 0.1,
+    "tight_deg": 2,
+    "loose_m": 0.25,
+    "loose_deg": 5
+  },
+  "summary_comparison_tolerance": 1e-08,
+  "markdown_numeric_claims_checked": [
+    "24/24",
+    "17/24 (70.8%)",
+    "13/20 (65%)",
+    "14/24 (58.3%)",
+    "10/20 (50%)",
+    "7.98cm / 0.475\u00b0",
+    "8.019m",
+    "11.392m",
+    "11.352\u00b0",
+    "44.195\u00b0",
+    "9/12",
+    "8/12",
+    "17.3cm",
+    "8.15m",
+    "12 distinct poses",
+    "0.938145",
+    "87 inliers",
+    "2.47px"
+  ],
+  "packaged_source_integrity_exists_and_matches": true,
+  "input_artifact_hashes": {
+    "manifest.json": "755f20992fecf5d43b223302293d0d7f80bd61618694b53c4a4ce8ee370e7c23",
+    "results_summary.json": "0ad1c51fb223134147a3ff27ed9f6bb24d44c1555a73911f98a0069ec9998a47",
+    "RESULTS.md": "34bd54b91eb3b7d2c92b5cbeb79dba962268e6b06468ca1403d1687e7273f988",
+    "fixtures/connected_home/evaluator_groundtruth.json": "b86490cb8bf692d1e728a4ebba1919766c840b442c1997549b1f202680ee1632"
+  },
+  "metrics": {
+    "expected_cases": 24,
+    "completed_cases": 24,
+    "all": {
+      "n": 24,
+      "positioned": 24,
+      "room_correct": 17,
+      "tight_success": 14,
+      "loose_success": 14,
+      "statuses": {
+        "positioned": 24
+      },
+      "room_confusion": {
+        "west_south": {
+          "west_south": 5,
+          "west_north": 0,
+          "east_south": 0,
+          "east_north": 0,
+          "hallway": 1,
+          "abstain": 0
+        },
+        "west_north": {
+          "west_south": 0,
+          "west_north": 4,
+          "east_south": 0,
+          "east_north": 0,
+          "hallway": 0,
+          "abstain": 0
+        },
+        "east_south": {
+          "west_south": 2,
+          "west_north": 0,
+          "east_south": 2,
+          "east_north": 0,
+          "hallway": 0,
+          "abstain": 0
+        },
+        "east_north": {
+          "west_south": 0,
+          "west_north": 2,
+          "east_south": 0,
+          "east_north": 2,
+          "hallway": 0,
+          "abstain": 0
+        },
+        "hallway": {
+          "west_south": 2,
+          "west_north": 0,
+          "east_south": 0,
+          "east_north": 0,
+          "hallway": 4,
+          "abstain": 0
+        }
+      },
+      "metric_denominator": "Positioned only for errors; all requested cases for success and room rates",
+      "position_error_m": {
+        "median": 0.07982915890111818,
+        "p90": 8.018632113223966,
+        "max": 11.392041882438935
+      },
+      "rotation_error_deg": {
+        "median": 0.4752487659942989,
+        "p90": 11.351688284040813,
+        "max": 44.194615040916844
+      }
+    },
+    "by_condition": {
+      "clean": {
+        "n": 12,
+        "positioned": 12,
+        "room_correct": 9,
+        "tight_success": 7,
+        "loose_success": 7,
+        "statuses": {
+          "positioned": 12
+        },
+        "room_confusion": {
+          "west_south": {
+            "west_south": 3,
+            "west_north": 0,
+            "east_south": 0,
+            "east_north": 0,
+            "hallway": 0,
+            "abstain": 0
+          },
+          "west_north": {
+            "west_south": 0,
+            "west_north": 2,
+            "east_south": 0,
+            "east_north": 0,
+            "hallway": 0,
+            "abstain": 0
+          },
+          "east_south": {
+            "west_south": 1,
+            "west_north": 0,
+            "east_south": 1,
+            "east_north": 0,
+            "hallway": 0,
+            "abstain": 0
+          },
+          "east_north": {
+            "west_south": 0,
+            "west_north": 1,
+            "east_south": 0,
+            "east_north": 1,
+            "hallway": 0,
+            "abstain": 0
+          },
+          "hallway": {
+            "west_south": 1,
+            "west_north": 0,
+            "east_south": 0,
+            "east_north": 0,
+            "hallway": 2,
+            "abstain": 0
+          }
+        },
+        "metric_denominator": "Positioned only for errors; all requested cases for success and room rates",
+        "position_error_m": {
+          "median": 0.07708035418356451,
+          "p90": 7.988523614611407,
+          "max": 11.392041882438935
+        },
+        "rotation_error_deg": {
+          "median": 0.7056870855650964,
+          "p90": 5.979285094665871,
+          "max": 34.10465079183124
+        }
+      },
+      "unknown_intrinsics": {
+        "n": 12,
+        "positioned": 12,
+        "room_correct": 8,
+        "tight_success": 7,
+        "loose_success": 7,
+        "statuses": {
+          "positioned": 12
+        },
+        "room_confusion": {
+          "west_south": {
+            "west_south": 2,
+            "west_north": 0,
+            "east_south": 0,
+            "east_north": 0,
+            "hallway": 1,
+            "abstain": 0
+          },
+          "west_north": {
+            "west_south": 0,
+            "west_north": 2,
+            "east_south": 0,
+            "east_north": 0,
+            "hallway": 0,
+            "abstain": 0
+          },
+          "east_south": {
+            "west_south": 1,
+            "west_north": 0,
+            "east_south": 1,
+            "east_north": 0,
+            "hallway": 0,
+            "abstain": 0
+          },
+          "east_north": {
+            "west_south": 0,
+            "west_north": 1,
+            "east_south": 0,
+            "east_north": 1,
+            "hallway": 0,
+            "abstain": 0
+          },
+          "hallway": {
+            "west_south": 1,
+            "west_north": 0,
+            "east_south": 0,
+            "east_north": 0,
+            "hallway": 2,
+            "abstain": 0
+          }
+        },
+        "metric_denominator": "Positioned only for errors; all requested cases for success and room rates",
+        "position_error_m": {
+          "median": 0.08267742850903928,
+          "p90": 8.02371028432378,
+          "max": 9.23315667802758
+        },
+        "rotation_error_deg": {
+          "median": 0.4752487659942989,
+          "p90": 11.687711081407041,
+          "max": 44.194615040916844
+        }
+      }
+    },
+    "by_split": {
+      "dev": {
+        "n": 4,
+        "positioned": 4,
+        "room_correct": 4,
+        "tight_success": 4,
+        "loose_success": 4,
+        "statuses": {
+          "positioned": 4
+        },
+        "room_confusion": {
+          "west_south": {
+            "west_south": 4,
+            "west_north": 0,
+            "east_south": 0,
+            "east_north": 0,
+            "hallway": 0,
+            "abstain": 0
+          },
+          "west_north": {
+            "west_south": 0,
+            "west_north": 0,
+            "east_south": 0,
+            "east_north": 0,
+            "hallway": 0,
+            "abstain": 0
+          },
+          "east_south": {
+            "west_south": 0,
+            "west_north": 0,
+            "east_south": 0,
+            "east_north": 0,
+            "hallway": 0,
+            "abstain": 0
+          },
+          "east_north": {
+            "west_south": 0,
+            "west_north": 0,
+            "east_south": 0,
+            "east_north": 0,
+            "hallway": 0,
+            "abstain": 0
+          },
+          "hallway": {
+            "west_south": 0,
+            "west_north": 0,
+            "east_south": 0,
+            "east_north": 0,
+            "hallway": 0,
+            "abstain": 0
+          }
+        },
+        "metric_denominator": "Positioned only for errors; all requested cases for success and room rates",
+        "position_error_m": {
+          "median": 0.046743699249220186,
+          "p90": 0.07791900350705101,
+          "max": 0.0795682863375832
+        },
+        "rotation_error_deg": {
+          "median": 0.7031235313141535,
+          "p90": 1.209428209841045,
+          "max": 1.2281969854963382
+        }
+      },
+      "heldout": {
+        "n": 20,
+        "positioned": 20,
+        "room_correct": 13,
+        "tight_success": 10,
+        "loose_success": 10,
+        "statuses": {
+          "positioned": 20
+        },
+        "room_confusion": {
+          "west_south": {
+            "west_south": 1,
+            "west_north": 0,
+            "east_south": 0,
+            "east_north": 0,
+            "hallway": 1,
+            "abstain": 0
+          },
+          "west_north": {
+            "west_south": 0,
+            "west_north": 4,
+            "east_south": 0,
+            "east_north": 0,
+            "hallway": 0,
+            "abstain": 0
+          },
+          "east_south": {
+            "west_south": 2,
+            "west_north": 0,
+            "east_south": 2,
+            "east_north": 0,
+            "hallway": 0,
+            "abstain": 0
+          },
+          "east_north": {
+            "west_south": 0,
+            "west_north": 2,
+            "east_south": 0,
+            "east_north": 2,
+            "hallway": 0,
+            "abstain": 0
+          },
+          "hallway": {
+            "west_south": 2,
+            "west_north": 0,
+            "east_south": 0,
+            "east_north": 0,
+            "hallway": 4,
+            "abstain": 0
+          }
+        },
+        "metric_denominator": "Positioned only for errors; all requested cases for success and room rates",
+        "position_error_m": {
+          "median": 0.17325761147811103,
+          "p90": 8.146940100689077,
+          "max": 11.392041882438935
+        },
+        "rotation_error_deg": {
+          "median": 0.4752487659942989,
+          "p90": 14.080615311264292,
+          "max": 44.194615040916844
+        }
+      }
+    }
+  },
+  "rows": [
+    {
+      "case": "query_west_south_0_clean",
+      "split": "dev",
+      "condition": "clean",
+      "true_room": "west_south",
+      "predicted_room": "west_south",
+      "status": "positioned",
+      "seconds": 15.558773071999894,
+      "confidence": 0.947445,
+      "position_error_m": 0.015706660549464076,
+      "rotation_error_deg": 0.24061266264961328,
+      "predicted_position": [
+        -5.25405614,
+        1.83754681,
+        4.80866993
+      ],
+      "true_position": [
+        -5.25,
+        1.850000023841858,
+        4.800000190734863
+      ],
+      "room_correct": true,
+      "tight_success": true,
+      "loose_success": true
+    },
+    {
+      "case": "query_west_south_0_unknown_intrinsics",
+      "split": "dev",
+      "condition": "unknown_intrinsics",
+      "true_room": "west_south",
+      "predicted_room": "west_south",
+      "status": "positioned",
+      "seconds": 75.04121399799988,
+      "confidence": 0.94722,
+      "position_error_m": 0.019416721595964484,
+      "rotation_error_deg": 0.2205925892248415,
+      "predicted_position": [
+        -5.24886617,
+        1.83209829,
+        4.79256706
+      ],
+      "true_position": [
+        -5.25,
+        1.850000023841858,
+        4.800000190734863
+      ],
+      "room_correct": true,
+      "tight_success": true,
+      "loose_success": true
+    },
+    {
+      "case": "query_west_south_1_clean",
+      "split": "dev",
+      "condition": "clean",
+      "true_room": "west_south",
+      "predicted_room": "west_south",
+      "status": "positioned",
+      "seconds": 11.649157934999948,
+      "confidence": 0.930704,
+      "position_error_m": 0.07407067690247589,
+      "rotation_error_deg": 1.1656343999786938,
+      "predicted_position": [
+        -2.78740485,
+        1.22724316,
+        4.75585472
+      ],
+      "true_position": [
+        -2.799999952316284,
+        1.2999999523162842,
+        4.75
+      ],
+      "room_correct": true,
+      "tight_success": true,
+      "loose_success": true
+    },
+    {
+      "case": "query_west_south_1_unknown_intrinsics",
+      "split": "dev",
+      "condition": "unknown_intrinsics",
+      "true_room": "west_south",
+      "predicted_room": "west_south",
+      "status": "positioned",
+      "seconds": 73.42976741699977,
+      "confidence": 0.932421,
+      "position_error_m": 0.0795682863375832,
+      "rotation_error_deg": 1.2281969854963382,
+      "predicted_position": [
+        -2.7893406,
+        1.22217823,
+        4.73730079
+      ],
+      "true_position": [
+        -2.799999952316284,
+        1.2999999523162842,
+        4.75
+      ],
+      "room_correct": true,
+      "tight_success": true,
+      "loose_success": true
+    },
+    {
+      "case": "query_west_north_0_clean",
+      "split": "heldout",
+      "condition": "clean",
+      "true_room": "west_north",
+      "predicted_room": "west_north",
+      "status": "positioned",
+      "seconds": 17.220083901999715,
+      "confidence": 0.952251,
+      "position_error_m": 0.021944082087666666,
+      "rotation_error_deg": 0.3757650570216373,
+      "predicted_position": [
+        -5.2299781,
+        1.84477689,
+        -0.19269349
+      ],
+      "true_position": [
+        -5.25,
+        1.850000023841858,
+        -0.20000000298023224
+      ],
+      "room_correct": true,
+      "tight_success": true,
+      "loose_success": true
+    },
+    {
+      "case": "query_west_north_0_unknown_intrinsics",
+      "split": "heldout",
+      "condition": "unknown_intrinsics",
+      "true_room": "west_north",
+      "predicted_room": "west_north",
+      "status": "positioned",
+      "seconds": 73.63554400200019,
+      "confidence": 0.952065,
+      "position_error_m": 0.028870531172948483,
+      "rotation_error_deg": 0.3736787329568228,
+      "predicted_position": [
+        -5.22570832,
+        1.83687356,
+        -0.20843314
+      ],
+      "true_position": [
+        -5.25,
+        1.850000023841858,
+        -0.20000000298023224
+      ],
+      "room_correct": true,
+      "tight_success": true,
+      "loose_success": true
+    },
+    {
+      "case": "query_west_north_1_clean",
+      "split": "heldout",
+      "condition": "clean",
+      "true_room": "west_north",
+      "predicted_room": "west_north",
+      "status": "positioned",
+      "seconds": 13.579289273000086,
+      "confidence": 0.946233,
+      "position_error_m": 0.03632134955706497,
+      "rotation_error_deg": 0.4579938560474926,
+      "predicted_position": [
+        -2.80338884,
+        1.33331254,
+        -0.23592778
+      ],
+      "true_position": [
+        -2.799999952316284,
+        1.2999999523162842,
+        -0.25
+      ],
+      "room_correct": true,
+      "tight_success": true,
+      "loose_success": true
+    },
+    {
+      "case": "query_west_north_1_unknown_intrinsics",
+      "split": "heldout",
+      "condition": "unknown_intrinsics",
+      "true_room": "west_north",
+      "predicted_room": "west_north",
+      "status": "positioned",
+      "seconds": 77.83806125799993,
+      "confidence": 0.946537,
+      "position_error_m": 0.03252993746712543,
+      "rotation_error_deg": 0.48012314415591933,
+      "predicted_position": [
+        -2.81264252,
+        1.32995833,
+        -0.25092624
+      ],
+      "true_position": [
+        -2.799999952316284,
+        1.2999999523162842,
+        -0.25
+      ],
+      "room_correct": true,
+      "tight_success": true,
+      "loose_success": true
+    },
+    {
+      "case": "query_east_south_0_clean",
+      "split": "heldout",
+      "condition": "clean",
+      "true_room": "east_south",
+      "predicted_room": "east_south",
+      "status": "positioned",
+      "seconds": 18.72327150900037,
+      "confidence": 0.950769,
+      "position_error_m": 0.004563618032776277,
+      "rotation_error_deg": 0.050572420723180106,
+      "predicted_position": [
+        2.74917743,
+        1.85212119,
+        4.80395628
+      ],
+      "true_position": [
+        2.75,
+        1.850000023841858,
+        4.800000190734863
+      ],
+      "room_correct": true,
+      "tight_success": true,
+      "loose_success": true
+    },
+    {
+      "case": "query_east_south_0_unknown_intrinsics",
+      "split": "heldout",
+      "condition": "unknown_intrinsics",
+      "true_room": "east_south",
+      "predicted_room": "east_south",
+      "status": "positioned",
+      "seconds": 82.52980920399978,
+      "confidence": 0.95049,
+      "position_error_m": 0.017847054443875326,
+      "rotation_error_deg": 0.20111714447153303,
+      "predicted_position": [
+        2.76381875,
+        1.85861566,
+        4.79269743
+      ],
+      "true_position": [
+        2.75,
+        1.850000023841858,
+        4.800000190734863
+      ],
+      "room_correct": true,
+      "tight_success": true,
+      "loose_success": true
+    },
+    {
+      "case": "query_east_south_1_clean",
+      "split": "heldout",
+      "condition": "clean",
+      "true_room": "east_south",
+      "predicted_room": "west_south",
+      "status": "positioned",
+      "seconds": 15.1579377879998,
+      "confidence": 0.938145,
+      "position_error_m": 7.993411080093609,
+      "rotation_error_deg": 0.3651884055714176,
+      "predicted_position": [
+        -2.79340878,
+        1.30547085,
+        4.75314479
+      ],
+      "true_position": [
+        5.199999809265137,
+        1.2999999523162842,
+        4.75
+      ],
+      "room_correct": false,
+      "tight_success": false,
+      "loose_success": false
+    },
+    {
+      "case": "query_east_south_1_unknown_intrinsics",
+      "split": "heldout",
+      "condition": "unknown_intrinsics",
+      "true_room": "east_south",
+      "predicted_room": "west_south",
+      "status": "positioned",
+      "seconds": 77.36429756799998,
+      "confidence": 0.937213,
+      "position_error_m": 8.000858514374617,
+      "rotation_error_deg": 0.2625114360791212,
+      "predicted_position": [
+        -2.80085579,
+        1.30140555,
+        4.74331636
+      ],
+      "true_position": [
+        5.199999809265137,
+        1.2999999523162842,
+        4.75
+      ],
+      "room_correct": false,
+      "tight_success": false,
+      "loose_success": false
+    },
+    {
+      "case": "query_east_north_0_clean",
+      "split": "heldout",
+      "condition": "clean",
+      "true_room": "east_north",
+      "predicted_room": "west_north",
+      "status": "positioned",
+      "seconds": 18.22063566700035,
+      "confidence": 0.945011,
+      "position_error_m": 7.94453642527159,
+      "rotation_error_deg": 0.9533803150827003,
+      "predicted_position": [
+        -5.19452588,
+        1.84607845,
+        -0.18766405
+      ],
+      "true_position": [
+        2.75,
+        1.850000023841858,
+        -0.20000000298023224
+      ],
+      "room_correct": false,
+      "tight_success": false,
+      "loose_success": false
+    },
+    {
+      "case": "query_east_north_0_unknown_intrinsics",
+      "split": "heldout",
+      "condition": "unknown_intrinsics",
+      "true_room": "east_north",
+      "predicted_room": "west_north",
+      "status": "positioned",
+      "seconds": 95.44266159100016,
+      "confidence": 0.957001,
+      "position_error_m": 8.026249369873687,
+      "rotation_error_deg": 0.4703743878326785,
+      "predicted_position": [
+        -5.2762271,
+        1.86451845,
+        -0.21211206
+      ],
+      "true_position": [
+        2.75,
+        1.850000023841858,
+        -0.20000000298023224
+      ],
+      "room_correct": false,
+      "tight_success": false,
+      "loose_success": false
+    },
+    {
+      "case": "query_east_north_1_clean",
+      "split": "heldout",
+      "condition": "clean",
+      "true_room": "east_north",
+      "predicted_room": "east_north",
+      "status": "positioned",
+      "seconds": 11.51874535800016,
+      "confidence": 0.929148,
+      "position_error_m": 0.08009003146465316,
+      "rotation_error_deg": 1.413808907296551,
+      "predicted_position": [
+        5.24826685,
+        1.23968953,
+        -0.27115086
+      ],
+      "true_position": [
+        5.199999809265137,
+        1.2999999523162842,
+        -0.25
+      ],
+      "room_correct": true,
+      "tight_success": true,
+      "loose_success": true
+    },
+    {
+      "case": "query_east_north_1_unknown_intrinsics",
+      "split": "heldout",
+      "condition": "unknown_intrinsics",
+      "true_room": "east_north",
+      "predicted_room": "east_north",
+      "status": "positioned",
+      "seconds": 76.42125435000025,
+      "confidence": 0.926786,
+      "position_error_m": 0.08578657068049536,
+      "rotation_error_deg": 1.4669895152427073,
+      "predicted_position": [
+        5.24715312,
+        1.23819533,
+        -0.28627795
+      ],
+      "true_position": [
+        5.199999809265137,
+        1.2999999523162842,
+        -0.25
+      ],
+      "room_correct": true,
+      "tight_success": true,
+      "loose_success": true
+    },
+    {
+      "case": "query_transition_0_clean",
+      "split": "heldout",
+      "condition": "clean",
+      "true_room": "hallway",
+      "predicted_room": "hallway",
+      "status": "positioned",
+      "seconds": 11.429371358000026,
+      "confidence": 0.950908,
+      "position_error_m": 0.036017747669913044,
+      "rotation_error_deg": 0.3290661446567135,
+      "predicted_position": [
+        -0.02717269,
+        1.68337489,
+        3.88319155
+      ],
+      "true_position": [
+        0.0,
+        1.7000000476837158,
+        3.9000000953674316
+      ],
+      "room_correct": true,
+      "tight_success": true,
+      "loose_success": true
+    },
+    {
+      "case": "query_transition_0_unknown_intrinsics",
+      "split": "heldout",
+      "condition": "unknown_intrinsics",
+      "true_room": "hallway",
+      "predicted_room": "hallway",
+      "status": "positioned",
+      "seconds": 89.71916272599992,
+      "confidence": 0.934829,
+      "position_error_m": 0.06960541621642301,
+      "rotation_error_deg": 0.42648223944083125,
+      "predicted_position": [
+        0.04429545,
+        1.70058892,
+        3.84631136
+      ],
+      "true_position": [
+        0.0,
+        1.7000000476837158,
+        3.9000000953674316
+      ],
+      "room_correct": true,
+      "tight_success": true,
+      "loose_success": true
+    },
+    {
+      "case": "query_transition_1_clean",
+      "split": "heldout",
+      "condition": "clean",
+      "true_room": "hallway",
+      "predicted_room": "hallway",
+      "status": "positioned",
+      "seconds": 17.587032592000014,
+      "confidence": 0.909635,
+      "position_error_m": 0.6584235021468378,
+      "rotation_error_deg": 6.307761128996234,
+      "predicted_position": [
+        -0.98877303,
+        1.33443905,
+        3.0531603
+      ],
+      "true_position": [
+        -0.75,
+        1.600000023841858,
+        2.5
+      ],
+      "room_correct": true,
+      "tight_success": false,
+      "loose_success": false
+    },
+    {
+      "case": "query_transition_1_unknown_intrinsics",
+      "split": "heldout",
+      "condition": "unknown_intrinsics",
+      "true_room": "hallway",
+      "predicted_room": "hallway",
+      "status": "positioned",
+      "seconds": 129.2134278399999,
+      "confidence": 0.934355,
+      "position_error_m": 1.3635552696832445,
+      "rotation_error_deg": 11.855722480090153,
+      "predicted_position": [
+        0.37930317,
+        0.85494864,
+        2.66986983
+      ],
+      "true_position": [
+        -0.75,
+        1.600000023841858,
+        2.5
+      ],
+      "room_correct": true,
+      "tight_success": false,
+      "loose_success": false
+    },
+    {
+      "case": "query_transition_2_clean",
+      "split": "heldout",
+      "condition": "clean",
+      "true_room": "west_south",
+      "predicted_room": "west_south",
+      "status": "positioned",
+      "seconds": 20.1351372109998,
+      "confidence": 0.919159,
+      "position_error_m": 0.2607286522757267,
+      "rotation_error_deg": 3.0230007856925902,
+      "predicted_position": [
+        -1.43270563,
+        1.41845155,
+        2.54047511
+      ],
+      "true_position": [
+        -1.25,
+        1.600000023841858,
+        2.5
+      ],
+      "room_correct": true,
+      "tight_success": false,
+      "loose_success": false
+    },
+    {
+      "case": "query_transition_2_unknown_intrinsics",
+      "split": "heldout",
+      "condition": "unknown_intrinsics",
+      "true_room": "west_south",
+      "predicted_room": "hallway",
+      "status": "positioned",
+      "seconds": 125.29104510699972,
+      "confidence": 0.930494,
+      "position_error_m": 2.0198241904985905,
+      "rotation_error_deg": 10.175608493259025,
+      "predicted_position": [
+        0.53855021,
+        0.83491707,
+        3.04353103
+      ],
+      "true_position": [
+        -1.25,
+        1.600000023841858,
+        2.5
+      ],
+      "room_correct": false,
+      "tight_success": false,
+      "loose_success": false
+    },
+    {
+      "case": "query_transition_3_clean",
+      "split": "heldout",
+      "condition": "clean",
+      "true_room": "hallway",
+      "predicted_room": "west_south",
+      "status": "positioned",
+      "seconds": 21.395432407000044,
+      "confidence": 0.870289,
+      "position_error_m": 11.392041882438935,
+      "rotation_error_deg": 34.10465079183124,
+      "predicted_position": [
+        -7.57133027,
+        0.37778598,
+        5.18376689
+      ],
+      "true_position": [
+        0.75,
+        1.600000023841858,
+        -2.5
+      ],
+      "room_correct": false,
+      "tight_success": false,
+      "loose_success": false
+    },
+    {
+      "case": "query_transition_3_unknown_intrinsics",
+      "split": "heldout",
+      "condition": "unknown_intrinsics",
+      "true_room": "hallway",
+      "predicted_room": "west_south",
+      "status": "positioned",
+      "seconds": 119.87351819300011,
+      "confidence": 0.896984,
+      "position_error_m": 9.23315667802758,
+      "rotation_error_deg": 44.194615040916844,
+      "predicted_position": [
+        -5.3907465,
+        1.56899223,
+        4.39503105
+      ],
+      "true_position": [
+        0.75,
+        1.600000023841858,
+        -2.5
+      ],
+      "room_correct": false,
+      "tight_success": false,
+      "loose_success": false
+    }
+  ]
+}

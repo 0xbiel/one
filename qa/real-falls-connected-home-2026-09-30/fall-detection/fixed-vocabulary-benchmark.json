@@ -1,0 +1,283 @@
+{
+  "declared_at_utc": "2026-09-30T13:30:11.549870+00:00",
+  "selection": [
+    {
+      "clip": "s1_fall_03",
+      "split": "development",
+      "time_s": 0.0,
+      "frame": "frames/s1_fall_03/00001.jpg"
+    },
+    {
+      "clip": "s1_fall_05",
+      "split": "development",
+      "time_s": 2.0,
+      "frame": "frames/s1_fall_05/00011.jpg"
+    },
+    {
+      "clip": "s1_fall_09",
+      "split": "development",
+      "time_s": 2.0,
+      "frame": "frames/s1_fall_09/00011.jpg"
+    },
+    {
+      "clip": "s1_adl_08",
+      "split": "development",
+      "time_s": 3.0,
+      "frame": "frames/s1_adl_08/00016.jpg"
+    },
+    {
+      "clip": "s1_adl_15",
+      "split": "development",
+      "time_s": 4.0,
+      "frame": "frames/s1_adl_15/00021.jpg"
+    }
+  ],
+  "timing_frame": {
+    "clip": "s1_fall_03",
+    "split": "development",
+    "time_s": 0.0,
+    "frame": "frames/s1_fall_03/00001.jpg"
+  },
+  "timing_repetitions": 10,
+  "warmup_each_path": 2,
+  "threads": 2,
+  "scope": "CPU offline diagnostic only; simultaneous other jobs may affect latency",
+  "completed_at_utc": "2026-09-30T13:30:25.482570+00:00",
+  "exact_equal_all": true,
+  "comparison": [
+    {
+      "frame": {
+        "clip": "s1_fall_03",
+        "split": "development",
+        "time_s": 0.0,
+        "frame": "frames/s1_fall_03/00001.jpg"
+      },
+      "equal": true,
+      "baseline": [
+        {
+          "label": "person",
+          "confidence": 0.888606,
+          "bbox": [
+            132.725,
+            45.52,
+            232.387,
+            302.318
+          ]
+        }
+      ],
+      "fixed": [
+        {
+          "label": "person",
+          "confidence": 0.888606,
+          "bbox": [
+            132.725,
+            45.52,
+            232.387,
+            302.318
+          ]
+        }
+      ]
+    },
+    {
+      "frame": {
+        "clip": "s1_fall_05",
+        "split": "development",
+        "time_s": 2.0,
+        "frame": "frames/s1_fall_05/00011.jpg"
+      },
+      "equal": true,
+      "baseline": [
+        {
+          "label": "person",
+          "confidence": 0.919473,
+          "bbox": [
+            308.207,
+            73.54,
+            441.876,
+            314.335
+          ]
+        }
+      ],
+      "fixed": [
+        {
+          "label": "person",
+          "confidence": 0.919473,
+          "bbox": [
+            308.207,
+            73.54,
+            441.876,
+            314.335
+          ]
+        }
+      ]
+    },
+    {
+      "frame": {
+        "clip": "s1_fall_09",
+        "split": "development",
+        "time_s": 2.0,
+        "frame": "frames/s1_fall_09/00011.jpg"
+      },
+      "equal": true,
+      "baseline": [
+        {
+          "label": "person",
+          "confidence": 0.560514,
+          "bbox": [
+            269.233,
+            263.925,
+            413.887,
+            360.0
+          ]
+        }
+      ],
+      "fixed": [
+        {
+          "label": "person",
+          "confidence": 0.560514,
+          "bbox": [
+            269.233,
+            263.925,
+            413.887,
+            360.0
+          ]
+        }
+      ]
+    },
+    {
+      "frame": {
+        "clip": "s1_adl_08",
+        "split": "development",
+        "time_s": 3.0,
+        "frame": "frames/s1_adl_08/00016.jpg"
+      },
+      "equal": true,
+      "baseline": [
+        {
+          "label": "person",
+          "confidence": 0.913712,
+          "bbox": [
+            131.737,
+            13.54,
+            222.874,
+            297.255
+          ]
+        }
+      ],
+      "fixed": [
+        {
+          "label": "person",
+          "confidence": 0.913712,
+          "bbox": [
+            131.737,
+            13.54,
+            222.874,
+            297.255
+          ]
+        }
+      ]
+    },
+    {
+      "frame": {
+        "clip": "s1_adl_15",
+        "split": "development",
+        "time_s": 4.0,
+        "frame": "frames/s1_adl_15/00021.jpg"
+      },
+      "equal": true,
+      "baseline": [
+        {
+          "label": "person",
+          "confidence": 0.921198,
+          "bbox": [
+            185.837,
+            128.662,
+            333.173,
+            338.35
+          ]
+        }
+      ],
+      "fixed": [
+        {
+          "label": "person",
+          "confidence": 0.921198,
+          "bbox": [
+            185.837,
+            128.662,
+            333.173,
+            338.35
+          ]
+        }
+      ]
+    }
+  ],
+  "baseline_timing": {
+    "seconds": [
+      0.2979804090000471,
+      0.30614934799996263,
+      0.2607572540000547,
+      0.26313527599995723,
+      0.24243593500000316,
+      0.26239164799994796,
+      0.24522909200004506,
+      0.25000051200004236,
+      0.2578688889998375,
+      0.29285918800019317
+    ],
+    "mean_seconds": 0.2678807551000091,
+    "median_seconds": 0.2615744510000013,
+    "p95_seconds": 0.3024733254500006,
+    "reciprocal_mean_fps": 3.7330042601480113
+  },
+  "fixed_timing": {
+    "seconds": [
+      0.162994647000005,
+      0.16382854899984522,
+      0.13728805499999908,
+      0.13940833700007715,
+      0.1418276809999952,
+      0.15728373199999623,
+      0.1321818470000835,
+      0.1373337969998829,
+      0.1690832109998155,
+      0.13489499999991494
+    ],
+    "mean_seconds": 0.14761248559996148,
+    "median_seconds": 0.14061800900003618,
+    "p95_seconds": 0.16671861309982886,
+    "reciprocal_mean_fps": 6.774494690849247
+  },
+  "labels": [
+    "person",
+    "keys",
+    "glasses",
+    "mobile phone",
+    "remote control",
+    "cup",
+    "bottle",
+    "book",
+    "medication box",
+    "cane",
+    "walker"
+  ],
+  "model_input": [
+    384,
+    640
+  ],
+  "confidence": 0.2,
+  "max_det": 100,
+  "model_sha256": "9b2c17ab6124a913e9b3a5c170617920d91b0f01111a8479da69f00e2cf27792",
+  "versions": {
+    "torch": "2.14.0+cpu",
+    "ultralytics": "8.4.168",
+    "opencv": "4.14.0"
+  },
+  "caveats": [
+    "Only five predeclared development frames checked; no universal numerical-equivalence proof",
+    "Baseline timings include exact-vocabulary CLIP embedding memoization already used by evaluation harness",
+    "Both timing paths include JPEG decode, identical low-light enhancement, image inference, and identical parsed output; exclude file read, resize, and JPEG encode",
+    "No camera capture, HTTP, tracking, persistence, UI, or multi-camera scheduling measured",
+    "CPU timings are not MPS/CUDA deployment latency; shared CPU contention may affect them",
+    "Fixed vocabulary must not be used when candidate labels change unless rebuilt"
+  ]
+}

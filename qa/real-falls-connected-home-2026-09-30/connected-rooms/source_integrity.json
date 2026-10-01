@@ -1,0 +1,186 @@
+{
+  "commit": "9c05becdc3af59b15092075c1eb1dc90e2ab9e70",
+  "files": [
+    {
+      "path": "app/main.py",
+      "git_blob": "beef9b1490187f481f018db8b6050d2d0f4e6ca3",
+      "sha256": "716f491253df32da9f0be5eee8f98dbf0760334e64fde05aaf691e7cef99cf36"
+    },
+    {
+      "path": "app/roomplan.py",
+      "git_blob": "9f6704a1ec9dc6160e376613646605f276d80391",
+      "sha256": "48ff7a686d7a228cb5c22d6e617786d475d0303938cdfc97361ef974fbd1b880"
+    },
+    {
+      "path": "geometry_service/__init__.py",
+      "git_blob": "6ad927c4f0460d04fe0a6e79895d785ae9bc0beb",
+      "sha256": "ed001cc3c732bd9055ec14688af2ffff987d0954444b579d5aa5489e90460496"
+    },
+    {
+      "path": "geometry_service/__main__.py",
+      "git_blob": "9638445038bc1f88d85ec3cb814a8d00dfa3e43b",
+      "sha256": "89f4d14f2d0013d6d1602156ebc3d2f3ed092865ee2d81d73fd0a77f3c431f01"
+    },
+    {
+      "path": "geometry_service/app.py",
+      "git_blob": "489fb4b96bb11c15f202c73f50674547e058fc08",
+      "sha256": "4d8a337d68c5b971fc2aa51fef0580b778e41ceede5f4608e50469b21fccfd27"
+    },
+    {
+      "path": "geometry_service/config.py",
+      "git_blob": "d78ae840fdd158d9bbe0718f84602e7d4a288355",
+      "sha256": "9834a21be5b5f8d0427e49f4aaebbd7706d4e99c35652fc1e94114b13f7abb99"
+    },
+    {
+      "path": "geometry_service/contracts.py",
+      "git_blob": "e686b423912d240281a8922d899af2b7ede0ef67",
+      "sha256": "b72ce5f97af19ba76782eeea05642f7b3ebd4b1caec553e7d5b7a1c0aba67fb3"
+    },
+    {
+      "path": "geometry_service/face.py",
+      "git_blob": "d5abcba2330b83e0ecc05507c3f318f5e61a3616",
+      "sha256": "f2df275914875fa88561b570c2c169d7f15ae71935def9397390cd9ce8c90154"
+    },
+    {
+      "path": "geometry_service/frames.py",
+      "git_blob": "a4a868ea4e2060aca4a1b54dc3bf6d64dd8a7685",
+      "sha256": "b3a2a9ce96841136535e556d522f9c9494553b1f85d43d0c0dbf7de5533112f6"
+    },
+    {
+      "path": "geometry_service/geometry.py",
+      "git_blob": "52e960b9960e5a9a4e0286782236369df2c26317",
+      "sha256": "20b70a0854046ee2b27ea718621b1600bbd332feb346bbc83a6b9d31fe3cfa90"
+    },
+    {
+      "path": "geometry_service/gpu_runtime.py",
+      "git_blob": "0807f823280e8ea6cd349c69b49ee57c8d0bc2f9",
+      "sha256": "e3237d5c75219859d9caf19e0d663bd213d0832c041c81ad8747d96d245e45bd"
+    },
+    {
+      "path": "geometry_service/learned_matcher.py",
+      "git_blob": "bce6f2432a57e6a2c79789397aaf7cc46eb2817d",
+      "sha256": "bfa8f0cbfc25f42172172b0ea9a0fc8906b3c3af16a1cbbcd05c379a82039257"
+    },
+    {
+      "path": "geometry_service/localization.py",
+      "git_blob": "b661b2dee7b8afebfc437fb4cd074fd46ff91266",
+      "sha256": "6d4d6653f88d83d2d9089f9dfc6b4fd26ffb1844e554893a5c60134913b1dbaa"
+    },
+    {
+      "path": "geometry_service/low_light.py",
+      "git_blob": "ffbe94e911d2735df39c5a4bfe1e5c777f68ba1c",
+      "sha256": "e2600ab3e2761aebf30d6e8e40f692c0ef32f9fd2000a14469e04b21c6d0a333"
+    },
+    {
+      "path": "geometry_service/model_config.yolo-world.json",
+      "git_blob": "4517867de26585051813294aa1a10b09ecb6fc07",
+      "sha256": "6695bb3ceaaf61f150ff23d5ce310e41b97ef6ddd85406b48a4e47aecb5a1270"
+    },
+    {
+      "path": "geometry_service/model_input.py",
+      "git_blob": "5ee0e73ee4658f3bdd3ca9cd1a97bebfae056ba6",
+      "sha256": "9bd440c9252cd7007c68075c7988ba53b203173ccae3426f7c5634af492f2b33"
+    },
+    {
+      "path": "geometry_service/real_layout.py",
+      "git_blob": "6ca3b584e5ffa56aad3fe305ae6fa64174a362af",
+      "sha256": "6e028c4a8edb8ac5e1e2707d16878dc461a8bce49628112e8caf16e16113dc76"
+    },
+    {
+      "path": "geometry_service/real_vision.py",
+      "git_blob": "41b8826617b3e1c88733a71b6b7be60561f7ac07",
+      "sha256": "9360118d54987c74f793b3948659a9f09f6660361692dd2388c7cc2a8f91d120"
+    },
+    {
+      "path": "geometry_service/runtime.py",
+      "git_blob": "2a3fb614ef4b8957dd0606c71a773bb591fcc02a",
+      "sha256": "cbaea07c7a445fd5b992970a8beed3da0f1a9cca43b703e140b5ea5368b322fb"
+    },
+    {
+      "path": "qa/multiroom-localization/archive.py",
+      "git_blob": "6f87ec82c1093b485fd2db0f0de1576b9e35397d",
+      "sha256": "be8fe2a5af8da450e54fbe0c42ebdbcf00a6e2ec55c84f00383b868a31ef3b0d"
+    },
+    {
+      "path": "qa/multiroom-localization/benchmark_serial.py",
+      "git_blob": "d62cc02bdf4f56cef0e4e563f322d717b7ace875",
+      "sha256": "cd16dbf5d9afcaf2019c98f939dba19dcea167d9b2397e352515e026614b5661"
+    },
+    {
+      "path": "qa/multiroom-localization/detect.py",
+      "git_blob": "dfd5bbafd05ce20a2f63c3bcc50c6d300fd2b945",
+      "sha256": "3a5e23e7b885b561c398f80ba3a465de009e2c8e5db546b1a7553cb134265344"
+    },
+    {
+      "path": "qa/multiroom-localization/generate_scene.py",
+      "git_blob": "091008f5695b84bea72ad33f2fef793c0a2a433c",
+      "sha256": "3b0fbbd5d912621964f0ceb99f27e0e96e3e8d2a02d57f3974fc20aa9ba7d9a9"
+    },
+    {
+      "path": "qa/multiroom-localization/microbench_dev_cache.py",
+      "git_blob": "fa37ccae76bc94e4df8cb3076617f031f2f306c1",
+      "sha256": "6711a20cee5eaf632c005e321902bda84a4ee815d24cf1e3ce775f02ebd2b333"
+    },
+    {
+      "path": "qa/multiroom-localization/package_scans.py",
+      "git_blob": "826829550c821ebc0054a6e4da219df273ab7c2a",
+      "sha256": "799e3313f3161bf26988448f8012a98f5bc142586a923897911e43a825b1b6e1"
+    },
+    {
+      "path": "qa/multiroom-localization/prepare.py",
+      "git_blob": "966b4ac353e7c94ba90d871ddaf81229b3e5e2aa",
+      "sha256": "051d7d46b27a30e9b21d410a9146d5ad383da9b90b727baa47519f714cca535d"
+    },
+    {
+      "path": "qa/multiroom-localization/proposed_test_guided_cache.py",
+      "git_blob": "97ae7332dfbd43fffa8ca0f8e1d78bc087cfc36f",
+      "sha256": "2b4d452088e7109387ebb1c7ac353a0302e0e2fdb080bd5ed5040ab4e2a9a6eb"
+    },
+    {
+      "path": "qa/multiroom-localization/render.py",
+      "git_blob": "20b340c56cdf6741db85617778970d1074162815",
+      "sha256": "67e210a9f6d66404629f78f85c3634e2e5073b0afbe2835f2899753ed3123b74"
+    },
+    {
+      "path": "qa/multiroom-localization/render_boxes.py",
+      "git_blob": "afbb15af308dada0f1a5bc6c750775508c311dfd",
+      "sha256": "7bfb6f11c3284363106665ca10f47a93f63a9718db6958bf1483bd50b1b53a78"
+    },
+    {
+      "path": "qa/multiroom-localization/run_single.py",
+      "git_blob": "56b875a5f5773acba20804e47a30c40b59ecec83",
+      "sha256": "d41dfb66cb5f5ebbde63409c089c6b6db52247d4e264086d94baf685536c2e16"
+    },
+    {
+      "path": "qa/multiroom-localization/summarize.py",
+      "git_blob": "b4d3591212e22af8f669087b8f740000c63442e8",
+      "sha256": "84819edd16d42a8583534a859d48ad71a6c86eb48b184ce6749d2e9469c72123"
+    },
+    {
+      "path": "qa/multiroom-localization/test_guided_cache_equivalence.py",
+      "git_blob": "1d12e7d0492efa99b9e6be99fcfac29842eb1715",
+      "sha256": "9c2deb6e393394a4e781982b3fe98f219dfb582427430d4579f5cfbaaa1de756"
+    },
+    {
+      "path": "qa/multiroom-localization/validate.py",
+      "git_blob": "2caf2c38590301778341e9d591c279f01b3fcc34",
+      "sha256": "0756f5abfd2cab3c0cf76c75b1fc46af0c1b51787b756ee50a83953f6a63f8b9"
+    },
+    {
+      "path": "qa/multiroom-localization/validate_backend_usdz.py",
+      "git_blob": "e9d1618c57a1692245e541dc60ddc820b1c95a8f",
+      "sha256": "d818d185801c96611113d0a2f075af32dbbb0bb814752597c3f5c26685049669"
+    },
+    {
+      "path": "qa/multiroom-localization/validate_blender_camera.py",
+      "git_blob": "c1ed7c03731b88ca4843e51c74857aa37cff0424",
+      "sha256": "5957c003e157cf88b02a14dc4eaffcc6479cde9fda0bb636e8f437de597121a8"
+    },
+    {
+      "path": "qa/multiroom-localization/validate_scan_bounds.py",
+      "git_blob": "6668e38441a1f045e3b7bea77231300e319e1f8e",
+      "sha256": "30d28f9de02b87d2440d8ad9ed768e6d33efdb9232aa930d8825ec074897b34f"
+    }
+  ],
+  "all_git_blobs_match": true
+}

@@ -1,0 +1,44 @@
+{
+  "backend": "ultralytics-yolo-world",
+  "model_name": "yolov8s-worldv2.pt",
+  "model_version": "yolov8s-worldv2-indoor-objects-v1",
+  "output_contract": "camera-room-2d/v1",
+  "input": {
+    "width": 640,
+    "height": 384
+  },
+  "normalization": {
+    "mean": [0.0, 0.0, 0.0],
+    "std": [1.0, 1.0, 1.0]
+  },
+  "minimum_confidence": 0.6,
+  "detection_confidence": 0.2,
+  "prompts": [
+    "bed",
+    "sofa",
+    "couch",
+    "chair",
+    "table",
+    "dining table",
+    "desk",
+    "cabinet",
+    "shelf",
+    "bookcase",
+    "wardrobe",
+    "dresser",
+    "nightstand",
+    "television",
+    "tv",
+    "toilet",
+    "refrigerator",
+    "oven",
+    "sink",
+    "lamp",
+    "door",
+    "window",
+    "floor",
+    "wall",
+    "ceiling"
+  ]
+}
+

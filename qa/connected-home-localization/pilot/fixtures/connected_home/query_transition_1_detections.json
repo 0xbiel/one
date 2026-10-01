@@ -1,0 +1,277 @@
+[
+  {
+    "label": "sofa",
+    "confidence": 0.916101,
+    "bbox": [
+      173.004,
+      159.142,
+      301.426,
+      262.64
+    ],
+    "frame_index": 0
+  },
+  {
+    "label": "couch",
+    "confidence": 0.907439,
+    "bbox": [
+      172.862,
+      159.54,
+      301.223,
+      262.627
+    ],
+    "frame_index": 0
+  },
+  {
+    "label": "lamp",
+    "confidence": 0.705072,
+    "bbox": [
+      272.848,
+      103.933,
+      318.43,
+      250.792
+    ],
+    "frame_index": 0
+  },
+  {
+    "label": "chair",
+    "confidence": 0.446236,
+    "bbox": [
+      176.764,
+      228.026,
+      317.376,
+      359.997
+    ],
+    "frame_index": 0
+  },
+  {
+    "label": "cabinet",
+    "confidence": 0.445813,
+    "bbox": [
+      317.502,
+      200.563,
+      391.779,
+      338.452
+    ],
+    "frame_index": 0
+  },
+  {
+    "label": "cabinet",
+    "confidence": 0.428061,
+    "bbox": [
+      383.928,
+      221.4,
+      476.968,
+      359.958
+    ],
+    "frame_index": 0
+  },
+  {
+    "label": "table",
+    "confidence": 0.329055,
+    "bbox": [
+      72.819,
+      200.435,
+      152.308,
+      264.088
+    ],
+    "frame_index": 0
+  },
+  {
+    "label": "desk",
+    "confidence": 0.328618,
+    "bbox": [
+      0.0,
+      250.733,
+      205.606,
+      360.0
+    ],
+    "frame_index": 0
+  },
+  {
+    "label": "cabinet",
+    "confidence": 0.317029,
+    "bbox": [
+      317.067,
+      190.993,
+      478.88,
+      360.0
+    ],
+    "frame_index": 0
+  },
+  {
+    "label": "desk",
+    "confidence": 0.295369,
+    "bbox": [
+      72.523,
+      200.701,
+      151.997,
+      264.258
+    ],
+    "frame_index": 0
+  },
+  {
+    "label": "television",
+    "confidence": 0.243087,
+    "bbox": [
+      30.819,
+      119.769,
+      132.683,
+      175.714
+    ],
+    "frame_index": 0
+  },
+  {
+    "label": "window",
+    "confidence": 0.232163,
+    "bbox": [
+      30.497,
+      119.772,
+      132.717,
+      175.915
+    ],
+    "frame_index": 0
+  },
+  {
+    "label": "sofa",
+    "confidence": 0.922652,
+    "bbox": [
+      172.915,
+      158.939,
+      301.316,
+      262.581
+    ],
+    "frame_index": 1
+  },
+  {
+    "label": "couch",
+    "confidence": 0.912107,
+    "bbox": [
+      172.835,
+      159.163,
+      301.229,
+      262.544
+    ],
+    "frame_index": 1
+  },
+  {
+    "label": "lamp",
+    "confidence": 0.686003,
+    "bbox": [
+      272.844,
+      104.271,
+      318.308,
+      250.882
+    ],
+    "frame_index": 1
+  },
+  {
+    "label": "cabinet",
+    "confidence": 0.418427,
+    "bbox": [
+      317.284,
+      200.31,
+      391.58,
+      338.495
+    ],
+    "frame_index": 1
+  },
+  {
+    "label": "cabinet",
+    "confidence": 0.395594,
+    "bbox": [
+      383.939,
+      221.191,
+      477.098,
+      359.959
+    ],
+    "frame_index": 1
+  },
+  {
+    "label": "chair",
+    "confidence": 0.354074,
+    "bbox": [
+      177.798,
+      227.958,
+      318.573,
+      360.0
+    ],
+    "frame_index": 1
+  },
+  {
+    "label": "cabinet",
+    "confidence": 0.322796,
+    "bbox": [
+      316.955,
+      191.086,
+      478.728,
+      360.0
+    ],
+    "frame_index": 1
+  },
+  {
+    "label": "table",
+    "confidence": 0.313753,
+    "bbox": [
+      72.748,
+      200.371,
+      152.25,
+      263.812
+    ],
+    "frame_index": 1
+  },
+  {
+    "label": "desk",
+    "confidence": 0.294588,
+    "bbox": [
+      0.0,
+      250.604,
+      205.485,
+      360.0
+    ],
+    "frame_index": 1
+  },
+  {
+    "label": "television",
+    "confidence": 0.289714,
+    "bbox": [
+      30.516,
+      119.761,
+      132.666,
+      175.501
+    ],
+    "frame_index": 1
+  },
+  {
+    "label": "desk",
+    "confidence": 0.285163,
+    "bbox": [
+      72.448,
+      200.656,
+      151.948,
+      263.862
+    ],
+    "frame_index": 1
+  },
+  {
+    "label": "window",
+    "confidence": 0.258137,
+    "bbox": [
+      30.463,
+      119.746,
+      132.697,
+      175.627
+    ],
+    "frame_index": 1
+  },
+  {
+    "label": "sofa",
+    "confidence": 0.244652,
+    "bbox": [
+      0.014,
+      250.162,
+      205.158,
+      360.0
+    ],
+    "frame_index": 1
+  }
+]

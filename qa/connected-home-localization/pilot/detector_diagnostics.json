@@ -1,0 +1,2722 @@
+[
+  {
+    "layout": "connected_home",
+    "query": "query_east_north_0",
+    "frame_index": 0,
+    "sha256": "97a3b1739ab8d68584742b0978ca7008b33436198475578dc7a6259ec058920b",
+    "labels": [
+      "person",
+      "window",
+      "mirror",
+      "glass door",
+      "sliding glass door",
+      "sofa",
+      "couch",
+      "table",
+      "desk",
+      "dining table",
+      "chair",
+      "cabinet",
+      "shelf",
+      "bookcase",
+      "wardrobe",
+      "dresser",
+      "nightstand",
+      "television",
+      "lamp"
+    ],
+    "detections": [
+      {
+        "label": "sofa",
+        "confidence": 0.921988,
+        "bbox": [
+          13.906,
+          141.23,
+          248.03,
+          251.251
+        ]
+      },
+      {
+        "label": "lamp",
+        "confidence": 0.790948,
+        "bbox": [
+          236.009,
+          82.76,
+          267.366,
+          212.276
+        ]
+      },
+      {
+        "label": "desk",
+        "confidence": 0.689382,
+        "bbox": [
+          366.597,
+          172.028,
+          480.0,
+          302.157
+        ]
+      },
+      {
+        "label": "desk",
+        "confidence": 0.506199,
+        "bbox": [
+          96.693,
+          212.094,
+          281.458,
+          337.562
+        ]
+      },
+      {
+        "label": "television",
+        "confidence": 0.468704,
+        "bbox": [
+          445.431,
+          91.87,
+          480.0,
+          190.229
+        ]
+      },
+      {
+        "label": "chair",
+        "confidence": 0.399431,
+        "bbox": [
+          353.078,
+          148.459,
+          413.749,
+          253.144
+        ]
+      },
+      {
+        "label": "cabinet",
+        "confidence": 0.363982,
+        "bbox": [
+          262.936,
+          135.113,
+          364.191,
+          203.106
+        ]
+      },
+      {
+        "label": "chair",
+        "confidence": 0.107489,
+        "bbox": [
+          352.438,
+          148.44,
+          395.085,
+          228.064
+        ]
+      }
+    ],
+    "seconds": 2.3400408450002033
+  },
+  {
+    "layout": "connected_home",
+    "query": "query_east_north_0",
+    "frame_index": 1,
+    "sha256": "059a66cb44356e22052332306487e6afbcd11bb0e032d776ad93187776d59557",
+    "labels": [
+      "person",
+      "window",
+      "mirror",
+      "glass door",
+      "sliding glass door",
+      "sofa",
+      "couch",
+      "table",
+      "desk",
+      "dining table",
+      "chair",
+      "cabinet",
+      "shelf",
+      "bookcase",
+      "wardrobe",
+      "dresser",
+      "nightstand",
+      "television",
+      "lamp"
+    ],
+    "detections": [
+      {
+        "label": "sofa",
+        "confidence": 0.913767,
+        "bbox": [
+          14.077,
+          140.924,
+          247.816,
+          252.277
+        ]
+      },
+      {
+        "label": "lamp",
+        "confidence": 0.781489,
+        "bbox": [
+          236.339,
+          82.714,
+          267.337,
+          212.334
+        ]
+      },
+      {
+        "label": "desk",
+        "confidence": 0.680907,
+        "bbox": [
+          365.816,
+          171.775,
+          480.0,
+          302.043
+        ]
+      },
+      {
+        "label": "desk",
+        "confidence": 0.500839,
+        "bbox": [
+          96.758,
+          212.017,
+          281.667,
+          337.866
+        ]
+      },
+      {
+        "label": "television",
+        "confidence": 0.445713,
+        "bbox": [
+          445.441,
+          91.879,
+          480.0,
+          190.502
+        ]
+      },
+      {
+        "label": "chair",
+        "confidence": 0.356123,
+        "bbox": [
+          352.911,
+          148.031,
+          413.785,
+          251.465
+        ]
+      },
+      {
+        "label": "cabinet",
+        "confidence": 0.338506,
+        "bbox": [
+          263.184,
+          135.3,
+          364.303,
+          202.813
+        ]
+      },
+      {
+        "label": "chair",
+        "confidence": 0.118899,
+        "bbox": [
+          352.115,
+          148.054,
+          395.235,
+          228.168
+        ]
+      }
+    ],
+    "seconds": 2.1904206509998403
+  },
+  {
+    "layout": "connected_home",
+    "query": "query_east_north_1",
+    "frame_index": 0,
+    "sha256": "3c73acb266341fa73d0bf04858c959112287b041cbd8b17aaec60510c9cf4b5d",
+    "labels": [
+      "person",
+      "window",
+      "mirror",
+      "glass door",
+      "sliding glass door",
+      "sofa",
+      "couch",
+      "table",
+      "desk",
+      "dining table",
+      "chair",
+      "cabinet",
+      "shelf",
+      "bookcase",
+      "wardrobe",
+      "dresser",
+      "nightstand",
+      "television",
+      "lamp"
+    ],
+    "detections": [
+      {
+        "label": "sofa",
+        "confidence": 0.915917,
+        "bbox": [
+          95.193,
+          147.203,
+          282.863,
+          232.67
+        ]
+      },
+      {
+        "label": "lamp",
+        "confidence": 0.818787,
+        "bbox": [
+          281.809,
+          86.066,
+          317.39,
+          231.778
+        ]
+      },
+      {
+        "label": "desk",
+        "confidence": 0.481119,
+        "bbox": [
+          344.746,
+          193.064,
+          479.988,
+          360.0
+        ]
+      },
+      {
+        "label": "table",
+        "confidence": 0.401409,
+        "bbox": [
+          38.308,
+          196.929,
+          213.951,
+          289.651
+        ]
+      },
+      {
+        "label": "desk",
+        "confidence": 0.268788,
+        "bbox": [
+          40.078,
+          195.969,
+          214.373,
+          290.384
+        ]
+      },
+      {
+        "label": "sofa",
+        "confidence": 0.228866,
+        "bbox": [
+          333.754,
+          154.921,
+          479.995,
+          308.583
+        ]
+      },
+      {
+        "label": "sofa",
+        "confidence": 0.142661,
+        "bbox": [
+          332.703,
+          155.305,
+          479.85,
+          263.396
+        ]
+      }
+    ],
+    "seconds": 2.3443719270003385
+  },
+  {
+    "layout": "connected_home",
+    "query": "query_east_north_1",
+    "frame_index": 1,
+    "sha256": "3535c0c53f9b01352a0352780fd795ddaf8f7d82a1c9b08a3449cca0916115ec",
+    "labels": [
+      "person",
+      "window",
+      "mirror",
+      "glass door",
+      "sliding glass door",
+      "sofa",
+      "couch",
+      "table",
+      "desk",
+      "dining table",
+      "chair",
+      "cabinet",
+      "shelf",
+      "bookcase",
+      "wardrobe",
+      "dresser",
+      "nightstand",
+      "television",
+      "lamp"
+    ],
+    "detections": [
+      {
+        "label": "sofa",
+        "confidence": 0.921772,
+        "bbox": [
+          94.739,
+          147.215,
+          282.578,
+          232.655
+        ]
+      },
+      {
+        "label": "lamp",
+        "confidence": 0.808122,
+        "bbox": [
+          282.303,
+          85.951,
+          317.488,
+          231.906
+        ]
+      },
+      {
+        "label": "desk",
+        "confidence": 0.405041,
+        "bbox": [
+          344.512,
+          193.33,
+          479.989,
+          359.975
+        ]
+      },
+      {
+        "label": "table",
+        "confidence": 0.336339,
+        "bbox": [
+          38.201,
+          196.991,
+          213.742,
+          289.7
+        ]
+      },
+      {
+        "label": "desk",
+        "confidence": 0.323861,
+        "bbox": [
+          40.159,
+          195.576,
+          213.354,
+          290.691
+        ]
+      },
+      {
+        "label": "sofa",
+        "confidence": 0.293798,
+        "bbox": [
+          333.375,
+          155.812,
+          479.917,
+          310.997
+        ]
+      }
+    ],
+    "seconds": 2.2563004089997776
+  },
+  {
+    "layout": "connected_home",
+    "query": "query_east_south_0",
+    "frame_index": 0,
+    "sha256": "8fe319263a26483f35ccc472947309b3c8643c138798da5889913a78aba56700",
+    "labels": [
+      "person",
+      "window",
+      "mirror",
+      "glass door",
+      "sliding glass door",
+      "sofa",
+      "couch",
+      "table",
+      "desk",
+      "dining table",
+      "chair",
+      "cabinet",
+      "shelf",
+      "bookcase",
+      "wardrobe",
+      "dresser",
+      "nightstand",
+      "television",
+      "lamp"
+    ],
+    "detections": [
+      {
+        "label": "sofa",
+        "confidence": 0.917242,
+        "bbox": [
+          14.216,
+          141.697,
+          247.559,
+          251.121
+        ]
+      },
+      {
+        "label": "lamp",
+        "confidence": 0.784375,
+        "bbox": [
+          234.139,
+          82.333,
+          267.712,
+          212.295
+        ]
+      },
+      {
+        "label": "desk",
+        "confidence": 0.726874,
+        "bbox": [
+          368.409,
+          172.473,
+          479.951,
+          301.787
+        ]
+      },
+      {
+        "label": "television",
+        "confidence": 0.593778,
+        "bbox": [
+          445.647,
+          91.691,
+          480.0,
+          188.41
+        ]
+      },
+      {
+        "label": "desk",
+        "confidence": 0.499939,
+        "bbox": [
+          96.753,
+          211.762,
+          281.506,
+          337.392
+        ]
+      },
+      {
+        "label": "chair",
+        "confidence": 0.368607,
+        "bbox": [
+          351.831,
+          148.907,
+          410.357,
+          251.22
+        ]
+      },
+      {
+        "label": "cabinet",
+        "confidence": 0.345259,
+        "bbox": [
+          262.82,
+          133.44,
+          364.862,
+          202.706
+        ]
+      },
+      {
+        "label": "chair",
+        "confidence": 0.257185,
+        "bbox": [
+          352.252,
+          148.746,
+          398.551,
+          226.925
+        ]
+      }
+    ],
+    "seconds": 2.233875712000099
+  },
+  {
+    "layout": "connected_home",
+    "query": "query_east_south_0",
+    "frame_index": 1,
+    "sha256": "1f832b269eeba719cc3b0b031cf51e60dd2fc423bef5ab3e9b762301c3bb1333",
+    "labels": [
+      "person",
+      "window",
+      "mirror",
+      "glass door",
+      "sliding glass door",
+      "sofa",
+      "couch",
+      "table",
+      "desk",
+      "dining table",
+      "chair",
+      "cabinet",
+      "shelf",
+      "bookcase",
+      "wardrobe",
+      "dresser",
+      "nightstand",
+      "television",
+      "lamp"
+    ],
+    "detections": [
+      {
+        "label": "sofa",
+        "confidence": 0.912916,
+        "bbox": [
+          14.011,
+          141.76,
+          247.569,
+          251.083
+        ]
+      },
+      {
+        "label": "lamp",
+        "confidence": 0.769006,
+        "bbox": [
+          234.332,
+          82.265,
+          267.78,
+          212.338
+        ]
+      },
+      {
+        "label": "desk",
+        "confidence": 0.725772,
+        "bbox": [
+          368.387,
+          172.424,
+          479.95,
+          301.579
+        ]
+      },
+      {
+        "label": "television",
+        "confidence": 0.614934,
+        "bbox": [
+          445.626,
+          91.8,
+          480.0,
+          187.66
+        ]
+      },
+      {
+        "label": "desk",
+        "confidence": 0.484302,
+        "bbox": [
+          95.95,
+          211.807,
+          281.914,
+          337.766
+        ]
+      },
+      {
+        "label": "chair",
+        "confidence": 0.376104,
+        "bbox": [
+          351.75,
+          148.773,
+          410.648,
+          251.324
+        ]
+      },
+      {
+        "label": "cabinet",
+        "confidence": 0.304584,
+        "bbox": [
+          262.913,
+          133.883,
+          365.172,
+          202.744
+        ]
+      },
+      {
+        "label": "chair",
+        "confidence": 0.256074,
+        "bbox": [
+          352.074,
+          148.612,
+          398.491,
+          226.997
+        ]
+      }
+    ],
+    "seconds": 2.203586939000161
+  },
+  {
+    "layout": "connected_home",
+    "query": "query_east_south_1",
+    "frame_index": 0,
+    "sha256": "b423c40545f9f8c7e7a12ea5bcedfe917e72e1766389d8e2630c6658b39cc1e2",
+    "labels": [
+      "person",
+      "window",
+      "mirror",
+      "glass door",
+      "sliding glass door",
+      "sofa",
+      "couch",
+      "table",
+      "desk",
+      "dining table",
+      "chair",
+      "cabinet",
+      "shelf",
+      "bookcase",
+      "wardrobe",
+      "dresser",
+      "nightstand",
+      "television",
+      "lamp"
+    ],
+    "detections": [
+      {
+        "label": "sofa",
+        "confidence": 0.932702,
+        "bbox": [
+          94.727,
+          146.836,
+          282.611,
+          232.811
+        ]
+      },
+      {
+        "label": "lamp",
+        "confidence": 0.803591,
+        "bbox": [
+          281.122,
+          86.32,
+          318.606,
+          231.719
+        ]
+      },
+      {
+        "label": "couch",
+        "confidence": 0.748665,
+        "bbox": [
+          94.78,
+          146.593,
+          283.184,
+          231.977
+        ]
+      },
+      {
+        "label": "desk",
+        "confidence": 0.470241,
+        "bbox": [
+          345.176,
+          197.324,
+          480.0,
+          360.0
+        ]
+      },
+      {
+        "label": "table",
+        "confidence": 0.270118,
+        "bbox": [
+          38.608,
+          197.159,
+          213.568,
+          290.407
+        ]
+      },
+      {
+        "label": "desk",
+        "confidence": 0.268846,
+        "bbox": [
+          40.371,
+          195.328,
+          213.889,
+          290.43
+        ]
+      },
+      {
+        "label": "chair",
+        "confidence": 0.240748,
+        "bbox": [
+          394.757,
+          163.665,
+          480.0,
+          309.519
+        ]
+      },
+      {
+        "label": "chair",
+        "confidence": 0.163189,
+        "bbox": [
+          359.191,
+          164.229,
+          478.904,
+          308.48
+        ]
+      }
+    ],
+    "seconds": 2.467519422999885
+  },
+  {
+    "layout": "connected_home",
+    "query": "query_east_south_1",
+    "frame_index": 1,
+    "sha256": "cf3bc871f7385ac66b329df5e6dc82df2236e26a4108ae6ae2f352b5ad7b16d4",
+    "labels": [
+      "person",
+      "window",
+      "mirror",
+      "glass door",
+      "sliding glass door",
+      "sofa",
+      "couch",
+      "table",
+      "desk",
+      "dining table",
+      "chair",
+      "cabinet",
+      "shelf",
+      "bookcase",
+      "wardrobe",
+      "dresser",
+      "nightstand",
+      "television",
+      "lamp"
+    ],
+    "detections": [
+      {
+        "label": "sofa",
+        "confidence": 0.939416,
+        "bbox": [
+          94.785,
+          146.774,
+          282.695,
+          232.912
+        ]
+      },
+      {
+        "label": "lamp",
+        "confidence": 0.790849,
+        "bbox": [
+          281.33,
+          86.407,
+          317.863,
+          231.862
+        ]
+      },
+      {
+        "label": "couch",
+        "confidence": 0.786276,
+        "bbox": [
+          94.945,
+          146.494,
+          283.287,
+          232.105
+        ]
+      },
+      {
+        "label": "desk",
+        "confidence": 0.472331,
+        "bbox": [
+          345.137,
+          197.63,
+          480.0,
+          360.0
+        ]
+      },
+      {
+        "label": "desk",
+        "confidence": 0.295242,
+        "bbox": [
+          40.357,
+          195.401,
+          213.945,
+          290.473
+        ]
+      },
+      {
+        "label": "table",
+        "confidence": 0.275915,
+        "bbox": [
+          38.307,
+          196.952,
+          213.627,
+          290.471
+        ]
+      },
+      {
+        "label": "chair",
+        "confidence": 0.254272,
+        "bbox": [
+          395.075,
+          163.395,
+          480.0,
+          309.765
+        ]
+      },
+      {
+        "label": "chair",
+        "confidence": 0.167654,
+        "bbox": [
+          359.783,
+          163.849,
+          478.955,
+          307.887
+        ]
+      },
+      {
+        "label": "sofa",
+        "confidence": 0.129915,
+        "bbox": [
+          335.15,
+          157.445,
+          479.871,
+          229.868
+        ]
+      }
+    ],
+    "seconds": 2.2344877739997173
+  },
+  {
+    "layout": "connected_home",
+    "query": "query_transition_0",
+    "frame_index": 0,
+    "sha256": "d109d2c84b1425b0823ff6e4bd944cb8e2c34315be4b9590b2bf2920bf8ad9bc",
+    "labels": [
+      "person",
+      "window",
+      "mirror",
+      "glass door",
+      "sliding glass door",
+      "sofa",
+      "couch",
+      "table",
+      "desk",
+      "dining table",
+      "chair",
+      "cabinet",
+      "shelf",
+      "bookcase",
+      "wardrobe",
+      "dresser",
+      "nightstand",
+      "television",
+      "lamp"
+    ],
+    "detections": [
+      {
+        "label": "sofa",
+        "confidence": 0.310224,
+        "bbox": [
+          403.711,
+          209.62,
+          480.0,
+          329.752
+        ]
+      }
+    ],
+    "seconds": 2.2290679399998226
+  },
+  {
+    "layout": "connected_home",
+    "query": "query_transition_0",
+    "frame_index": 1,
+    "sha256": "8c2dac6de4a7ed4a803dbb31b852efa0531d5b64308a684d9ca2c397cbf56526",
+    "labels": [
+      "person",
+      "window",
+      "mirror",
+      "glass door",
+      "sliding glass door",
+      "sofa",
+      "couch",
+      "table",
+      "desk",
+      "dining table",
+      "chair",
+      "cabinet",
+      "shelf",
+      "bookcase",
+      "wardrobe",
+      "dresser",
+      "nightstand",
+      "television",
+      "lamp"
+    ],
+    "detections": [
+      {
+        "label": "sofa",
+        "confidence": 0.298206,
+        "bbox": [
+          403.686,
+          209.308,
+          480.0,
+          329.844
+        ]
+      }
+    ],
+    "seconds": 2.1630080780000753
+  },
+  {
+    "layout": "connected_home",
+    "query": "query_transition_1",
+    "frame_index": 0,
+    "sha256": "794a257b2202370b21c67fe8455a7bf15dc999649ba6e1b06e237bfd6a319e55",
+    "labels": [
+      "person",
+      "window",
+      "mirror",
+      "glass door",
+      "sliding glass door",
+      "sofa",
+      "couch",
+      "table",
+      "desk",
+      "dining table",
+      "chair",
+      "cabinet",
+      "shelf",
+      "bookcase",
+      "wardrobe",
+      "dresser",
+      "nightstand",
+      "television",
+      "lamp"
+    ],
+    "detections": [
+      {
+        "label": "sofa",
+        "confidence": 0.916101,
+        "bbox": [
+          173.004,
+          159.142,
+          301.426,
+          262.64
+        ]
+      },
+      {
+        "label": "couch",
+        "confidence": 0.907439,
+        "bbox": [
+          172.862,
+          159.54,
+          301.223,
+          262.627
+        ]
+      },
+      {
+        "label": "lamp",
+        "confidence": 0.705072,
+        "bbox": [
+          272.848,
+          103.933,
+          318.43,
+          250.792
+        ]
+      },
+      {
+        "label": "chair",
+        "confidence": 0.446236,
+        "bbox": [
+          176.764,
+          228.026,
+          317.376,
+          359.997
+        ]
+      },
+      {
+        "label": "cabinet",
+        "confidence": 0.445813,
+        "bbox": [
+          317.502,
+          200.563,
+          391.779,
+          338.452
+        ]
+      },
+      {
+        "label": "cabinet",
+        "confidence": 0.428061,
+        "bbox": [
+          383.928,
+          221.4,
+          476.968,
+          359.958
+        ]
+      },
+      {
+        "label": "table",
+        "confidence": 0.329055,
+        "bbox": [
+          72.819,
+          200.435,
+          152.308,
+          264.088
+        ]
+      },
+      {
+        "label": "desk",
+        "confidence": 0.328618,
+        "bbox": [
+          0.0,
+          250.733,
+          205.606,
+          360.0
+        ]
+      },
+      {
+        "label": "cabinet",
+        "confidence": 0.317029,
+        "bbox": [
+          317.067,
+          190.993,
+          478.88,
+          360.0
+        ]
+      },
+      {
+        "label": "desk",
+        "confidence": 0.295369,
+        "bbox": [
+          72.523,
+          200.701,
+          151.997,
+          264.258
+        ]
+      },
+      {
+        "label": "television",
+        "confidence": 0.243087,
+        "bbox": [
+          30.819,
+          119.769,
+          132.683,
+          175.714
+        ]
+      },
+      {
+        "label": "window",
+        "confidence": 0.232163,
+        "bbox": [
+          30.497,
+          119.772,
+          132.717,
+          175.915
+        ]
+      }
+    ],
+    "seconds": 2.3561496580000494
+  },
+  {
+    "layout": "connected_home",
+    "query": "query_transition_1",
+    "frame_index": 1,
+    "sha256": "6a9cd6c3484dd3103058671e1bd3f74f92b978fb3207977ca28bc0127c3d174f",
+    "labels": [
+      "person",
+      "window",
+      "mirror",
+      "glass door",
+      "sliding glass door",
+      "sofa",
+      "couch",
+      "table",
+      "desk",
+      "dining table",
+      "chair",
+      "cabinet",
+      "shelf",
+      "bookcase",
+      "wardrobe",
+      "dresser",
+      "nightstand",
+      "television",
+      "lamp"
+    ],
+    "detections": [
+      {
+        "label": "sofa",
+        "confidence": 0.922652,
+        "bbox": [
+          172.915,
+          158.939,
+          301.316,
+          262.581
+        ]
+      },
+      {
+        "label": "couch",
+        "confidence": 0.912107,
+        "bbox": [
+          172.835,
+          159.163,
+          301.229,
+          262.544
+        ]
+      },
+      {
+        "label": "lamp",
+        "confidence": 0.686003,
+        "bbox": [
+          272.844,
+          104.271,
+          318.308,
+          250.882
+        ]
+      },
+      {
+        "label": "cabinet",
+        "confidence": 0.418427,
+        "bbox": [
+          317.284,
+          200.31,
+          391.58,
+          338.495
+        ]
+      },
+      {
+        "label": "cabinet",
+        "confidence": 0.395594,
+        "bbox": [
+          383.939,
+          221.191,
+          477.098,
+          359.959
+        ]
+      },
+      {
+        "label": "chair",
+        "confidence": 0.354074,
+        "bbox": [
+          177.798,
+          227.958,
+          318.573,
+          360.0
+        ]
+      },
+      {
+        "label": "cabinet",
+        "confidence": 0.322796,
+        "bbox": [
+          316.955,
+          191.086,
+          478.728,
+          360.0
+        ]
+      },
+      {
+        "label": "table",
+        "confidence": 0.313753,
+        "bbox": [
+          72.748,
+          200.371,
+          152.25,
+          263.812
+        ]
+      },
+      {
+        "label": "desk",
+        "confidence": 0.294588,
+        "bbox": [
+          0.0,
+          250.604,
+          205.485,
+          360.0
+        ]
+      },
+      {
+        "label": "television",
+        "confidence": 0.289714,
+        "bbox": [
+          30.516,
+          119.761,
+          132.666,
+          175.501
+        ]
+      },
+      {
+        "label": "desk",
+        "confidence": 0.285163,
+        "bbox": [
+          72.448,
+          200.656,
+          151.948,
+          263.862
+        ]
+      },
+      {
+        "label": "window",
+        "confidence": 0.258137,
+        "bbox": [
+          30.463,
+          119.746,
+          132.697,
+          175.627
+        ]
+      },
+      {
+        "label": "sofa",
+        "confidence": 0.244652,
+        "bbox": [
+          0.014,
+          250.162,
+          205.158,
+          360.0
+        ]
+      }
+    ],
+    "seconds": 2.1768239360003463
+  },
+  {
+    "layout": "connected_home",
+    "query": "query_transition_2",
+    "frame_index": 0,
+    "sha256": "48c51d41cddc7503b83eb66fb78fd0b8524f0385aeb31e2b4b30a1858f65606c",
+    "labels": [
+      "person",
+      "window",
+      "mirror",
+      "glass door",
+      "sliding glass door",
+      "sofa",
+      "couch",
+      "table",
+      "desk",
+      "dining table",
+      "chair",
+      "cabinet",
+      "shelf",
+      "bookcase",
+      "wardrobe",
+      "dresser",
+      "nightstand",
+      "television",
+      "lamp"
+    ],
+    "detections": [
+      {
+        "label": "sofa",
+        "confidence": 0.926727,
+        "bbox": [
+          158.807,
+          155.044,
+          304.614,
+          272.936
+        ]
+      },
+      {
+        "label": "couch",
+        "confidence": 0.89107,
+        "bbox": [
+          158.093,
+          154.978,
+          304.112,
+          272.34
+        ]
+      },
+      {
+        "label": "lamp",
+        "confidence": 0.670893,
+        "bbox": [
+          279.437,
+          89.334,
+          331.29,
+          257.459
+        ]
+      },
+      {
+        "label": "cabinet",
+        "confidence": 0.407466,
+        "bbox": [
+          336.474,
+          202.682,
+          437.521,
+          360.0
+        ]
+      },
+      {
+        "label": "cabinet",
+        "confidence": 0.368822,
+        "bbox": [
+          335.46,
+          191.163,
+          479.943,
+          360.0
+        ]
+      },
+      {
+        "label": "table",
+        "confidence": 0.350633,
+        "bbox": [
+          43.946,
+          203.03,
+          140.667,
+          296.939
+        ]
+      },
+      {
+        "label": "window",
+        "confidence": 0.289756,
+        "bbox": [
+          0.0,
+          111.299,
+          112.784,
+          175.179
+        ]
+      },
+      {
+        "label": "desk",
+        "confidence": 0.281379,
+        "bbox": [
+          0.009,
+          279.659,
+          179.98,
+          359.982
+        ]
+      },
+      {
+        "label": "desk",
+        "confidence": 0.252468,
+        "bbox": [
+          43.872,
+          202.94,
+          141.074,
+          297.557
+        ]
+      },
+      {
+        "label": "cabinet",
+        "confidence": 0.227089,
+        "bbox": [
+          420.717,
+          232.395,
+          480.0,
+          360.0
+        ]
+      },
+      {
+        "label": "chair",
+        "confidence": 0.143874,
+        "bbox": [
+          194.606,
+          249.73,
+          387.512,
+          360.0
+        ]
+      },
+      {
+        "label": "table",
+        "confidence": 0.129516,
+        "bbox": [
+          0.0,
+          280.326,
+          177.017,
+          360.0
+        ]
+      }
+    ],
+    "seconds": 2.5990664239998296
+  },
+  {
+    "layout": "connected_home",
+    "query": "query_transition_2",
+    "frame_index": 1,
+    "sha256": "7b7c5a52864a5b366706841236b82c3c74097b3125250c080c27b35012fd98cb",
+    "labels": [
+      "person",
+      "window",
+      "mirror",
+      "glass door",
+      "sliding glass door",
+      "sofa",
+      "couch",
+      "table",
+      "desk",
+      "dining table",
+      "chair",
+      "cabinet",
+      "shelf",
+      "bookcase",
+      "wardrobe",
+      "dresser",
+      "nightstand",
+      "television",
+      "lamp"
+    ],
+    "detections": [
+      {
+        "label": "sofa",
+        "confidence": 0.929185,
+        "bbox": [
+          157.864,
+          155.34,
+          304.287,
+          272.856
+        ]
+      },
+      {
+        "label": "couch",
+        "confidence": 0.891193,
+        "bbox": [
+          157.86,
+          155.342,
+          304.267,
+          272.387
+        ]
+      },
+      {
+        "label": "lamp",
+        "confidence": 0.524048,
+        "bbox": [
+          279.645,
+          90.877,
+          330.218,
+          257.159
+        ]
+      },
+      {
+        "label": "cabinet",
+        "confidence": 0.37606,
+        "bbox": [
+          336.242,
+          202.848,
+          437.763,
+          360.0
+        ]
+      },
+      {
+        "label": "table",
+        "confidence": 0.368945,
+        "bbox": [
+          43.901,
+          202.906,
+          140.545,
+          296.968
+        ]
+      },
+      {
+        "label": "window",
+        "confidence": 0.350729,
+        "bbox": [
+          0.0,
+          111.207,
+          112.774,
+          175.033
+        ]
+      },
+      {
+        "label": "desk",
+        "confidence": 0.291882,
+        "bbox": [
+          0.0,
+          279.906,
+          180.951,
+          360.0
+        ]
+      },
+      {
+        "label": "cabinet",
+        "confidence": 0.266927,
+        "bbox": [
+          336.435,
+          191.665,
+          480.0,
+          359.951
+        ]
+      },
+      {
+        "label": "desk",
+        "confidence": 0.246057,
+        "bbox": [
+          43.84,
+          202.881,
+          140.966,
+          297.577
+        ]
+      },
+      {
+        "label": "cabinet",
+        "confidence": 0.224897,
+        "bbox": [
+          420.003,
+          232.823,
+          479.939,
+          360.0
+        ]
+      },
+      {
+        "label": "table",
+        "confidence": 0.127704,
+        "bbox": [
+          0.0,
+          280.305,
+          177.163,
+          360.0
+        ]
+      },
+      {
+        "label": "chair",
+        "confidence": 0.112841,
+        "bbox": [
+          193.524,
+          249.84,
+          386.678,
+          359.593
+        ]
+      }
+    ],
+    "seconds": 2.1692110300000422
+  },
+  {
+    "layout": "connected_home",
+    "query": "query_transition_3",
+    "frame_index": 0,
+    "sha256": "f180e6aa3e6eab7c3f14a1a9c2faea5e7caed2b7d985dd4490c8343a59f7ed13",
+    "labels": [
+      "person",
+      "window",
+      "mirror",
+      "glass door",
+      "sliding glass door",
+      "sofa",
+      "couch",
+      "table",
+      "desk",
+      "dining table",
+      "chair",
+      "cabinet",
+      "shelf",
+      "bookcase",
+      "wardrobe",
+      "dresser",
+      "nightstand",
+      "television",
+      "lamp"
+    ],
+    "detections": [
+      {
+        "label": "sofa",
+        "confidence": 0.919301,
+        "bbox": [
+          0.0,
+          176.535,
+          264.933,
+          359.933
+        ]
+      },
+      {
+        "label": "lamp",
+        "confidence": 0.791271,
+        "bbox": [
+          211.028,
+          109.025,
+          246.281,
+          188.001
+        ]
+      },
+      {
+        "label": "chair",
+        "confidence": 0.777765,
+        "bbox": [
+          316.911,
+          164.022,
+          358.85,
+          234.153
+        ]
+      },
+      {
+        "label": "desk",
+        "confidence": 0.664551,
+        "bbox": [
+          282.22,
+          233.732,
+          421.726,
+          359.906
+        ]
+      },
+      {
+        "label": "desk",
+        "confidence": 0.609311,
+        "bbox": [
+          362.973,
+          173.368,
+          464.724,
+          255.978
+        ]
+      },
+      {
+        "label": "television",
+        "confidence": 0.608369,
+        "bbox": [
+          347.239,
+          119.731,
+          449.504,
+          175.828
+        ]
+      },
+      {
+        "label": "chair",
+        "confidence": 0.501053,
+        "bbox": [
+          453.87,
+          161.806,
+          480.0,
+          252.075
+        ]
+      },
+      {
+        "label": "shelf",
+        "confidence": 0.351778,
+        "bbox": [
+          243.891,
+          160.916,
+          279.015,
+          216.95
+        ]
+      },
+      {
+        "label": "cabinet",
+        "confidence": 0.33997,
+        "bbox": [
+          243.99,
+          161.048,
+          278.824,
+          216.825
+        ]
+      },
+      {
+        "label": "chair",
+        "confidence": 0.106161,
+        "bbox": [
+          453.508,
+          199.28,
+          480.0,
+          251.292
+        ]
+      }
+    ],
+    "seconds": 2.2309180540000852
+  },
+  {
+    "layout": "connected_home",
+    "query": "query_transition_3",
+    "frame_index": 1,
+    "sha256": "e6e86c42139c3c1886e8d66a0c118d0edef8c36dba8525c06303fa953fa0db8d",
+    "labels": [
+      "person",
+      "window",
+      "mirror",
+      "glass door",
+      "sliding glass door",
+      "sofa",
+      "couch",
+      "table",
+      "desk",
+      "dining table",
+      "chair",
+      "cabinet",
+      "shelf",
+      "bookcase",
+      "wardrobe",
+      "dresser",
+      "nightstand",
+      "television",
+      "lamp"
+    ],
+    "detections": [
+      {
+        "label": "sofa",
+        "confidence": 0.919844,
+        "bbox": [
+          0.0,
+          176.338,
+          265.074,
+          359.906
+        ]
+      },
+      {
+        "label": "lamp",
+        "confidence": 0.792442,
+        "bbox": [
+          210.869,
+          109.129,
+          246.086,
+          188.053
+        ]
+      },
+      {
+        "label": "chair",
+        "confidence": 0.790133,
+        "bbox": [
+          316.675,
+          164.307,
+          359.065,
+          233.743
+        ]
+      },
+      {
+        "label": "desk",
+        "confidence": 0.665246,
+        "bbox": [
+          282.258,
+          232.988,
+          421.992,
+          359.918
+        ]
+      },
+      {
+        "label": "television",
+        "confidence": 0.64953,
+        "bbox": [
+          347.212,
+          119.669,
+          449.629,
+          175.737
+        ]
+      },
+      {
+        "label": "desk",
+        "confidence": 0.617327,
+        "bbox": [
+          362.795,
+          173.208,
+          464.671,
+          255.794
+        ]
+      },
+      {
+        "label": "chair",
+        "confidence": 0.484806,
+        "bbox": [
+          453.761,
+          161.982,
+          480.0,
+          251.762
+        ]
+      },
+      {
+        "label": "cabinet",
+        "confidence": 0.317757,
+        "bbox": [
+          244.273,
+          160.89,
+          279.299,
+          215.924
+        ]
+      },
+      {
+        "label": "shelf",
+        "confidence": 0.312595,
+        "bbox": [
+          243.923,
+          160.911,
+          279.038,
+          216.384
+        ]
+      }
+    ],
+    "seconds": 2.1404685509996852
+  },
+  {
+    "layout": "connected_home",
+    "query": "query_west_north_0",
+    "frame_index": 0,
+    "sha256": "168c415c10e1721a8e90061652bd4f140de50b2abefd51b09a5d04207493f801",
+    "labels": [
+      "person",
+      "window",
+      "mirror",
+      "glass door",
+      "sliding glass door",
+      "sofa",
+      "couch",
+      "table",
+      "desk",
+      "dining table",
+      "chair",
+      "cabinet",
+      "shelf",
+      "bookcase",
+      "wardrobe",
+      "dresser",
+      "nightstand",
+      "television",
+      "lamp"
+    ],
+    "detections": [
+      {
+        "label": "sofa",
+        "confidence": 0.92393,
+        "bbox": [
+          14.288,
+          141.16,
+          247.681,
+          253.19
+        ]
+      },
+      {
+        "label": "lamp",
+        "confidence": 0.796668,
+        "bbox": [
+          235.023,
+          82.671,
+          267.385,
+          212.084
+        ]
+      },
+      {
+        "label": "desk",
+        "confidence": 0.597459,
+        "bbox": [
+          369.406,
+          171.52,
+          480.0,
+          301.276
+        ]
+      },
+      {
+        "label": "desk",
+        "confidence": 0.500036,
+        "bbox": [
+          96.789,
+          212.566,
+          281.455,
+          337.125
+        ]
+      },
+      {
+        "label": "cabinet",
+        "confidence": 0.386211,
+        "bbox": [
+          262.562,
+          135.203,
+          364.943,
+          202.655
+        ]
+      },
+      {
+        "label": "chair",
+        "confidence": 0.344827,
+        "bbox": [
+          352.243,
+          148.554,
+          395.103,
+          226.997
+        ]
+      },
+      {
+        "label": "chair",
+        "confidence": 0.315453,
+        "bbox": [
+          352.315,
+          148.997,
+          409.177,
+          250.873
+        ]
+      }
+    ],
+    "seconds": 2.3986959900003058
+  },
+  {
+    "layout": "connected_home",
+    "query": "query_west_north_0",
+    "frame_index": 1,
+    "sha256": "762a74edbf7a44f0fb47130efcad8ce184b1b0d06c1b9140956bb5f309dde9c8",
+    "labels": [
+      "person",
+      "window",
+      "mirror",
+      "glass door",
+      "sliding glass door",
+      "sofa",
+      "couch",
+      "table",
+      "desk",
+      "dining table",
+      "chair",
+      "cabinet",
+      "shelf",
+      "bookcase",
+      "wardrobe",
+      "dresser",
+      "nightstand",
+      "television",
+      "lamp"
+    ],
+    "detections": [
+      {
+        "label": "sofa",
+        "confidence": 0.923328,
+        "bbox": [
+          14.177,
+          140.927,
+          247.471,
+          254.033
+        ]
+      },
+      {
+        "label": "lamp",
+        "confidence": 0.781497,
+        "bbox": [
+          235.924,
+          82.693,
+          267.096,
+          212.073
+        ]
+      },
+      {
+        "label": "desk",
+        "confidence": 0.557418,
+        "bbox": [
+          368.405,
+          171.531,
+          480.0,
+          301.22
+        ]
+      },
+      {
+        "label": "desk",
+        "confidence": 0.490918,
+        "bbox": [
+          96.833,
+          212.332,
+          281.373,
+          337.089
+        ]
+      },
+      {
+        "label": "cabinet",
+        "confidence": 0.342898,
+        "bbox": [
+          264.712,
+          135.228,
+          365.104,
+          202.49
+        ]
+      },
+      {
+        "label": "chair",
+        "confidence": 0.335653,
+        "bbox": [
+          352.204,
+          148.247,
+          395.253,
+          226.526
+        ]
+      },
+      {
+        "label": "chair",
+        "confidence": 0.285409,
+        "bbox": [
+          352.285,
+          148.642,
+          408.759,
+          250.847
+        ]
+      }
+    ],
+    "seconds": 2.117249351999817
+  },
+  {
+    "layout": "connected_home",
+    "query": "query_west_north_1",
+    "frame_index": 0,
+    "sha256": "167f902f13b6e5527fbedebfca943d7938c874c180ded206fb6f85e0d5240bc7",
+    "labels": [
+      "person",
+      "window",
+      "mirror",
+      "glass door",
+      "sliding glass door",
+      "sofa",
+      "couch",
+      "table",
+      "desk",
+      "dining table",
+      "chair",
+      "cabinet",
+      "shelf",
+      "bookcase",
+      "wardrobe",
+      "dresser",
+      "nightstand",
+      "television",
+      "lamp"
+    ],
+    "detections": [
+      {
+        "label": "sofa",
+        "confidence": 0.927739,
+        "bbox": [
+          94.829,
+          146.923,
+          282.653,
+          234.138
+        ]
+      },
+      {
+        "label": "lamp",
+        "confidence": 0.825341,
+        "bbox": [
+          281.507,
+          86.373,
+          318.352,
+          231.522
+        ]
+      },
+      {
+        "label": "desk",
+        "confidence": 0.399641,
+        "bbox": [
+          40.175,
+          196.267,
+          213.83,
+          290.361
+        ]
+      },
+      {
+        "label": "desk",
+        "confidence": 0.37984,
+        "bbox": [
+          345.252,
+          194.937,
+          479.992,
+          360.0
+        ]
+      },
+      {
+        "label": "table",
+        "confidence": 0.297243,
+        "bbox": [
+          38.862,
+          198.003,
+          213.528,
+          290.537
+        ]
+      },
+      {
+        "label": "window",
+        "confidence": 0.280312,
+        "bbox": [
+          0.007,
+          94.283,
+          25.229,
+          174.369
+        ]
+      },
+      {
+        "label": "chair",
+        "confidence": 0.276191,
+        "bbox": [
+          398.12,
+          162.839,
+          480.0,
+          306.865
+        ]
+      },
+      {
+        "label": "sofa",
+        "confidence": 0.151868,
+        "bbox": [
+          335.585,
+          157.26,
+          480.0,
+          310.066
+        ]
+      },
+      {
+        "label": "sofa",
+        "confidence": 0.137471,
+        "bbox": [
+          334.447,
+          155.845,
+          479.329,
+          231.536
+        ]
+      },
+      {
+        "label": "television",
+        "confidence": 0.112553,
+        "bbox": [
+          0.0,
+          94.927,
+          24.777,
+          173.452
+        ]
+      }
+    ],
+    "seconds": 2.2747332299995833
+  },
+  {
+    "layout": "connected_home",
+    "query": "query_west_north_1",
+    "frame_index": 1,
+    "sha256": "213ac9b336806858de26d298bdd9083642ac09d94c66c6b9ca7880ffd046d214",
+    "labels": [
+      "person",
+      "window",
+      "mirror",
+      "glass door",
+      "sliding glass door",
+      "sofa",
+      "couch",
+      "table",
+      "desk",
+      "dining table",
+      "chair",
+      "cabinet",
+      "shelf",
+      "bookcase",
+      "wardrobe",
+      "dresser",
+      "nightstand",
+      "television",
+      "lamp"
+    ],
+    "detections": [
+      {
+        "label": "sofa",
+        "confidence": 0.926656,
+        "bbox": [
+          95.061,
+          147.323,
+          283.057,
+          234.58
+        ]
+      },
+      {
+        "label": "lamp",
+        "confidence": 0.81863,
+        "bbox": [
+          281.679,
+          86.376,
+          318.409,
+          231.501
+        ]
+      },
+      {
+        "label": "desk",
+        "confidence": 0.374293,
+        "bbox": [
+          345.194,
+          194.936,
+          479.987,
+          360.0
+        ]
+      },
+      {
+        "label": "desk",
+        "confidence": 0.364721,
+        "bbox": [
+          40.298,
+          196.262,
+          213.694,
+          290.304
+        ]
+      },
+      {
+        "label": "table",
+        "confidence": 0.345049,
+        "bbox": [
+          40.454,
+          196.275,
+          213.203,
+          289.564
+        ]
+      },
+      {
+        "label": "sofa",
+        "confidence": 0.29477,
+        "bbox": [
+          335.453,
+          157.266,
+          480.0,
+          308.047
+        ]
+      },
+      {
+        "label": "sofa",
+        "confidence": 0.2725,
+        "bbox": [
+          334.622,
+          156.458,
+          479.95,
+          231.04
+        ]
+      },
+      {
+        "label": "window",
+        "confidence": 0.269885,
+        "bbox": [
+          0.007,
+          94.14,
+          25.194,
+          174.497
+        ]
+      },
+      {
+        "label": "chair",
+        "confidence": 0.267789,
+        "bbox": [
+          398.227,
+          162.702,
+          480.0,
+          306.806
+        ]
+      },
+      {
+        "label": "television",
+        "confidence": 0.148846,
+        "bbox": [
+          0.0,
+          94.799,
+          24.734,
+          173.57
+        ]
+      }
+    ],
+    "seconds": 1.971128660999966
+  },
+  {
+    "layout": "connected_home",
+    "query": "query_west_south_0",
+    "frame_index": 0,
+    "sha256": "558ab834a5bf76768ade7ded38e03945f7e09457a7019cef4630196d85868b6a",
+    "labels": [
+      "person",
+      "window",
+      "mirror",
+      "glass door",
+      "sliding glass door",
+      "sofa",
+      "couch",
+      "table",
+      "desk",
+      "dining table",
+      "chair",
+      "cabinet",
+      "shelf",
+      "bookcase",
+      "wardrobe",
+      "dresser",
+      "nightstand",
+      "television",
+      "lamp"
+    ],
+    "detections": [
+      {
+        "label": "sofa",
+        "confidence": 0.913701,
+        "bbox": [
+          14.025,
+          141.671,
+          247.394,
+          252.255
+        ]
+      },
+      {
+        "label": "lamp",
+        "confidence": 0.79491,
+        "bbox": [
+          233.585,
+          82.108,
+          267.603,
+          212.284
+        ]
+      },
+      {
+        "label": "desk",
+        "confidence": 0.522544,
+        "bbox": [
+          368.019,
+          171.586,
+          480.0,
+          301.758
+        ]
+      },
+      {
+        "label": "desk",
+        "confidence": 0.515983,
+        "bbox": [
+          97.005,
+          212.437,
+          281.108,
+          337.216
+        ]
+      },
+      {
+        "label": "cabinet",
+        "confidence": 0.442446,
+        "bbox": [
+          263.446,
+          133.584,
+          364.249,
+          202.74
+        ]
+      },
+      {
+        "label": "chair",
+        "confidence": 0.258805,
+        "bbox": [
+          352.745,
+          148.547,
+          394.921,
+          226.241
+        ]
+      },
+      {
+        "label": "chair",
+        "confidence": 0.22464,
+        "bbox": [
+          352.232,
+          147.853,
+          409.157,
+          237.426
+        ]
+      }
+    ],
+    "seconds": 1.9347924869998678
+  },
+  {
+    "layout": "connected_home",
+    "query": "query_west_south_0",
+    "frame_index": 1,
+    "sha256": "4bd4e5af84f9ecf41700a7c9c9c37d0e38b5c363ee7fb18514f9c262e00bb3e7",
+    "labels": [
+      "person",
+      "window",
+      "mirror",
+      "glass door",
+      "sliding glass door",
+      "sofa",
+      "couch",
+      "table",
+      "desk",
+      "dining table",
+      "chair",
+      "cabinet",
+      "shelf",
+      "bookcase",
+      "wardrobe",
+      "dresser",
+      "nightstand",
+      "television",
+      "lamp"
+    ],
+    "detections": [
+      {
+        "label": "sofa",
+        "confidence": 0.909916,
+        "bbox": [
+          14.1,
+          141.486,
+          247.518,
+          252.467
+        ]
+      },
+      {
+        "label": "lamp",
+        "confidence": 0.782816,
+        "bbox": [
+          233.879,
+          81.997,
+          267.773,
+          212.085
+        ]
+      },
+      {
+        "label": "desk",
+        "confidence": 0.509599,
+        "bbox": [
+          97.008,
+          212.412,
+          281.048,
+          337.259
+        ]
+      },
+      {
+        "label": "desk",
+        "confidence": 0.499398,
+        "bbox": [
+          367.552,
+          171.511,
+          480.0,
+          301.607
+        ]
+      },
+      {
+        "label": "cabinet",
+        "confidence": 0.333492,
+        "bbox": [
+          263.347,
+          134.122,
+          364.425,
+          202.547
+        ]
+      },
+      {
+        "label": "chair",
+        "confidence": 0.212546,
+        "bbox": [
+          352.6,
+          148.576,
+          394.554,
+          225.997
+        ]
+      },
+      {
+        "label": "chair",
+        "confidence": 0.196579,
+        "bbox": [
+          352.067,
+          147.752,
+          409.13,
+          238.251
+        ]
+      }
+    ],
+    "seconds": 2.145643844999995
+  },
+  {
+    "layout": "connected_home",
+    "query": "query_west_south_1",
+    "frame_index": 0,
+    "sha256": "f9ef1ebec05dd9ac4850e1447017439f78c32a63ad8485c69901ce85823c83cd",
+    "labels": [
+      "person",
+      "window",
+      "mirror",
+      "glass door",
+      "sliding glass door",
+      "sofa",
+      "couch",
+      "table",
+      "desk",
+      "dining table",
+      "chair",
+      "cabinet",
+      "shelf",
+      "bookcase",
+      "wardrobe",
+      "dresser",
+      "nightstand",
+      "television",
+      "lamp"
+    ],
+    "detections": [
+      {
+        "label": "sofa",
+        "confidence": 0.914227,
+        "bbox": [
+          95.887,
+          147.43,
+          281.728,
+          234.469
+        ]
+      },
+      {
+        "label": "lamp",
+        "confidence": 0.810803,
+        "bbox": [
+          281.1,
+          86.041,
+          317.672,
+          232.044
+        ]
+      },
+      {
+        "label": "desk",
+        "confidence": 0.44691,
+        "bbox": [
+          345.548,
+          195.542,
+          480.0,
+          359.963
+        ]
+      },
+      {
+        "label": "desk",
+        "confidence": 0.406819,
+        "bbox": [
+          40.514,
+          196.07,
+          213.948,
+          290.187
+        ]
+      },
+      {
+        "label": "window",
+        "confidence": 0.323282,
+        "bbox": [
+          0.006,
+          93.708,
+          25.127,
+          175.695
+        ]
+      },
+      {
+        "label": "sofa",
+        "confidence": 0.294526,
+        "bbox": [
+          334.628,
+          157.144,
+          480.0,
+          305.897
+        ]
+      },
+      {
+        "label": "table",
+        "confidence": 0.284131,
+        "bbox": [
+          39.13,
+          197.627,
+          213.615,
+          290.465
+        ]
+      },
+      {
+        "label": "couch",
+        "confidence": 0.207977,
+        "bbox": [
+          94.969,
+          146.83,
+          282.635,
+          233.223
+        ]
+      },
+      {
+        "label": "mirror",
+        "confidence": 0.116479,
+        "bbox": [
+          0.0,
+          94.591,
+          24.644,
+          174.157
+        ]
+      },
+      {
+        "label": "sofa",
+        "confidence": 0.102672,
+        "bbox": [
+          334.176,
+          157.777,
+          480.0,
+          232.44
+        ]
+      }
+    ],
+    "seconds": 2.038326414000039
+  },
+  {
+    "layout": "connected_home",
+    "query": "query_west_south_1",
+    "frame_index": 1,
+    "sha256": "c9607d6b36205d21cb1cc746cd7302e2341077407b6ccd6fbd793138593dbb3c",
+    "labels": [
+      "person",
+      "window",
+      "mirror",
+      "glass door",
+      "sliding glass door",
+      "sofa",
+      "couch",
+      "table",
+      "desk",
+      "dining table",
+      "chair",
+      "cabinet",
+      "shelf",
+      "bookcase",
+      "wardrobe",
+      "dresser",
+      "nightstand",
+      "television",
+      "lamp"
+    ],
+    "detections": [
+      {
+        "label": "sofa",
+        "confidence": 0.918577,
+        "bbox": [
+          94.849,
+          147.034,
+          282.397,
+          234.764
+        ]
+      },
+      {
+        "label": "lamp",
+        "confidence": 0.802145,
+        "bbox": [
+          281.308,
+          85.99,
+          316.562,
+          231.901
+        ]
+      },
+      {
+        "label": "desk",
+        "confidence": 0.428242,
+        "bbox": [
+          40.642,
+          195.608,
+          213.98,
+          290.295
+        ]
+      },
+      {
+        "label": "desk",
+        "confidence": 0.383221,
+        "bbox": [
+          345.016,
+          193.534,
+          480.0,
+          360.0
+        ]
+      },
+      {
+        "label": "sofa",
+        "confidence": 0.353779,
+        "bbox": [
+          335.312,
+          156.475,
+          479.999,
+          307.949
+        ]
+      },
+      {
+        "label": "window",
+        "confidence": 0.351177,
+        "bbox": [
+          0.005,
+          93.526,
+          25.164,
+          175.841
+        ]
+      },
+      {
+        "label": "table",
+        "confidence": 0.277377,
+        "bbox": [
+          39.025,
+          197.178,
+          213.652,
+          290.502
+        ]
+      },
+      {
+        "label": "couch",
+        "confidence": 0.218855,
+        "bbox": [
+          95.169,
+          146.825,
+          282.819,
+          233.618
+        ]
+      },
+      {
+        "label": "sofa",
+        "confidence": 0.108986,
+        "bbox": [
+          334.741,
+          157.579,
+          480.0,
+          232.958
+        ]
+      },
+      {
+        "label": "mirror",
+        "confidence": 0.106833,
+        "bbox": [
+          0.0,
+          94.129,
+          24.858,
+          175.323
+        ]
+      }
+    ],
+    "seconds": 2.013003559000026
+  }
+]

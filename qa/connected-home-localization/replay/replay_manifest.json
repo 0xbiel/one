@@ -1,0 +1,5745 @@
+{
+  "schema": "one-connected-replay.v1",
+  "common_gzip_sha256": "a16109979656b939cfffdf89b8b7e90260e5ecbc204ff86be1770057d01bc9d6",
+  "chunks": [
+    {
+      "file": "common.json.gz.part00",
+      "sha256": "38b9b41c42a83149f43902670541173be4bdfdcc54cd574e70663761b6eba75e",
+      "bytes": 90000
+    },
+    {
+      "file": "common.json.gz.part01",
+      "sha256": "413c00d5d9be90aae2e968e734b214e99997cd541822f06739f79a72893e4e3b",
+      "bytes": 90000
+    },
+    {
+      "file": "common.json.gz.part02",
+      "sha256": "ae4f0e504bc63f19ca00e13009d197119b37ec25590d5c9390e385ccd763b18c",
+      "bytes": 90000
+    },
+    {
+      "file": "common.json.gz.part03",
+      "sha256": "dca0d934071f02216fe75eb2c04c8acc9dbbc284ae656d7ab7fe8017cd05ff5b",
+      "bytes": 90000
+    },
+    {
+      "file": "common.json.gz.part04",
+      "sha256": "06d4a91cda7e3abdd02428ee18bf64eb173581364cecd4e5a39cf663eb0d1f83",
+      "bytes": 90000
+    },
+    {
+      "file": "common.json.gz.part05",
+      "sha256": "d9dea23805da046fc998c09aaa70bc8450c8a33983cc53d61df2c11fcc12c910",
+      "bytes": 90000
+    },
+    {
+      "file": "common.json.gz.part06",
+      "sha256": "1a6277dbb6efb87e8b0ef9d5040a724dd3e2f8622d0fe18a9c2f4c0f63d25ce0",
+      "bytes": 90000
+    },
+    {
+      "file": "common.json.gz.part07",
+      "sha256": "f6c44930e518e6718212925faaa6780442a2e198df6db8f1c3213baa7b06ca09",
+      "bytes": 90000
+    },
+    {
+      "file": "common.json.gz.part08",
+      "sha256": "0ec47bf11dc1189b6c8c766f255efdf3ef622e4594ec1f79fe17110d2f1cc371",
+      "bytes": 90000
+    },
+    {
+      "file": "common.json.gz.part09",
+      "sha256": "25e22af7c5f53082489aef15e70c9b2830140d4f51f025c04a34f52e24620244",
+      "bytes": 90000
+    },
+    {
+      "file": "common.json.gz.part10",
+      "sha256": "8d42202bde466a3ebd075018df2945ec73f00e1f02a38ffc4a170f1e960a25c9",
+      "bytes": 90000
+    },
+    {
+      "file": "common.json.gz.part11",
+      "sha256": "97c9ddc35301fea853ca9674946339a68f685c0a3c2ec917671b0735b2bf083d",
+      "bytes": 90000
+    },
+    {
+      "file": "common.json.gz.part12",
+      "sha256": "46bcba523aca920e4a0a96f79b1e0246a1406457290450125e82d87263207452",
+      "bytes": 22525
+    }
+  ],
+  "cases": [
+    {
+      "case": "query_west_south_0_clean",
+      "split": "dev",
+      "condition": "clean",
+      "query": "query_west_south_0",
+      "input": "inputs/query_west_south_0_clean.json",
+      "sha256": "e89d7fbf0411557866067be7c7327f175d17c69e615fb426a725d5c9307b31cc",
+      "keys": [
+        "landmarks",
+        "frames",
+        "room_objects",
+        "room_zones",
+        "intrinsics",
+        "object_detections"
+      ],
+      "frames": [
+        {
+          "file": "frames/558ab834a5bf76768ade7ded38e03945f7e09457a7019cef4630196d85868b6a.jpg",
+          "sha256": "558ab834a5bf76768ade7ded38e03945f7e09457a7019cef4630196d85868b6a",
+          "width": 480,
+          "height": 360,
+          "keys": [
+            "frame_base64",
+            "width",
+            "height"
+          ]
+        },
+        {
+          "file": "frames/4bd4e5af84f9ecf41700a7c9c9c37d0e38b5c363ee7fb18514f9c262e00bb3e7.jpg",
+          "sha256": "4bd4e5af84f9ecf41700a7c9c9c37d0e38b5c363ee7fb18514f9c262e00bb3e7",
+          "width": 480,
+          "height": 360,
+          "keys": [
+            "frame_base64",
+            "width",
+            "height"
+          ]
+        }
+      ],
+      "details": {
+        "intrinsics": {
+          "values": [
+            [
+              320.0,
+              0,
+              240.0
+            ],
+            [
+              0,
+              320.0,
+              180.0
+            ],
+            [
+              0,
+              0,
+              1
+            ]
+          ]
+        },
+        "object_detections": [
+          {
+            "label": "sofa",
+            "confidence": 0.913701,
+            "bbox": [
+              14.025,
+              141.671,
+              247.394,
+              252.255
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "lamp",
+            "confidence": 0.79491,
+            "bbox": [
+              233.585,
+              82.108,
+              267.603,
+              212.284
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "desk",
+            "confidence": 0.522544,
+            "bbox": [
+              368.019,
+              171.586,
+              480.0,
+              301.758
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "desk",
+            "confidence": 0.515983,
+            "bbox": [
+              97.005,
+              212.437,
+              281.108,
+              337.216
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "cabinet",
+            "confidence": 0.442446,
+            "bbox": [
+              263.446,
+              133.584,
+              364.249,
+              202.74
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "chair",
+            "confidence": 0.258805,
+            "bbox": [
+              352.745,
+              148.547,
+              394.921,
+              226.241
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "chair",
+            "confidence": 0.22464,
+            "bbox": [
+              352.232,
+              147.853,
+              409.157,
+              237.426
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "sofa",
+            "confidence": 0.909916,
+            "bbox": [
+              14.1,
+              141.486,
+              247.518,
+              252.467
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "lamp",
+            "confidence": 0.782816,
+            "bbox": [
+              233.879,
+              81.997,
+              267.773,
+              212.085
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "desk",
+            "confidence": 0.509599,
+            "bbox": [
+              97.008,
+              212.412,
+              281.048,
+              337.259
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "desk",
+            "confidence": 0.499398,
+            "bbox": [
+              367.552,
+              171.511,
+              480.0,
+              301.607
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "cabinet",
+            "confidence": 0.333492,
+            "bbox": [
+              263.347,
+              134.122,
+              364.425,
+              202.547
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "chair",
+            "confidence": 0.212546,
+            "bbox": [
+              352.6,
+              148.576,
+              394.554,
+              225.997
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "chair",
+            "confidence": 0.196579,
+            "bbox": [
+              352.067,
+              147.752,
+              409.13,
+              238.251
+            ],
+            "frame_index": 1
+          }
+        ]
+      }
+    },
+    {
+      "case": "query_west_south_0_unknown_intrinsics",
+      "split": "dev",
+      "condition": "unknown_intrinsics",
+      "query": "query_west_south_0",
+      "input": "inputs/query_west_south_0_unknown_intrinsics.json",
+      "sha256": "6549a067df075baf7e8d52952401bc59212ff09ab11862a1b6f5874e08dd4c4b",
+      "keys": [
+        "landmarks",
+        "frames",
+        "room_objects",
+        "room_zones",
+        "object_detections"
+      ],
+      "frames": [
+        {
+          "file": "frames/558ab834a5bf76768ade7ded38e03945f7e09457a7019cef4630196d85868b6a.jpg",
+          "sha256": "558ab834a5bf76768ade7ded38e03945f7e09457a7019cef4630196d85868b6a",
+          "width": 480,
+          "height": 360,
+          "keys": [
+            "frame_base64",
+            "width",
+            "height"
+          ]
+        },
+        {
+          "file": "frames/4bd4e5af84f9ecf41700a7c9c9c37d0e38b5c363ee7fb18514f9c262e00bb3e7.jpg",
+          "sha256": "4bd4e5af84f9ecf41700a7c9c9c37d0e38b5c363ee7fb18514f9c262e00bb3e7",
+          "width": 480,
+          "height": 360,
+          "keys": [
+            "frame_base64",
+            "width",
+            "height"
+          ]
+        }
+      ],
+      "details": {
+        "object_detections": [
+          {
+            "label": "sofa",
+            "confidence": 0.913701,
+            "bbox": [
+              14.025,
+              141.671,
+              247.394,
+              252.255
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "lamp",
+            "confidence": 0.79491,
+            "bbox": [
+              233.585,
+              82.108,
+              267.603,
+              212.284
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "desk",
+            "confidence": 0.522544,
+            "bbox": [
+              368.019,
+              171.586,
+              480.0,
+              301.758
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "desk",
+            "confidence": 0.515983,
+            "bbox": [
+              97.005,
+              212.437,
+              281.108,
+              337.216
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "cabinet",
+            "confidence": 0.442446,
+            "bbox": [
+              263.446,
+              133.584,
+              364.249,
+              202.74
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "chair",
+            "confidence": 0.258805,
+            "bbox": [
+              352.745,
+              148.547,
+              394.921,
+              226.241
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "chair",
+            "confidence": 0.22464,
+            "bbox": [
+              352.232,
+              147.853,
+              409.157,
+              237.426
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "sofa",
+            "confidence": 0.909916,
+            "bbox": [
+              14.1,
+              141.486,
+              247.518,
+              252.467
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "lamp",
+            "confidence": 0.782816,
+            "bbox": [
+              233.879,
+              81.997,
+              267.773,
+              212.085
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "desk",
+            "confidence": 0.509599,
+            "bbox": [
+              97.008,
+              212.412,
+              281.048,
+              337.259
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "desk",
+            "confidence": 0.499398,
+            "bbox": [
+              367.552,
+              171.511,
+              480.0,
+              301.607
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "cabinet",
+            "confidence": 0.333492,
+            "bbox": [
+              263.347,
+              134.122,
+              364.425,
+              202.547
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "chair",
+            "confidence": 0.212546,
+            "bbox": [
+              352.6,
+              148.576,
+              394.554,
+              225.997
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "chair",
+            "confidence": 0.196579,
+            "bbox": [
+              352.067,
+              147.752,
+              409.13,
+              238.251
+            ],
+            "frame_index": 1
+          }
+        ]
+      }
+    },
+    {
+      "case": "query_west_south_1_clean",
+      "split": "dev",
+      "condition": "clean",
+      "query": "query_west_south_1",
+      "input": "inputs/query_west_south_1_clean.json",
+      "sha256": "455abf9e1e46211f8b8dcfc06c2e1ea88a741763c8a2b13e0b0956ab8db73547",
+      "keys": [
+        "landmarks",
+        "frames",
+        "room_objects",
+        "room_zones",
+        "intrinsics",
+        "object_detections"
+      ],
+      "frames": [
+        {
+          "file": "frames/f9ef1ebec05dd9ac4850e1447017439f78c32a63ad8485c69901ce85823c83cd.jpg",
+          "sha256": "f9ef1ebec05dd9ac4850e1447017439f78c32a63ad8485c69901ce85823c83cd",
+          "width": 480,
+          "height": 360,
+          "keys": [
+            "frame_base64",
+            "width",
+            "height"
+          ]
+        },
+        {
+          "file": "frames/c9607d6b36205d21cb1cc746cd7302e2341077407b6ccd6fbd793138593dbb3c.jpg",
+          "sha256": "c9607d6b36205d21cb1cc746cd7302e2341077407b6ccd6fbd793138593dbb3c",
+          "width": 480,
+          "height": 360,
+          "keys": [
+            "frame_base64",
+            "width",
+            "height"
+          ]
+        }
+      ],
+      "details": {
+        "intrinsics": {
+          "values": [
+            [
+              320.0,
+              0,
+              240.0
+            ],
+            [
+              0,
+              320.0,
+              180.0
+            ],
+            [
+              0,
+              0,
+              1
+            ]
+          ]
+        },
+        "object_detections": [
+          {
+            "label": "sofa",
+            "confidence": 0.914227,
+            "bbox": [
+              95.887,
+              147.43,
+              281.728,
+              234.469
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "lamp",
+            "confidence": 0.810803,
+            "bbox": [
+              281.1,
+              86.041,
+              317.672,
+              232.044
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "desk",
+            "confidence": 0.44691,
+            "bbox": [
+              345.548,
+              195.542,
+              480.0,
+              359.963
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "desk",
+            "confidence": 0.406819,
+            "bbox": [
+              40.514,
+              196.07,
+              213.948,
+              290.187
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "window",
+            "confidence": 0.323282,
+            "bbox": [
+              0.006,
+              93.708,
+              25.127,
+              175.695
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "sofa",
+            "confidence": 0.294526,
+            "bbox": [
+              334.628,
+              157.144,
+              480.0,
+              305.897
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "table",
+            "confidence": 0.284131,
+            "bbox": [
+              39.13,
+              197.627,
+              213.615,
+              290.465
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "couch",
+            "confidence": 0.207977,
+            "bbox": [
+              94.969,
+              146.83,
+              282.635,
+              233.223
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "mirror",
+            "confidence": 0.116479,
+            "bbox": [
+              0.0,
+              94.591,
+              24.644,
+              174.157
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "sofa",
+            "confidence": 0.102672,
+            "bbox": [
+              334.176,
+              157.777,
+              480.0,
+              232.44
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "sofa",
+            "confidence": 0.918577,
+            "bbox": [
+              94.849,
+              147.034,
+              282.397,
+              234.764
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "lamp",
+            "confidence": 0.802145,
+            "bbox": [
+              281.308,
+              85.99,
+              316.562,
+              231.901
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "desk",
+            "confidence": 0.428242,
+            "bbox": [
+              40.642,
+              195.608,
+              213.98,
+              290.295
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "desk",
+            "confidence": 0.383221,
+            "bbox": [
+              345.016,
+              193.534,
+              480.0,
+              360.0
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "sofa",
+            "confidence": 0.353779,
+            "bbox": [
+              335.312,
+              156.475,
+              479.999,
+              307.949
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "window",
+            "confidence": 0.351177,
+            "bbox": [
+              0.005,
+              93.526,
+              25.164,
+              175.841
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "table",
+            "confidence": 0.277377,
+            "bbox": [
+              39.025,
+              197.178,
+              213.652,
+              290.502
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "couch",
+            "confidence": 0.218855,
+            "bbox": [
+              95.169,
+              146.825,
+              282.819,
+              233.618
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "sofa",
+            "confidence": 0.108986,
+            "bbox": [
+              334.741,
+              157.579,
+              480.0,
+              232.958
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "mirror",
+            "confidence": 0.106833,
+            "bbox": [
+              0.0,
+              94.129,
+              24.858,
+              175.323
+            ],
+            "frame_index": 1
+          }
+        ]
+      }
+    },
+    {
+      "case": "query_west_south_1_unknown_intrinsics",
+      "split": "dev",
+      "condition": "unknown_intrinsics",
+      "query": "query_west_south_1",
+      "input": "inputs/query_west_south_1_unknown_intrinsics.json",
+      "sha256": "75f0208727328e77b09275a9e2546b6a23463b5343b35de299ffba5b129740df",
+      "keys": [
+        "landmarks",
+        "frames",
+        "room_objects",
+        "room_zones",
+        "object_detections"
+      ],
+      "frames": [
+        {
+          "file": "frames/f9ef1ebec05dd9ac4850e1447017439f78c32a63ad8485c69901ce85823c83cd.jpg",
+          "sha256": "f9ef1ebec05dd9ac4850e1447017439f78c32a63ad8485c69901ce85823c83cd",
+          "width": 480,
+          "height": 360,
+          "keys": [
+            "frame_base64",
+            "width",
+            "height"
+          ]
+        },
+        {
+          "file": "frames/c9607d6b36205d21cb1cc746cd7302e2341077407b6ccd6fbd793138593dbb3c.jpg",
+          "sha256": "c9607d6b36205d21cb1cc746cd7302e2341077407b6ccd6fbd793138593dbb3c",
+          "width": 480,
+          "height": 360,
+          "keys": [
+            "frame_base64",
+            "width",
+            "height"
+          ]
+        }
+      ],
+      "details": {
+        "object_detections": [
+          {
+            "label": "sofa",
+            "confidence": 0.914227,
+            "bbox": [
+              95.887,
+              147.43,
+              281.728,
+              234.469
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "lamp",
+            "confidence": 0.810803,
+            "bbox": [
+              281.1,
+              86.041,
+              317.672,
+              232.044
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "desk",
+            "confidence": 0.44691,
+            "bbox": [
+              345.548,
+              195.542,
+              480.0,
+              359.963
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "desk",
+            "confidence": 0.406819,
+            "bbox": [
+              40.514,
+              196.07,
+              213.948,
+              290.187
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "window",
+            "confidence": 0.323282,
+            "bbox": [
+              0.006,
+              93.708,
+              25.127,
+              175.695
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "sofa",
+            "confidence": 0.294526,
+            "bbox": [
+              334.628,
+              157.144,
+              480.0,
+              305.897
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "table",
+            "confidence": 0.284131,
+            "bbox": [
+              39.13,
+              197.627,
+              213.615,
+              290.465
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "couch",
+            "confidence": 0.207977,
+            "bbox": [
+              94.969,
+              146.83,
+              282.635,
+              233.223
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "mirror",
+            "confidence": 0.116479,
+            "bbox": [
+              0.0,
+              94.591,
+              24.644,
+              174.157
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "sofa",
+            "confidence": 0.102672,
+            "bbox": [
+              334.176,
+              157.777,
+              480.0,
+              232.44
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "sofa",
+            "confidence": 0.918577,
+            "bbox": [
+              94.849,
+              147.034,
+              282.397,
+              234.764
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "lamp",
+            "confidence": 0.802145,
+            "bbox": [
+              281.308,
+              85.99,
+              316.562,
+              231.901
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "desk",
+            "confidence": 0.428242,
+            "bbox": [
+              40.642,
+              195.608,
+              213.98,
+              290.295
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "desk",
+            "confidence": 0.383221,
+            "bbox": [
+              345.016,
+              193.534,
+              480.0,
+              360.0
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "sofa",
+            "confidence": 0.353779,
+            "bbox": [
+              335.312,
+              156.475,
+              479.999,
+              307.949
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "window",
+            "confidence": 0.351177,
+            "bbox": [
+              0.005,
+              93.526,
+              25.164,
+              175.841
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "table",
+            "confidence": 0.277377,
+            "bbox": [
+              39.025,
+              197.178,
+              213.652,
+              290.502
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "couch",
+            "confidence": 0.218855,
+            "bbox": [
+              95.169,
+              146.825,
+              282.819,
+              233.618
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "sofa",
+            "confidence": 0.108986,
+            "bbox": [
+              334.741,
+              157.579,
+              480.0,
+              232.958
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "mirror",
+            "confidence": 0.106833,
+            "bbox": [
+              0.0,
+              94.129,
+              24.858,
+              175.323
+            ],
+            "frame_index": 1
+          }
+        ]
+      }
+    },
+    {
+      "case": "query_west_north_0_clean",
+      "split": "heldout",
+      "condition": "clean",
+      "query": "query_west_north_0",
+      "input": "inputs/query_west_north_0_clean.json",
+      "sha256": "0e77f15575c337f309faa03a932f93ba750db5f5aeb5af2053265dbb50a3b2cb",
+      "keys": [
+        "landmarks",
+        "frames",
+        "room_objects",
+        "room_zones",
+        "intrinsics",
+        "object_detections"
+      ],
+      "frames": [
+        {
+          "file": "frames/168c415c10e1721a8e90061652bd4f140de50b2abefd51b09a5d04207493f801.jpg",
+          "sha256": "168c415c10e1721a8e90061652bd4f140de50b2abefd51b09a5d04207493f801",
+          "width": 480,
+          "height": 360,
+          "keys": [
+            "frame_base64",
+            "width",
+            "height"
+          ]
+        },
+        {
+          "file": "frames/762a74edbf7a44f0fb47130efcad8ce184b1b0d06c1b9140956bb5f309dde9c8.jpg",
+          "sha256": "762a74edbf7a44f0fb47130efcad8ce184b1b0d06c1b9140956bb5f309dde9c8",
+          "width": 480,
+          "height": 360,
+          "keys": [
+            "frame_base64",
+            "width",
+            "height"
+          ]
+        }
+      ],
+      "details": {
+        "intrinsics": {
+          "values": [
+            [
+              320.0,
+              0,
+              240.0
+            ],
+            [
+              0,
+              320.0,
+              180.0
+            ],
+            [
+              0,
+              0,
+              1
+            ]
+          ]
+        },
+        "object_detections": [
+          {
+            "label": "sofa",
+            "confidence": 0.92393,
+            "bbox": [
+              14.288,
+              141.16,
+              247.681,
+              253.19
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "lamp",
+            "confidence": 0.796668,
+            "bbox": [
+              235.023,
+              82.671,
+              267.385,
+              212.084
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "desk",
+            "confidence": 0.597459,
+            "bbox": [
+              369.406,
+              171.52,
+              480.0,
+              301.276
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "desk",
+            "confidence": 0.500036,
+            "bbox": [
+              96.789,
+              212.566,
+              281.455,
+              337.125
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "cabinet",
+            "confidence": 0.386211,
+            "bbox": [
+              262.562,
+              135.203,
+              364.943,
+              202.655
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "chair",
+            "confidence": 0.344827,
+            "bbox": [
+              352.243,
+              148.554,
+              395.103,
+              226.997
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "chair",
+            "confidence": 0.315453,
+            "bbox": [
+              352.315,
+              148.997,
+              409.177,
+              250.873
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "sofa",
+            "confidence": 0.923328,
+            "bbox": [
+              14.177,
+              140.927,
+              247.471,
+              254.033
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "lamp",
+            "confidence": 0.781497,
+            "bbox": [
+              235.924,
+              82.693,
+              267.096,
+              212.073
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "desk",
+            "confidence": 0.557418,
+            "bbox": [
+              368.405,
+              171.531,
+              480.0,
+              301.22
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "desk",
+            "confidence": 0.490918,
+            "bbox": [
+              96.833,
+              212.332,
+              281.373,
+              337.089
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "cabinet",
+            "confidence": 0.342898,
+            "bbox": [
+              264.712,
+              135.228,
+              365.104,
+              202.49
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "chair",
+            "confidence": 0.335653,
+            "bbox": [
+              352.204,
+              148.247,
+              395.253,
+              226.526
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "chair",
+            "confidence": 0.285409,
+            "bbox": [
+              352.285,
+              148.642,
+              408.759,
+              250.847
+            ],
+            "frame_index": 1
+          }
+        ]
+      }
+    },
+    {
+      "case": "query_west_north_0_unknown_intrinsics",
+      "split": "heldout",
+      "condition": "unknown_intrinsics",
+      "query": "query_west_north_0",
+      "input": "inputs/query_west_north_0_unknown_intrinsics.json",
+      "sha256": "75717a29060e21351d199b7cce53ed48d1d9541ecb15b22d3222886357ecc058",
+      "keys": [
+        "landmarks",
+        "frames",
+        "room_objects",
+        "room_zones",
+        "object_detections"
+      ],
+      "frames": [
+        {
+          "file": "frames/168c415c10e1721a8e90061652bd4f140de50b2abefd51b09a5d04207493f801.jpg",
+          "sha256": "168c415c10e1721a8e90061652bd4f140de50b2abefd51b09a5d04207493f801",
+          "width": 480,
+          "height": 360,
+          "keys": [
+            "frame_base64",
+            "width",
+            "height"
+          ]
+        },
+        {
+          "file": "frames/762a74edbf7a44f0fb47130efcad8ce184b1b0d06c1b9140956bb5f309dde9c8.jpg",
+          "sha256": "762a74edbf7a44f0fb47130efcad8ce184b1b0d06c1b9140956bb5f309dde9c8",
+          "width": 480,
+          "height": 360,
+          "keys": [
+            "frame_base64",
+            "width",
+            "height"
+          ]
+        }
+      ],
+      "details": {
+        "object_detections": [
+          {
+            "label": "sofa",
+            "confidence": 0.92393,
+            "bbox": [
+              14.288,
+              141.16,
+              247.681,
+              253.19
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "lamp",
+            "confidence": 0.796668,
+            "bbox": [
+              235.023,
+              82.671,
+              267.385,
+              212.084
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "desk",
+            "confidence": 0.597459,
+            "bbox": [
+              369.406,
+              171.52,
+              480.0,
+              301.276
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "desk",
+            "confidence": 0.500036,
+            "bbox": [
+              96.789,
+              212.566,
+              281.455,
+              337.125
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "cabinet",
+            "confidence": 0.386211,
+            "bbox": [
+              262.562,
+              135.203,
+              364.943,
+              202.655
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "chair",
+            "confidence": 0.344827,
+            "bbox": [
+              352.243,
+              148.554,
+              395.103,
+              226.997
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "chair",
+            "confidence": 0.315453,
+            "bbox": [
+              352.315,
+              148.997,
+              409.177,
+              250.873
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "sofa",
+            "confidence": 0.923328,
+            "bbox": [
+              14.177,
+              140.927,
+              247.471,
+              254.033
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "lamp",
+            "confidence": 0.781497,
+            "bbox": [
+              235.924,
+              82.693,
+              267.096,
+              212.073
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "desk",
+            "confidence": 0.557418,
+            "bbox": [
+              368.405,
+              171.531,
+              480.0,
+              301.22
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "desk",
+            "confidence": 0.490918,
+            "bbox": [
+              96.833,
+              212.332,
+              281.373,
+              337.089
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "cabinet",
+            "confidence": 0.342898,
+            "bbox": [
+              264.712,
+              135.228,
+              365.104,
+              202.49
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "chair",
+            "confidence": 0.335653,
+            "bbox": [
+              352.204,
+              148.247,
+              395.253,
+              226.526
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "chair",
+            "confidence": 0.285409,
+            "bbox": [
+              352.285,
+              148.642,
+              408.759,
+              250.847
+            ],
+            "frame_index": 1
+          }
+        ]
+      }
+    },
+    {
+      "case": "query_west_north_1_clean",
+      "split": "heldout",
+      "condition": "clean",
+      "query": "query_west_north_1",
+      "input": "inputs/query_west_north_1_clean.json",
+      "sha256": "25ceef114fb8238f58af02ce9f67aebc564ec20ab7fc90570aa3b70876a1233c",
+      "keys": [
+        "landmarks",
+        "frames",
+        "room_objects",
+        "room_zones",
+        "intrinsics",
+        "object_detections"
+      ],
+      "frames": [
+        {
+          "file": "frames/167f902f13b6e5527fbedebfca943d7938c874c180ded206fb6f85e0d5240bc7.jpg",
+          "sha256": "167f902f13b6e5527fbedebfca943d7938c874c180ded206fb6f85e0d5240bc7",
+          "width": 480,
+          "height": 360,
+          "keys": [
+            "frame_base64",
+            "width",
+            "height"
+          ]
+        },
+        {
+          "file": "frames/213ac9b336806858de26d298bdd9083642ac09d94c66c6b9ca7880ffd046d214.jpg",
+          "sha256": "213ac9b336806858de26d298bdd9083642ac09d94c66c6b9ca7880ffd046d214",
+          "width": 480,
+          "height": 360,
+          "keys": [
+            "frame_base64",
+            "width",
+            "height"
+          ]
+        }
+      ],
+      "details": {
+        "intrinsics": {
+          "values": [
+            [
+              320.0,
+              0,
+              240.0
+            ],
+            [
+              0,
+              320.0,
+              180.0
+            ],
+            [
+              0,
+              0,
+              1
+            ]
+          ]
+        },
+        "object_detections": [
+          {
+            "label": "sofa",
+            "confidence": 0.927739,
+            "bbox": [
+              94.829,
+              146.923,
+              282.653,
+              234.138
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "lamp",
+            "confidence": 0.825341,
+            "bbox": [
+              281.507,
+              86.373,
+              318.352,
+              231.522
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "desk",
+            "confidence": 0.399641,
+            "bbox": [
+              40.175,
+              196.267,
+              213.83,
+              290.361
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "desk",
+            "confidence": 0.37984,
+            "bbox": [
+              345.252,
+              194.937,
+              479.992,
+              360.0
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "table",
+            "confidence": 0.297243,
+            "bbox": [
+              38.862,
+              198.003,
+              213.528,
+              290.537
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "window",
+            "confidence": 0.280312,
+            "bbox": [
+              0.007,
+              94.283,
+              25.229,
+              174.369
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "chair",
+            "confidence": 0.276191,
+            "bbox": [
+              398.12,
+              162.839,
+              480.0,
+              306.865
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "sofa",
+            "confidence": 0.151868,
+            "bbox": [
+              335.585,
+              157.26,
+              480.0,
+              310.066
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "sofa",
+            "confidence": 0.137471,
+            "bbox": [
+              334.447,
+              155.845,
+              479.329,
+              231.536
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "television",
+            "confidence": 0.112553,
+            "bbox": [
+              0.0,
+              94.927,
+              24.777,
+              173.452
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "sofa",
+            "confidence": 0.926656,
+            "bbox": [
+              95.061,
+              147.323,
+              283.057,
+              234.58
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "lamp",
+            "confidence": 0.81863,
+            "bbox": [
+              281.679,
+              86.376,
+              318.409,
+              231.501
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "desk",
+            "confidence": 0.374293,
+            "bbox": [
+              345.194,
+              194.936,
+              479.987,
+              360.0
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "desk",
+            "confidence": 0.364721,
+            "bbox": [
+              40.298,
+              196.262,
+              213.694,
+              290.304
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "table",
+            "confidence": 0.345049,
+            "bbox": [
+              40.454,
+              196.275,
+              213.203,
+              289.564
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "sofa",
+            "confidence": 0.29477,
+            "bbox": [
+              335.453,
+              157.266,
+              480.0,
+              308.047
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "sofa",
+            "confidence": 0.2725,
+            "bbox": [
+              334.622,
+              156.458,
+              479.95,
+              231.04
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "window",
+            "confidence": 0.269885,
+            "bbox": [
+              0.007,
+              94.14,
+              25.194,
+              174.497
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "chair",
+            "confidence": 0.267789,
+            "bbox": [
+              398.227,
+              162.702,
+              480.0,
+              306.806
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "television",
+            "confidence": 0.148846,
+            "bbox": [
+              0.0,
+              94.799,
+              24.734,
+              173.57
+            ],
+            "frame_index": 1
+          }
+        ]
+      }
+    },
+    {
+      "case": "query_west_north_1_unknown_intrinsics",
+      "split": "heldout",
+      "condition": "unknown_intrinsics",
+      "query": "query_west_north_1",
+      "input": "inputs/query_west_north_1_unknown_intrinsics.json",
+      "sha256": "f7228d31e1e5ee11d37b963e13422e1e94d678a4cf176a2c281d6ea34310cbac",
+      "keys": [
+        "landmarks",
+        "frames",
+        "room_objects",
+        "room_zones",
+        "object_detections"
+      ],
+      "frames": [
+        {
+          "file": "frames/167f902f13b6e5527fbedebfca943d7938c874c180ded206fb6f85e0d5240bc7.jpg",
+          "sha256": "167f902f13b6e5527fbedebfca943d7938c874c180ded206fb6f85e0d5240bc7",
+          "width": 480,
+          "height": 360,
+          "keys": [
+            "frame_base64",
+            "width",
+            "height"
+          ]
+        },
+        {
+          "file": "frames/213ac9b336806858de26d298bdd9083642ac09d94c66c6b9ca7880ffd046d214.jpg",
+          "sha256": "213ac9b336806858de26d298bdd9083642ac09d94c66c6b9ca7880ffd046d214",
+          "width": 480,
+          "height": 360,
+          "keys": [
+            "frame_base64",
+            "width",
+            "height"
+          ]
+        }
+      ],
+      "details": {
+        "object_detections": [
+          {
+            "label": "sofa",
+            "confidence": 0.927739,
+            "bbox": [
+              94.829,
+              146.923,
+              282.653,
+              234.138
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "lamp",
+            "confidence": 0.825341,
+            "bbox": [
+              281.507,
+              86.373,
+              318.352,
+              231.522
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "desk",
+            "confidence": 0.399641,
+            "bbox": [
+              40.175,
+              196.267,
+              213.83,
+              290.361
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "desk",
+            "confidence": 0.37984,
+            "bbox": [
+              345.252,
+              194.937,
+              479.992,
+              360.0
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "table",
+            "confidence": 0.297243,
+            "bbox": [
+              38.862,
+              198.003,
+              213.528,
+              290.537
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "window",
+            "confidence": 0.280312,
+            "bbox": [
+              0.007,
+              94.283,
+              25.229,
+              174.369
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "chair",
+            "confidence": 0.276191,
+            "bbox": [
+              398.12,
+              162.839,
+              480.0,
+              306.865
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "sofa",
+            "confidence": 0.151868,
+            "bbox": [
+              335.585,
+              157.26,
+              480.0,
+              310.066
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "sofa",
+            "confidence": 0.137471,
+            "bbox": [
+              334.447,
+              155.845,
+              479.329,
+              231.536
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "television",
+            "confidence": 0.112553,
+            "bbox": [
+              0.0,
+              94.927,
+              24.777,
+              173.452
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "sofa",
+            "confidence": 0.926656,
+            "bbox": [
+              95.061,
+              147.323,
+              283.057,
+              234.58
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "lamp",
+            "confidence": 0.81863,
+            "bbox": [
+              281.679,
+              86.376,
+              318.409,
+              231.501
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "desk",
+            "confidence": 0.374293,
+            "bbox": [
+              345.194,
+              194.936,
+              479.987,
+              360.0
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "desk",
+            "confidence": 0.364721,
+            "bbox": [
+              40.298,
+              196.262,
+              213.694,
+              290.304
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "table",
+            "confidence": 0.345049,
+            "bbox": [
+              40.454,
+              196.275,
+              213.203,
+              289.564
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "sofa",
+            "confidence": 0.29477,
+            "bbox": [
+              335.453,
+              157.266,
+              480.0,
+              308.047
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "sofa",
+            "confidence": 0.2725,
+            "bbox": [
+              334.622,
+              156.458,
+              479.95,
+              231.04
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "window",
+            "confidence": 0.269885,
+            "bbox": [
+              0.007,
+              94.14,
+              25.194,
+              174.497
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "chair",
+            "confidence": 0.267789,
+            "bbox": [
+              398.227,
+              162.702,
+              480.0,
+              306.806
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "television",
+            "confidence": 0.148846,
+            "bbox": [
+              0.0,
+              94.799,
+              24.734,
+              173.57
+            ],
+            "frame_index": 1
+          }
+        ]
+      }
+    },
+    {
+      "case": "query_east_south_0_clean",
+      "split": "heldout",
+      "condition": "clean",
+      "query": "query_east_south_0",
+      "input": "inputs/query_east_south_0_clean.json",
+      "sha256": "c36ed705a3f3b7ca86138bc615d60758a07b5c3f93e01b72f5ab6d61e2c3414d",
+      "keys": [
+        "landmarks",
+        "frames",
+        "room_objects",
+        "room_zones",
+        "intrinsics",
+        "object_detections"
+      ],
+      "frames": [
+        {
+          "file": "frames/8fe319263a26483f35ccc472947309b3c8643c138798da5889913a78aba56700.jpg",
+          "sha256": "8fe319263a26483f35ccc472947309b3c8643c138798da5889913a78aba56700",
+          "width": 480,
+          "height": 360,
+          "keys": [
+            "frame_base64",
+            "width",
+            "height"
+          ]
+        },
+        {
+          "file": "frames/1f832b269eeba719cc3b0b031cf51e60dd2fc423bef5ab3e9b762301c3bb1333.jpg",
+          "sha256": "1f832b269eeba719cc3b0b031cf51e60dd2fc423bef5ab3e9b762301c3bb1333",
+          "width": 480,
+          "height": 360,
+          "keys": [
+            "frame_base64",
+            "width",
+            "height"
+          ]
+        }
+      ],
+      "details": {
+        "intrinsics": {
+          "values": [
+            [
+              320.0,
+              0,
+              240.0
+            ],
+            [
+              0,
+              320.0,
+              180.0
+            ],
+            [
+              0,
+              0,
+              1
+            ]
+          ]
+        },
+        "object_detections": [
+          {
+            "label": "sofa",
+            "confidence": 0.917242,
+            "bbox": [
+              14.216,
+              141.697,
+              247.559,
+              251.121
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "lamp",
+            "confidence": 0.784375,
+            "bbox": [
+              234.139,
+              82.333,
+              267.712,
+              212.295
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "desk",
+            "confidence": 0.726874,
+            "bbox": [
+              368.409,
+              172.473,
+              479.951,
+              301.787
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "television",
+            "confidence": 0.593778,
+            "bbox": [
+              445.647,
+              91.691,
+              480.0,
+              188.41
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "desk",
+            "confidence": 0.499939,
+            "bbox": [
+              96.753,
+              211.762,
+              281.506,
+              337.392
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "chair",
+            "confidence": 0.368607,
+            "bbox": [
+              351.831,
+              148.907,
+              410.357,
+              251.22
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "cabinet",
+            "confidence": 0.345259,
+            "bbox": [
+              262.82,
+              133.44,
+              364.862,
+              202.706
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "chair",
+            "confidence": 0.257185,
+            "bbox": [
+              352.252,
+              148.746,
+              398.551,
+              226.925
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "sofa",
+            "confidence": 0.912916,
+            "bbox": [
+              14.011,
+              141.76,
+              247.569,
+              251.083
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "lamp",
+            "confidence": 0.769006,
+            "bbox": [
+              234.332,
+              82.265,
+              267.78,
+              212.338
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "desk",
+            "confidence": 0.725772,
+            "bbox": [
+              368.387,
+              172.424,
+              479.95,
+              301.579
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "television",
+            "confidence": 0.614934,
+            "bbox": [
+              445.626,
+              91.8,
+              480.0,
+              187.66
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "desk",
+            "confidence": 0.484302,
+            "bbox": [
+              95.95,
+              211.807,
+              281.914,
+              337.766
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "chair",
+            "confidence": 0.376104,
+            "bbox": [
+              351.75,
+              148.773,
+              410.648,
+              251.324
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "cabinet",
+            "confidence": 0.304584,
+            "bbox": [
+              262.913,
+              133.883,
+              365.172,
+              202.744
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "chair",
+            "confidence": 0.256074,
+            "bbox": [
+              352.074,
+              148.612,
+              398.491,
+              226.997
+            ],
+            "frame_index": 1
+          }
+        ]
+      }
+    },
+    {
+      "case": "query_east_south_0_unknown_intrinsics",
+      "split": "heldout",
+      "condition": "unknown_intrinsics",
+      "query": "query_east_south_0",
+      "input": "inputs/query_east_south_0_unknown_intrinsics.json",
+      "sha256": "8161b191e59a4a6a2852c4b1337de03ea669fc1df44110d06c861e52673fb6f1",
+      "keys": [
+        "landmarks",
+        "frames",
+        "room_objects",
+        "room_zones",
+        "object_detections"
+      ],
+      "frames": [
+        {
+          "file": "frames/8fe319263a26483f35ccc472947309b3c8643c138798da5889913a78aba56700.jpg",
+          "sha256": "8fe319263a26483f35ccc472947309b3c8643c138798da5889913a78aba56700",
+          "width": 480,
+          "height": 360,
+          "keys": [
+            "frame_base64",
+            "width",
+            "height"
+          ]
+        },
+        {
+          "file": "frames/1f832b269eeba719cc3b0b031cf51e60dd2fc423bef5ab3e9b762301c3bb1333.jpg",
+          "sha256": "1f832b269eeba719cc3b0b031cf51e60dd2fc423bef5ab3e9b762301c3bb1333",
+          "width": 480,
+          "height": 360,
+          "keys": [
+            "frame_base64",
+            "width",
+            "height"
+          ]
+        }
+      ],
+      "details": {
+        "object_detections": [
+          {
+            "label": "sofa",
+            "confidence": 0.917242,
+            "bbox": [
+              14.216,
+              141.697,
+              247.559,
+              251.121
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "lamp",
+            "confidence": 0.784375,
+            "bbox": [
+              234.139,
+              82.333,
+              267.712,
+              212.295
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "desk",
+            "confidence": 0.726874,
+            "bbox": [
+              368.409,
+              172.473,
+              479.951,
+              301.787
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "television",
+            "confidence": 0.593778,
+            "bbox": [
+              445.647,
+              91.691,
+              480.0,
+              188.41
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "desk",
+            "confidence": 0.499939,
+            "bbox": [
+              96.753,
+              211.762,
+              281.506,
+              337.392
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "chair",
+            "confidence": 0.368607,
+            "bbox": [
+              351.831,
+              148.907,
+              410.357,
+              251.22
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "cabinet",
+            "confidence": 0.345259,
+            "bbox": [
+              262.82,
+              133.44,
+              364.862,
+              202.706
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "chair",
+            "confidence": 0.257185,
+            "bbox": [
+              352.252,
+              148.746,
+              398.551,
+              226.925
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "sofa",
+            "confidence": 0.912916,
+            "bbox": [
+              14.011,
+              141.76,
+              247.569,
+              251.083
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "lamp",
+            "confidence": 0.769006,
+            "bbox": [
+              234.332,
+              82.265,
+              267.78,
+              212.338
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "desk",
+            "confidence": 0.725772,
+            "bbox": [
+              368.387,
+              172.424,
+              479.95,
+              301.579
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "television",
+            "confidence": 0.614934,
+            "bbox": [
+              445.626,
+              91.8,
+              480.0,
+              187.66
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "desk",
+            "confidence": 0.484302,
+            "bbox": [
+              95.95,
+              211.807,
+              281.914,
+              337.766
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "chair",
+            "confidence": 0.376104,
+            "bbox": [
+              351.75,
+              148.773,
+              410.648,
+              251.324
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "cabinet",
+            "confidence": 0.304584,
+            "bbox": [
+              262.913,
+              133.883,
+              365.172,
+              202.744
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "chair",
+            "confidence": 0.256074,
+            "bbox": [
+              352.074,
+              148.612,
+              398.491,
+              226.997
+            ],
+            "frame_index": 1
+          }
+        ]
+      }
+    },
+    {
+      "case": "query_east_south_1_clean",
+      "split": "heldout",
+      "condition": "clean",
+      "query": "query_east_south_1",
+      "input": "inputs/query_east_south_1_clean.json",
+      "sha256": "f34af4b8fc9d9c7fd617d215340099346519078fba074f0a6ab28a121a56f398",
+      "keys": [
+        "landmarks",
+        "frames",
+        "room_objects",
+        "room_zones",
+        "intrinsics",
+        "object_detections"
+      ],
+      "frames": [
+        {
+          "file": "frames/b423c40545f9f8c7e7a12ea5bcedfe917e72e1766389d8e2630c6658b39cc1e2.jpg",
+          "sha256": "b423c40545f9f8c7e7a12ea5bcedfe917e72e1766389d8e2630c6658b39cc1e2",
+          "width": 480,
+          "height": 360,
+          "keys": [
+            "frame_base64",
+            "width",
+            "height"
+          ]
+        },
+        {
+          "file": "frames/cf3bc871f7385ac66b329df5e6dc82df2236e26a4108ae6ae2f352b5ad7b16d4.jpg",
+          "sha256": "cf3bc871f7385ac66b329df5e6dc82df2236e26a4108ae6ae2f352b5ad7b16d4",
+          "width": 480,
+          "height": 360,
+          "keys": [
+            "frame_base64",
+            "width",
+            "height"
+          ]
+        }
+      ],
+      "details": {
+        "intrinsics": {
+          "values": [
+            [
+              320.0,
+              0,
+              240.0
+            ],
+            [
+              0,
+              320.0,
+              180.0
+            ],
+            [
+              0,
+              0,
+              1
+            ]
+          ]
+        },
+        "object_detections": [
+          {
+            "label": "sofa",
+            "confidence": 0.932702,
+            "bbox": [
+              94.727,
+              146.836,
+              282.611,
+              232.811
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "lamp",
+            "confidence": 0.803591,
+            "bbox": [
+              281.122,
+              86.32,
+              318.606,
+              231.719
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "couch",
+            "confidence": 0.748665,
+            "bbox": [
+              94.78,
+              146.593,
+              283.184,
+              231.977
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "desk",
+            "confidence": 0.470241,
+            "bbox": [
+              345.176,
+              197.324,
+              480.0,
+              360.0
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "table",
+            "confidence": 0.270118,
+            "bbox": [
+              38.608,
+              197.159,
+              213.568,
+              290.407
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "desk",
+            "confidence": 0.268846,
+            "bbox": [
+              40.371,
+              195.328,
+              213.889,
+              290.43
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "chair",
+            "confidence": 0.240748,
+            "bbox": [
+              394.757,
+              163.665,
+              480.0,
+              309.519
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "chair",
+            "confidence": 0.163189,
+            "bbox": [
+              359.191,
+              164.229,
+              478.904,
+              308.48
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "sofa",
+            "confidence": 0.939416,
+            "bbox": [
+              94.785,
+              146.774,
+              282.695,
+              232.912
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "lamp",
+            "confidence": 0.790849,
+            "bbox": [
+              281.33,
+              86.407,
+              317.863,
+              231.862
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "couch",
+            "confidence": 0.786276,
+            "bbox": [
+              94.945,
+              146.494,
+              283.287,
+              232.105
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "desk",
+            "confidence": 0.472331,
+            "bbox": [
+              345.137,
+              197.63,
+              480.0,
+              360.0
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "desk",
+            "confidence": 0.295242,
+            "bbox": [
+              40.357,
+              195.401,
+              213.945,
+              290.473
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "table",
+            "confidence": 0.275915,
+            "bbox": [
+              38.307,
+              196.952,
+              213.627,
+              290.471
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "chair",
+            "confidence": 0.254272,
+            "bbox": [
+              395.075,
+              163.395,
+              480.0,
+              309.765
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "chair",
+            "confidence": 0.167654,
+            "bbox": [
+              359.783,
+              163.849,
+              478.955,
+              307.887
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "sofa",
+            "confidence": 0.129915,
+            "bbox": [
+              335.15,
+              157.445,
+              479.871,
+              229.868
+            ],
+            "frame_index": 1
+          }
+        ]
+      }
+    },
+    {
+      "case": "query_east_south_1_unknown_intrinsics",
+      "split": "heldout",
+      "condition": "unknown_intrinsics",
+      "query": "query_east_south_1",
+      "input": "inputs/query_east_south_1_unknown_intrinsics.json",
+      "sha256": "765e36a6da5f1c413a0431fe9b2c617bd81d03ed99756410ad19371d9578afea",
+      "keys": [
+        "landmarks",
+        "frames",
+        "room_objects",
+        "room_zones",
+        "object_detections"
+      ],
+      "frames": [
+        {
+          "file": "frames/b423c40545f9f8c7e7a12ea5bcedfe917e72e1766389d8e2630c6658b39cc1e2.jpg",
+          "sha256": "b423c40545f9f8c7e7a12ea5bcedfe917e72e1766389d8e2630c6658b39cc1e2",
+          "width": 480,
+          "height": 360,
+          "keys": [
+            "frame_base64",
+            "width",
+            "height"
+          ]
+        },
+        {
+          "file": "frames/cf3bc871f7385ac66b329df5e6dc82df2236e26a4108ae6ae2f352b5ad7b16d4.jpg",
+          "sha256": "cf3bc871f7385ac66b329df5e6dc82df2236e26a4108ae6ae2f352b5ad7b16d4",
+          "width": 480,
+          "height": 360,
+          "keys": [
+            "frame_base64",
+            "width",
+            "height"
+          ]
+        }
+      ],
+      "details": {
+        "object_detections": [
+          {
+            "label": "sofa",
+            "confidence": 0.932702,
+            "bbox": [
+              94.727,
+              146.836,
+              282.611,
+              232.811
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "lamp",
+            "confidence": 0.803591,
+            "bbox": [
+              281.122,
+              86.32,
+              318.606,
+              231.719
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "couch",
+            "confidence": 0.748665,
+            "bbox": [
+              94.78,
+              146.593,
+              283.184,
+              231.977
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "desk",
+            "confidence": 0.470241,
+            "bbox": [
+              345.176,
+              197.324,
+              480.0,
+              360.0
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "table",
+            "confidence": 0.270118,
+            "bbox": [
+              38.608,
+              197.159,
+              213.568,
+              290.407
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "desk",
+            "confidence": 0.268846,
+            "bbox": [
+              40.371,
+              195.328,
+              213.889,
+              290.43
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "chair",
+            "confidence": 0.240748,
+            "bbox": [
+              394.757,
+              163.665,
+              480.0,
+              309.519
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "chair",
+            "confidence": 0.163189,
+            "bbox": [
+              359.191,
+              164.229,
+              478.904,
+              308.48
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "sofa",
+            "confidence": 0.939416,
+            "bbox": [
+              94.785,
+              146.774,
+              282.695,
+              232.912
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "lamp",
+            "confidence": 0.790849,
+            "bbox": [
+              281.33,
+              86.407,
+              317.863,
+              231.862
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "couch",
+            "confidence": 0.786276,
+            "bbox": [
+              94.945,
+              146.494,
+              283.287,
+              232.105
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "desk",
+            "confidence": 0.472331,
+            "bbox": [
+              345.137,
+              197.63,
+              480.0,
+              360.0
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "desk",
+            "confidence": 0.295242,
+            "bbox": [
+              40.357,
+              195.401,
+              213.945,
+              290.473
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "table",
+            "confidence": 0.275915,
+            "bbox": [
+              38.307,
+              196.952,
+              213.627,
+              290.471
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "chair",
+            "confidence": 0.254272,
+            "bbox": [
+              395.075,
+              163.395,
+              480.0,
+              309.765
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "chair",
+            "confidence": 0.167654,
+            "bbox": [
+              359.783,
+              163.849,
+              478.955,
+              307.887
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "sofa",
+            "confidence": 0.129915,
+            "bbox": [
+              335.15,
+              157.445,
+              479.871,
+              229.868
+            ],
+            "frame_index": 1
+          }
+        ]
+      }
+    },
+    {
+      "case": "query_east_north_0_clean",
+      "split": "heldout",
+      "condition": "clean",
+      "query": "query_east_north_0",
+      "input": "inputs/query_east_north_0_clean.json",
+      "sha256": "efbee932a5c0fddc3cc7d20ef40626fbcbb860a0737b915a4c38ca7375f04066",
+      "keys": [
+        "landmarks",
+        "frames",
+        "room_objects",
+        "room_zones",
+        "intrinsics",
+        "object_detections"
+      ],
+      "frames": [
+        {
+          "file": "frames/97a3b1739ab8d68584742b0978ca7008b33436198475578dc7a6259ec058920b.jpg",
+          "sha256": "97a3b1739ab8d68584742b0978ca7008b33436198475578dc7a6259ec058920b",
+          "width": 480,
+          "height": 360,
+          "keys": [
+            "frame_base64",
+            "width",
+            "height"
+          ]
+        },
+        {
+          "file": "frames/059a66cb44356e22052332306487e6afbcd11bb0e032d776ad93187776d59557.jpg",
+          "sha256": "059a66cb44356e22052332306487e6afbcd11bb0e032d776ad93187776d59557",
+          "width": 480,
+          "height": 360,
+          "keys": [
+            "frame_base64",
+            "width",
+            "height"
+          ]
+        }
+      ],
+      "details": {
+        "intrinsics": {
+          "values": [
+            [
+              320.0,
+              0,
+              240.0
+            ],
+            [
+              0,
+              320.0,
+              180.0
+            ],
+            [
+              0,
+              0,
+              1
+            ]
+          ]
+        },
+        "object_detections": [
+          {
+            "label": "sofa",
+            "confidence": 0.921988,
+            "bbox": [
+              13.906,
+              141.23,
+              248.03,
+              251.251
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "lamp",
+            "confidence": 0.790948,
+            "bbox": [
+              236.009,
+              82.76,
+              267.366,
+              212.276
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "desk",
+            "confidence": 0.689382,
+            "bbox": [
+              366.597,
+              172.028,
+              480.0,
+              302.157
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "desk",
+            "confidence": 0.506199,
+            "bbox": [
+              96.693,
+              212.094,
+              281.458,
+              337.562
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "television",
+            "confidence": 0.468704,
+            "bbox": [
+              445.431,
+              91.87,
+              480.0,
+              190.229
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "chair",
+            "confidence": 0.399431,
+            "bbox": [
+              353.078,
+              148.459,
+              413.749,
+              253.144
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "cabinet",
+            "confidence": 0.363982,
+            "bbox": [
+              262.936,
+              135.113,
+              364.191,
+              203.106
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "chair",
+            "confidence": 0.107489,
+            "bbox": [
+              352.438,
+              148.44,
+              395.085,
+              228.064
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "sofa",
+            "confidence": 0.913767,
+            "bbox": [
+              14.077,
+              140.924,
+              247.816,
+              252.277
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "lamp",
+            "confidence": 0.781489,
+            "bbox": [
+              236.339,
+              82.714,
+              267.337,
+              212.334
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "desk",
+            "confidence": 0.680907,
+            "bbox": [
+              365.816,
+              171.775,
+              480.0,
+              302.043
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "desk",
+            "confidence": 0.500839,
+            "bbox": [
+              96.758,
+              212.017,
+              281.667,
+              337.866
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "television",
+            "confidence": 0.445713,
+            "bbox": [
+              445.441,
+              91.879,
+              480.0,
+              190.502
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "chair",
+            "confidence": 0.356123,
+            "bbox": [
+              352.911,
+              148.031,
+              413.785,
+              251.465
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "cabinet",
+            "confidence": 0.338506,
+            "bbox": [
+              263.184,
+              135.3,
+              364.303,
+              202.813
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "chair",
+            "confidence": 0.118899,
+            "bbox": [
+              352.115,
+              148.054,
+              395.235,
+              228.168
+            ],
+            "frame_index": 1
+          }
+        ]
+      }
+    },
+    {
+      "case": "query_east_north_0_unknown_intrinsics",
+      "split": "heldout",
+      "condition": "unknown_intrinsics",
+      "query": "query_east_north_0",
+      "input": "inputs/query_east_north_0_unknown_intrinsics.json",
+      "sha256": "88dd213d408c66574d99d46cb5365a72cb7b4b1172371100ec6603e30fa5a903",
+      "keys": [
+        "landmarks",
+        "frames",
+        "room_objects",
+        "room_zones",
+        "object_detections"
+      ],
+      "frames": [
+        {
+          "file": "frames/97a3b1739ab8d68584742b0978ca7008b33436198475578dc7a6259ec058920b.jpg",
+          "sha256": "97a3b1739ab8d68584742b0978ca7008b33436198475578dc7a6259ec058920b",
+          "width": 480,
+          "height": 360,
+          "keys": [
+            "frame_base64",
+            "width",
+            "height"
+          ]
+        },
+        {
+          "file": "frames/059a66cb44356e22052332306487e6afbcd11bb0e032d776ad93187776d59557.jpg",
+          "sha256": "059a66cb44356e22052332306487e6afbcd11bb0e032d776ad93187776d59557",
+          "width": 480,
+          "height": 360,
+          "keys": [
+            "frame_base64",
+            "width",
+            "height"
+          ]
+        }
+      ],
+      "details": {
+        "object_detections": [
+          {
+            "label": "sofa",
+            "confidence": 0.921988,
+            "bbox": [
+              13.906,
+              141.23,
+              248.03,
+              251.251
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "lamp",
+            "confidence": 0.790948,
+            "bbox": [
+              236.009,
+              82.76,
+              267.366,
+              212.276
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "desk",
+            "confidence": 0.689382,
+            "bbox": [
+              366.597,
+              172.028,
+              480.0,
+              302.157
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "desk",
+            "confidence": 0.506199,
+            "bbox": [
+              96.693,
+              212.094,
+              281.458,
+              337.562
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "television",
+            "confidence": 0.468704,
+            "bbox": [
+              445.431,
+              91.87,
+              480.0,
+              190.229
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "chair",
+            "confidence": 0.399431,
+            "bbox": [
+              353.078,
+              148.459,
+              413.749,
+              253.144
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "cabinet",
+            "confidence": 0.363982,
+            "bbox": [
+              262.936,
+              135.113,
+              364.191,
+              203.106
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "chair",
+            "confidence": 0.107489,
+            "bbox": [
+              352.438,
+              148.44,
+              395.085,
+              228.064
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "sofa",
+            "confidence": 0.913767,
+            "bbox": [
+              14.077,
+              140.924,
+              247.816,
+              252.277
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "lamp",
+            "confidence": 0.781489,
+            "bbox": [
+              236.339,
+              82.714,
+              267.337,
+              212.334
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "desk",
+            "confidence": 0.680907,
+            "bbox": [
+              365.816,
+              171.775,
+              480.0,
+              302.043
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "desk",
+            "confidence": 0.500839,
+            "bbox": [
+              96.758,
+              212.017,
+              281.667,
+              337.866
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "television",
+            "confidence": 0.445713,
+            "bbox": [
+              445.441,
+              91.879,
+              480.0,
+              190.502
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "chair",
+            "confidence": 0.356123,
+            "bbox": [
+              352.911,
+              148.031,
+              413.785,
+              251.465
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "cabinet",
+            "confidence": 0.338506,
+            "bbox": [
+              263.184,
+              135.3,
+              364.303,
+              202.813
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "chair",
+            "confidence": 0.118899,
+            "bbox": [
+              352.115,
+              148.054,
+              395.235,
+              228.168
+            ],
+            "frame_index": 1
+          }
+        ]
+      }
+    },
+    {
+      "case": "query_east_north_1_clean",
+      "split": "heldout",
+      "condition": "clean",
+      "query": "query_east_north_1",
+      "input": "inputs/query_east_north_1_clean.json",
+      "sha256": "cbf9b412e5d3322c1e36818afdb0dde559654569af1a9bfa531f29095d547054",
+      "keys": [
+        "landmarks",
+        "frames",
+        "room_objects",
+        "room_zones",
+        "intrinsics",
+        "object_detections"
+      ],
+      "frames": [
+        {
+          "file": "frames/3c73acb266341fa73d0bf04858c959112287b041cbd8b17aaec60510c9cf4b5d.jpg",
+          "sha256": "3c73acb266341fa73d0bf04858c959112287b041cbd8b17aaec60510c9cf4b5d",
+          "width": 480,
+          "height": 360,
+          "keys": [
+            "frame_base64",
+            "width",
+            "height"
+          ]
+        },
+        {
+          "file": "frames/3535c0c53f9b01352a0352780fd795ddaf8f7d82a1c9b08a3449cca0916115ec.jpg",
+          "sha256": "3535c0c53f9b01352a0352780fd795ddaf8f7d82a1c9b08a3449cca0916115ec",
+          "width": 480,
+          "height": 360,
+          "keys": [
+            "frame_base64",
+            "width",
+            "height"
+          ]
+        }
+      ],
+      "details": {
+        "intrinsics": {
+          "values": [
+            [
+              320.0,
+              0,
+              240.0
+            ],
+            [
+              0,
+              320.0,
+              180.0
+            ],
+            [
+              0,
+              0,
+              1
+            ]
+          ]
+        },
+        "object_detections": [
+          {
+            "label": "sofa",
+            "confidence": 0.915917,
+            "bbox": [
+              95.193,
+              147.203,
+              282.863,
+              232.67
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "lamp",
+            "confidence": 0.818787,
+            "bbox": [
+              281.809,
+              86.066,
+              317.39,
+              231.778
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "desk",
+            "confidence": 0.481119,
+            "bbox": [
+              344.746,
+              193.064,
+              479.988,
+              360.0
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "table",
+            "confidence": 0.401409,
+            "bbox": [
+              38.308,
+              196.929,
+              213.951,
+              289.651
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "desk",
+            "confidence": 0.268788,
+            "bbox": [
+              40.078,
+              195.969,
+              214.373,
+              290.384
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "sofa",
+            "confidence": 0.228866,
+            "bbox": [
+              333.754,
+              154.921,
+              479.995,
+              308.583
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "sofa",
+            "confidence": 0.142661,
+            "bbox": [
+              332.703,
+              155.305,
+              479.85,
+              263.396
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "sofa",
+            "confidence": 0.921772,
+            "bbox": [
+              94.739,
+              147.215,
+              282.578,
+              232.655
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "lamp",
+            "confidence": 0.808122,
+            "bbox": [
+              282.303,
+              85.951,
+              317.488,
+              231.906
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "desk",
+            "confidence": 0.405041,
+            "bbox": [
+              344.512,
+              193.33,
+              479.989,
+              359.975
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "table",
+            "confidence": 0.336339,
+            "bbox": [
+              38.201,
+              196.991,
+              213.742,
+              289.7
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "desk",
+            "confidence": 0.323861,
+            "bbox": [
+              40.159,
+              195.576,
+              213.354,
+              290.691
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "sofa",
+            "confidence": 0.293798,
+            "bbox": [
+              333.375,
+              155.812,
+              479.917,
+              310.997
+            ],
+            "frame_index": 1
+          }
+        ]
+      }
+    },
+    {
+      "case": "query_east_north_1_unknown_intrinsics",
+      "split": "heldout",
+      "condition": "unknown_intrinsics",
+      "query": "query_east_north_1",
+      "input": "inputs/query_east_north_1_unknown_intrinsics.json",
+      "sha256": "21cce370c7e00abe313882eea0ef207c5b9889acaa83e097340bd36d96df9c2f",
+      "keys": [
+        "landmarks",
+        "frames",
+        "room_objects",
+        "room_zones",
+        "object_detections"
+      ],
+      "frames": [
+        {
+          "file": "frames/3c73acb266341fa73d0bf04858c959112287b041cbd8b17aaec60510c9cf4b5d.jpg",
+          "sha256": "3c73acb266341fa73d0bf04858c959112287b041cbd8b17aaec60510c9cf4b5d",
+          "width": 480,
+          "height": 360,
+          "keys": [
+            "frame_base64",
+            "width",
+            "height"
+          ]
+        },
+        {
+          "file": "frames/3535c0c53f9b01352a0352780fd795ddaf8f7d82a1c9b08a3449cca0916115ec.jpg",
+          "sha256": "3535c0c53f9b01352a0352780fd795ddaf8f7d82a1c9b08a3449cca0916115ec",
+          "width": 480,
+          "height": 360,
+          "keys": [
+            "frame_base64",
+            "width",
+            "height"
+          ]
+        }
+      ],
+      "details": {
+        "object_detections": [
+          {
+            "label": "sofa",
+            "confidence": 0.915917,
+            "bbox": [
+              95.193,
+              147.203,
+              282.863,
+              232.67
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "lamp",
+            "confidence": 0.818787,
+            "bbox": [
+              281.809,
+              86.066,
+              317.39,
+              231.778
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "desk",
+            "confidence": 0.481119,
+            "bbox": [
+              344.746,
+              193.064,
+              479.988,
+              360.0
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "table",
+            "confidence": 0.401409,
+            "bbox": [
+              38.308,
+              196.929,
+              213.951,
+              289.651
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "desk",
+            "confidence": 0.268788,
+            "bbox": [
+              40.078,
+              195.969,
+              214.373,
+              290.384
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "sofa",
+            "confidence": 0.228866,
+            "bbox": [
+              333.754,
+              154.921,
+              479.995,
+              308.583
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "sofa",
+            "confidence": 0.142661,
+            "bbox": [
+              332.703,
+              155.305,
+              479.85,
+              263.396
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "sofa",
+            "confidence": 0.921772,
+            "bbox": [
+              94.739,
+              147.215,
+              282.578,
+              232.655
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "lamp",
+            "confidence": 0.808122,
+            "bbox": [
+              282.303,
+              85.951,
+              317.488,
+              231.906
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "desk",
+            "confidence": 0.405041,
+            "bbox": [
+              344.512,
+              193.33,
+              479.989,
+              359.975
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "table",
+            "confidence": 0.336339,
+            "bbox": [
+              38.201,
+              196.991,
+              213.742,
+              289.7
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "desk",
+            "confidence": 0.323861,
+            "bbox": [
+              40.159,
+              195.576,
+              213.354,
+              290.691
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "sofa",
+            "confidence": 0.293798,
+            "bbox": [
+              333.375,
+              155.812,
+              479.917,
+              310.997
+            ],
+            "frame_index": 1
+          }
+        ]
+      }
+    },
+    {
+      "case": "query_transition_0_clean",
+      "split": "heldout",
+      "condition": "clean",
+      "query": "query_transition_0",
+      "input": "inputs/query_transition_0_clean.json",
+      "sha256": "5008b81eb4874e9bb9a4f66bce4c1dba0204e7176e3e2a50f90662ef5531b5a3",
+      "keys": [
+        "landmarks",
+        "frames",
+        "room_objects",
+        "room_zones",
+        "intrinsics",
+        "object_detections"
+      ],
+      "frames": [
+        {
+          "file": "frames/d109d2c84b1425b0823ff6e4bd944cb8e2c34315be4b9590b2bf2920bf8ad9bc.jpg",
+          "sha256": "d109d2c84b1425b0823ff6e4bd944cb8e2c34315be4b9590b2bf2920bf8ad9bc",
+          "width": 480,
+          "height": 360,
+          "keys": [
+            "frame_base64",
+            "width",
+            "height"
+          ]
+        },
+        {
+          "file": "frames/8c2dac6de4a7ed4a803dbb31b852efa0531d5b64308a684d9ca2c397cbf56526.jpg",
+          "sha256": "8c2dac6de4a7ed4a803dbb31b852efa0531d5b64308a684d9ca2c397cbf56526",
+          "width": 480,
+          "height": 360,
+          "keys": [
+            "frame_base64",
+            "width",
+            "height"
+          ]
+        }
+      ],
+      "details": {
+        "intrinsics": {
+          "values": [
+            [
+              320.0,
+              0,
+              240.0
+            ],
+            [
+              0,
+              320.0,
+              180.0
+            ],
+            [
+              0,
+              0,
+              1
+            ]
+          ]
+        },
+        "object_detections": [
+          {
+            "label": "sofa",
+            "confidence": 0.310224,
+            "bbox": [
+              403.711,
+              209.62,
+              480.0,
+              329.752
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "sofa",
+            "confidence": 0.298206,
+            "bbox": [
+              403.686,
+              209.308,
+              480.0,
+              329.844
+            ],
+            "frame_index": 1
+          }
+        ]
+      }
+    },
+    {
+      "case": "query_transition_0_unknown_intrinsics",
+      "split": "heldout",
+      "condition": "unknown_intrinsics",
+      "query": "query_transition_0",
+      "input": "inputs/query_transition_0_unknown_intrinsics.json",
+      "sha256": "b1a2288b04bf09b3bc16c0e4a794894595077f27f4c9b1cfd026a21bf8241251",
+      "keys": [
+        "landmarks",
+        "frames",
+        "room_objects",
+        "room_zones",
+        "object_detections"
+      ],
+      "frames": [
+        {
+          "file": "frames/d109d2c84b1425b0823ff6e4bd944cb8e2c34315be4b9590b2bf2920bf8ad9bc.jpg",
+          "sha256": "d109d2c84b1425b0823ff6e4bd944cb8e2c34315be4b9590b2bf2920bf8ad9bc",
+          "width": 480,
+          "height": 360,
+          "keys": [
+            "frame_base64",
+            "width",
+            "height"
+          ]
+        },
+        {
+          "file": "frames/8c2dac6de4a7ed4a803dbb31b852efa0531d5b64308a684d9ca2c397cbf56526.jpg",
+          "sha256": "8c2dac6de4a7ed4a803dbb31b852efa0531d5b64308a684d9ca2c397cbf56526",
+          "width": 480,
+          "height": 360,
+          "keys": [
+            "frame_base64",
+            "width",
+            "height"
+          ]
+        }
+      ],
+      "details": {
+        "object_detections": [
+          {
+            "label": "sofa",
+            "confidence": 0.310224,
+            "bbox": [
+              403.711,
+              209.62,
+              480.0,
+              329.752
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "sofa",
+            "confidence": 0.298206,
+            "bbox": [
+              403.686,
+              209.308,
+              480.0,
+              329.844
+            ],
+            "frame_index": 1
+          }
+        ]
+      }
+    },
+    {
+      "case": "query_transition_1_clean",
+      "split": "heldout",
+      "condition": "clean",
+      "query": "query_transition_1",
+      "input": "inputs/query_transition_1_clean.json",
+      "sha256": "32cb14fc28e99a36e1db45bd534b396e2048746f3b2156015166f1b4bd9fa1e5",
+      "keys": [
+        "landmarks",
+        "frames",
+        "room_objects",
+        "room_zones",
+        "intrinsics",
+        "object_detections"
+      ],
+      "frames": [
+        {
+          "file": "frames/794a257b2202370b21c67fe8455a7bf15dc999649ba6e1b06e237bfd6a319e55.jpg",
+          "sha256": "794a257b2202370b21c67fe8455a7bf15dc999649ba6e1b06e237bfd6a319e55",
+          "width": 480,
+          "height": 360,
+          "keys": [
+            "frame_base64",
+            "width",
+            "height"
+          ]
+        },
+        {
+          "file": "frames/6a9cd6c3484dd3103058671e1bd3f74f92b978fb3207977ca28bc0127c3d174f.jpg",
+          "sha256": "6a9cd6c3484dd3103058671e1bd3f74f92b978fb3207977ca28bc0127c3d174f",
+          "width": 480,
+          "height": 360,
+          "keys": [
+            "frame_base64",
+            "width",
+            "height"
+          ]
+        }
+      ],
+      "details": {
+        "intrinsics": {
+          "values": [
+            [
+              320.0,
+              0,
+              240.0
+            ],
+            [
+              0,
+              320.0,
+              180.0
+            ],
+            [
+              0,
+              0,
+              1
+            ]
+          ]
+        },
+        "object_detections": [
+          {
+            "label": "sofa",
+            "confidence": 0.916101,
+            "bbox": [
+              173.004,
+              159.142,
+              301.426,
+              262.64
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "couch",
+            "confidence": 0.907439,
+            "bbox": [
+              172.862,
+              159.54,
+              301.223,
+              262.627
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "lamp",
+            "confidence": 0.705072,
+            "bbox": [
+              272.848,
+              103.933,
+              318.43,
+              250.792
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "chair",
+            "confidence": 0.446236,
+            "bbox": [
+              176.764,
+              228.026,
+              317.376,
+              359.997
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "cabinet",
+            "confidence": 0.445813,
+            "bbox": [
+              317.502,
+              200.563,
+              391.779,
+              338.452
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "cabinet",
+            "confidence": 0.428061,
+            "bbox": [
+              383.928,
+              221.4,
+              476.968,
+              359.958
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "table",
+            "confidence": 0.329055,
+            "bbox": [
+              72.819,
+              200.435,
+              152.308,
+              264.088
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "desk",
+            "confidence": 0.328618,
+            "bbox": [
+              0.0,
+              250.733,
+              205.606,
+              360.0
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "cabinet",
+            "confidence": 0.317029,
+            "bbox": [
+              317.067,
+              190.993,
+              478.88,
+              360.0
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "desk",
+            "confidence": 0.295369,
+            "bbox": [
+              72.523,
+              200.701,
+              151.997,
+              264.258
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "television",
+            "confidence": 0.243087,
+            "bbox": [
+              30.819,
+              119.769,
+              132.683,
+              175.714
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "window",
+            "confidence": 0.232163,
+            "bbox": [
+              30.497,
+              119.772,
+              132.717,
+              175.915
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "sofa",
+            "confidence": 0.922652,
+            "bbox": [
+              172.915,
+              158.939,
+              301.316,
+              262.581
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "couch",
+            "confidence": 0.912107,
+            "bbox": [
+              172.835,
+              159.163,
+              301.229,
+              262.544
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "lamp",
+            "confidence": 0.686003,
+            "bbox": [
+              272.844,
+              104.271,
+              318.308,
+              250.882
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "cabinet",
+            "confidence": 0.418427,
+            "bbox": [
+              317.284,
+              200.31,
+              391.58,
+              338.495
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "cabinet",
+            "confidence": 0.395594,
+            "bbox": [
+              383.939,
+              221.191,
+              477.098,
+              359.959
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "chair",
+            "confidence": 0.354074,
+            "bbox": [
+              177.798,
+              227.958,
+              318.573,
+              360.0
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "cabinet",
+            "confidence": 0.322796,
+            "bbox": [
+              316.955,
+              191.086,
+              478.728,
+              360.0
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "table",
+            "confidence": 0.313753,
+            "bbox": [
+              72.748,
+              200.371,
+              152.25,
+              263.812
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "desk",
+            "confidence": 0.294588,
+            "bbox": [
+              0.0,
+              250.604,
+              205.485,
+              360.0
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "television",
+            "confidence": 0.289714,
+            "bbox": [
+              30.516,
+              119.761,
+              132.666,
+              175.501
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "desk",
+            "confidence": 0.285163,
+            "bbox": [
+              72.448,
+              200.656,
+              151.948,
+              263.862
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "window",
+            "confidence": 0.258137,
+            "bbox": [
+              30.463,
+              119.746,
+              132.697,
+              175.627
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "sofa",
+            "confidence": 0.244652,
+            "bbox": [
+              0.014,
+              250.162,
+              205.158,
+              360.0
+            ],
+            "frame_index": 1
+          }
+        ]
+      }
+    },
+    {
+      "case": "query_transition_1_unknown_intrinsics",
+      "split": "heldout",
+      "condition": "unknown_intrinsics",
+      "query": "query_transition_1",
+      "input": "inputs/query_transition_1_unknown_intrinsics.json",
+      "sha256": "4568cb35ce45dbe593f896ccc6a3149cfd3fde10c52648c233ac80755cab364d",
+      "keys": [
+        "landmarks",
+        "frames",
+        "room_objects",
+        "room_zones",
+        "object_detections"
+      ],
+      "frames": [
+        {
+          "file": "frames/794a257b2202370b21c67fe8455a7bf15dc999649ba6e1b06e237bfd6a319e55.jpg",
+          "sha256": "794a257b2202370b21c67fe8455a7bf15dc999649ba6e1b06e237bfd6a319e55",
+          "width": 480,
+          "height": 360,
+          "keys": [
+            "frame_base64",
+            "width",
+            "height"
+          ]
+        },
+        {
+          "file": "frames/6a9cd6c3484dd3103058671e1bd3f74f92b978fb3207977ca28bc0127c3d174f.jpg",
+          "sha256": "6a9cd6c3484dd3103058671e1bd3f74f92b978fb3207977ca28bc0127c3d174f",
+          "width": 480,
+          "height": 360,
+          "keys": [
+            "frame_base64",
+            "width",
+            "height"
+          ]
+        }
+      ],
+      "details": {
+        "object_detections": [
+          {
+            "label": "sofa",
+            "confidence": 0.916101,
+            "bbox": [
+              173.004,
+              159.142,
+              301.426,
+              262.64
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "couch",
+            "confidence": 0.907439,
+            "bbox": [
+              172.862,
+              159.54,
+              301.223,
+              262.627
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "lamp",
+            "confidence": 0.705072,
+            "bbox": [
+              272.848,
+              103.933,
+              318.43,
+              250.792
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "chair",
+            "confidence": 0.446236,
+            "bbox": [
+              176.764,
+              228.026,
+              317.376,
+              359.997
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "cabinet",
+            "confidence": 0.445813,
+            "bbox": [
+              317.502,
+              200.563,
+              391.779,
+              338.452
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "cabinet",
+            "confidence": 0.428061,
+            "bbox": [
+              383.928,
+              221.4,
+              476.968,
+              359.958
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "table",
+            "confidence": 0.329055,
+            "bbox": [
+              72.819,
+              200.435,
+              152.308,
+              264.088
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "desk",
+            "confidence": 0.328618,
+            "bbox": [
+              0.0,
+              250.733,
+              205.606,
+              360.0
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "cabinet",
+            "confidence": 0.317029,
+            "bbox": [
+              317.067,
+              190.993,
+              478.88,
+              360.0
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "desk",
+            "confidence": 0.295369,
+            "bbox": [
+              72.523,
+              200.701,
+              151.997,
+              264.258
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "television",
+            "confidence": 0.243087,
+            "bbox": [
+              30.819,
+              119.769,
+              132.683,
+              175.714
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "window",
+            "confidence": 0.232163,
+            "bbox": [
+              30.497,
+              119.772,
+              132.717,
+              175.915
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "sofa",
+            "confidence": 0.922652,
+            "bbox": [
+              172.915,
+              158.939,
+              301.316,
+              262.581
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "couch",
+            "confidence": 0.912107,
+            "bbox": [
+              172.835,
+              159.163,
+              301.229,
+              262.544
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "lamp",
+            "confidence": 0.686003,
+            "bbox": [
+              272.844,
+              104.271,
+              318.308,
+              250.882
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "cabinet",
+            "confidence": 0.418427,
+            "bbox": [
+              317.284,
+              200.31,
+              391.58,
+              338.495
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "cabinet",
+            "confidence": 0.395594,
+            "bbox": [
+              383.939,
+              221.191,
+              477.098,
+              359.959
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "chair",
+            "confidence": 0.354074,
+            "bbox": [
+              177.798,
+              227.958,
+              318.573,
+              360.0
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "cabinet",
+            "confidence": 0.322796,
+            "bbox": [
+              316.955,
+              191.086,
+              478.728,
+              360.0
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "table",
+            "confidence": 0.313753,
+            "bbox": [
+              72.748,
+              200.371,
+              152.25,
+              263.812
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "desk",
+            "confidence": 0.294588,
+            "bbox": [
+              0.0,
+              250.604,
+              205.485,
+              360.0
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "television",
+            "confidence": 0.289714,
+            "bbox": [
+              30.516,
+              119.761,
+              132.666,
+              175.501
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "desk",
+            "confidence": 0.285163,
+            "bbox": [
+              72.448,
+              200.656,
+              151.948,
+              263.862
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "window",
+            "confidence": 0.258137,
+            "bbox": [
+              30.463,
+              119.746,
+              132.697,
+              175.627
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "sofa",
+            "confidence": 0.244652,
+            "bbox": [
+              0.014,
+              250.162,
+              205.158,
+              360.0
+            ],
+            "frame_index": 1
+          }
+        ]
+      }
+    },
+    {
+      "case": "query_transition_2_clean",
+      "split": "heldout",
+      "condition": "clean",
+      "query": "query_transition_2",
+      "input": "inputs/query_transition_2_clean.json",
+      "sha256": "aee84c8648c1da874c84f74dcfd8b7f697e8eb2aedc3dafe4d6ca0e802a0f3da",
+      "keys": [
+        "landmarks",
+        "frames",
+        "room_objects",
+        "room_zones",
+        "intrinsics",
+        "object_detections"
+      ],
+      "frames": [
+        {
+          "file": "frames/48c51d41cddc7503b83eb66fb78fd0b8524f0385aeb31e2b4b30a1858f65606c.jpg",
+          "sha256": "48c51d41cddc7503b83eb66fb78fd0b8524f0385aeb31e2b4b30a1858f65606c",
+          "width": 480,
+          "height": 360,
+          "keys": [
+            "frame_base64",
+            "width",
+            "height"
+          ]
+        },
+        {
+          "file": "frames/7b7c5a52864a5b366706841236b82c3c74097b3125250c080c27b35012fd98cb.jpg",
+          "sha256": "7b7c5a52864a5b366706841236b82c3c74097b3125250c080c27b35012fd98cb",
+          "width": 480,
+          "height": 360,
+          "keys": [
+            "frame_base64",
+            "width",
+            "height"
+          ]
+        }
+      ],
+      "details": {
+        "intrinsics": {
+          "values": [
+            [
+              320.0,
+              0,
+              240.0
+            ],
+            [
+              0,
+              320.0,
+              180.0
+            ],
+            [
+              0,
+              0,
+              1
+            ]
+          ]
+        },
+        "object_detections": [
+          {
+            "label": "sofa",
+            "confidence": 0.926727,
+            "bbox": [
+              158.807,
+              155.044,
+              304.614,
+              272.936
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "couch",
+            "confidence": 0.89107,
+            "bbox": [
+              158.093,
+              154.978,
+              304.112,
+              272.34
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "lamp",
+            "confidence": 0.670893,
+            "bbox": [
+              279.437,
+              89.334,
+              331.29,
+              257.459
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "cabinet",
+            "confidence": 0.407466,
+            "bbox": [
+              336.474,
+              202.682,
+              437.521,
+              360.0
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "cabinet",
+            "confidence": 0.368822,
+            "bbox": [
+              335.46,
+              191.163,
+              479.943,
+              360.0
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "table",
+            "confidence": 0.350633,
+            "bbox": [
+              43.946,
+              203.03,
+              140.667,
+              296.939
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "window",
+            "confidence": 0.289756,
+            "bbox": [
+              0.0,
+              111.299,
+              112.784,
+              175.179
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "desk",
+            "confidence": 0.281379,
+            "bbox": [
+              0.009,
+              279.659,
+              179.98,
+              359.982
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "desk",
+            "confidence": 0.252468,
+            "bbox": [
+              43.872,
+              202.94,
+              141.074,
+              297.557
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "cabinet",
+            "confidence": 0.227089,
+            "bbox": [
+              420.717,
+              232.395,
+              480.0,
+              360.0
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "chair",
+            "confidence": 0.143874,
+            "bbox": [
+              194.606,
+              249.73,
+              387.512,
+              360.0
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "table",
+            "confidence": 0.129516,
+            "bbox": [
+              0.0,
+              280.326,
+              177.017,
+              360.0
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "sofa",
+            "confidence": 0.929185,
+            "bbox": [
+              157.864,
+              155.34,
+              304.287,
+              272.856
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "couch",
+            "confidence": 0.891193,
+            "bbox": [
+              157.86,
+              155.342,
+              304.267,
+              272.387
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "lamp",
+            "confidence": 0.524048,
+            "bbox": [
+              279.645,
+              90.877,
+              330.218,
+              257.159
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "cabinet",
+            "confidence": 0.37606,
+            "bbox": [
+              336.242,
+              202.848,
+              437.763,
+              360.0
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "table",
+            "confidence": 0.368945,
+            "bbox": [
+              43.901,
+              202.906,
+              140.545,
+              296.968
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "window",
+            "confidence": 0.350729,
+            "bbox": [
+              0.0,
+              111.207,
+              112.774,
+              175.033
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "desk",
+            "confidence": 0.291882,
+            "bbox": [
+              0.0,
+              279.906,
+              180.951,
+              360.0
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "cabinet",
+            "confidence": 0.266927,
+            "bbox": [
+              336.435,
+              191.665,
+              480.0,
+              359.951
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "desk",
+            "confidence": 0.246057,
+            "bbox": [
+              43.84,
+              202.881,
+              140.966,
+              297.577
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "cabinet",
+            "confidence": 0.224897,
+            "bbox": [
+              420.003,
+              232.823,
+              479.939,
+              360.0
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "table",
+            "confidence": 0.127704,
+            "bbox": [
+              0.0,
+              280.305,
+              177.163,
+              360.0
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "chair",
+            "confidence": 0.112841,
+            "bbox": [
+              193.524,
+              249.84,
+              386.678,
+              359.593
+            ],
+            "frame_index": 1
+          }
+        ]
+      }
+    },
+    {
+      "case": "query_transition_2_unknown_intrinsics",
+      "split": "heldout",
+      "condition": "unknown_intrinsics",
+      "query": "query_transition_2",
+      "input": "inputs/query_transition_2_unknown_intrinsics.json",
+      "sha256": "86e5481340bdcfbc734ed16dbafa12fdc4e0fcab8fe78ae587871009a6c376e0",
+      "keys": [
+        "landmarks",
+        "frames",
+        "room_objects",
+        "room_zones",
+        "object_detections"
+      ],
+      "frames": [
+        {
+          "file": "frames/48c51d41cddc7503b83eb66fb78fd0b8524f0385aeb31e2b4b30a1858f65606c.jpg",
+          "sha256": "48c51d41cddc7503b83eb66fb78fd0b8524f0385aeb31e2b4b30a1858f65606c",
+          "width": 480,
+          "height": 360,
+          "keys": [
+            "frame_base64",
+            "width",
+            "height"
+          ]
+        },
+        {
+          "file": "frames/7b7c5a52864a5b366706841236b82c3c74097b3125250c080c27b35012fd98cb.jpg",
+          "sha256": "7b7c5a52864a5b366706841236b82c3c74097b3125250c080c27b35012fd98cb",
+          "width": 480,
+          "height": 360,
+          "keys": [
+            "frame_base64",
+            "width",
+            "height"
+          ]
+        }
+      ],
+      "details": {
+        "object_detections": [
+          {
+            "label": "sofa",
+            "confidence": 0.926727,
+            "bbox": [
+              158.807,
+              155.044,
+              304.614,
+              272.936
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "couch",
+            "confidence": 0.89107,
+            "bbox": [
+              158.093,
+              154.978,
+              304.112,
+              272.34
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "lamp",
+            "confidence": 0.670893,
+            "bbox": [
+              279.437,
+              89.334,
+              331.29,
+              257.459
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "cabinet",
+            "confidence": 0.407466,
+            "bbox": [
+              336.474,
+              202.682,
+              437.521,
+              360.0
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "cabinet",
+            "confidence": 0.368822,
+            "bbox": [
+              335.46,
+              191.163,
+              479.943,
+              360.0
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "table",
+            "confidence": 0.350633,
+            "bbox": [
+              43.946,
+              203.03,
+              140.667,
+              296.939
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "window",
+            "confidence": 0.289756,
+            "bbox": [
+              0.0,
+              111.299,
+              112.784,
+              175.179
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "desk",
+            "confidence": 0.281379,
+            "bbox": [
+              0.009,
+              279.659,
+              179.98,
+              359.982
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "desk",
+            "confidence": 0.252468,
+            "bbox": [
+              43.872,
+              202.94,
+              141.074,
+              297.557
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "cabinet",
+            "confidence": 0.227089,
+            "bbox": [
+              420.717,
+              232.395,
+              480.0,
+              360.0
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "chair",
+            "confidence": 0.143874,
+            "bbox": [
+              194.606,
+              249.73,
+              387.512,
+              360.0
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "table",
+            "confidence": 0.129516,
+            "bbox": [
+              0.0,
+              280.326,
+              177.017,
+              360.0
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "sofa",
+            "confidence": 0.929185,
+            "bbox": [
+              157.864,
+              155.34,
+              304.287,
+              272.856
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "couch",
+            "confidence": 0.891193,
+            "bbox": [
+              157.86,
+              155.342,
+              304.267,
+              272.387
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "lamp",
+            "confidence": 0.524048,
+            "bbox": [
+              279.645,
+              90.877,
+              330.218,
+              257.159
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "cabinet",
+            "confidence": 0.37606,
+            "bbox": [
+              336.242,
+              202.848,
+              437.763,
+              360.0
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "table",
+            "confidence": 0.368945,
+            "bbox": [
+              43.901,
+              202.906,
+              140.545,
+              296.968
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "window",
+            "confidence": 0.350729,
+            "bbox": [
+              0.0,
+              111.207,
+              112.774,
+              175.033
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "desk",
+            "confidence": 0.291882,
+            "bbox": [
+              0.0,
+              279.906,
+              180.951,
+              360.0
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "cabinet",
+            "confidence": 0.266927,
+            "bbox": [
+              336.435,
+              191.665,
+              480.0,
+              359.951
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "desk",
+            "confidence": 0.246057,
+            "bbox": [
+              43.84,
+              202.881,
+              140.966,
+              297.577
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "cabinet",
+            "confidence": 0.224897,
+            "bbox": [
+              420.003,
+              232.823,
+              479.939,
+              360.0
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "table",
+            "confidence": 0.127704,
+            "bbox": [
+              0.0,
+              280.305,
+              177.163,
+              360.0
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "chair",
+            "confidence": 0.112841,
+            "bbox": [
+              193.524,
+              249.84,
+              386.678,
+              359.593
+            ],
+            "frame_index": 1
+          }
+        ]
+      }
+    },
+    {
+      "case": "query_transition_3_clean",
+      "split": "heldout",
+      "condition": "clean",
+      "query": "query_transition_3",
+      "input": "inputs/query_transition_3_clean.json",
+      "sha256": "a98cc07f523b540001ee954c5a116494a3010be84cc87cf1a4efde017ce3fdeb",
+      "keys": [
+        "landmarks",
+        "frames",
+        "room_objects",
+        "room_zones",
+        "intrinsics",
+        "object_detections"
+      ],
+      "frames": [
+        {
+          "file": "frames/f180e6aa3e6eab7c3f14a1a9c2faea5e7caed2b7d985dd4490c8343a59f7ed13.jpg",
+          "sha256": "f180e6aa3e6eab7c3f14a1a9c2faea5e7caed2b7d985dd4490c8343a59f7ed13",
+          "width": 480,
+          "height": 360,
+          "keys": [
+            "frame_base64",
+            "width",
+            "height"
+          ]
+        },
+        {
+          "file": "frames/e6e86c42139c3c1886e8d66a0c118d0edef8c36dba8525c06303fa953fa0db8d.jpg",
+          "sha256": "e6e86c42139c3c1886e8d66a0c118d0edef8c36dba8525c06303fa953fa0db8d",
+          "width": 480,
+          "height": 360,
+          "keys": [
+            "frame_base64",
+            "width",
+            "height"
+          ]
+        }
+      ],
+      "details": {
+        "intrinsics": {
+          "values": [
+            [
+              320.0,
+              0,
+              240.0
+            ],
+            [
+              0,
+              320.0,
+              180.0
+            ],
+            [
+              0,
+              0,
+              1
+            ]
+          ]
+        },
+        "object_detections": [
+          {
+            "label": "sofa",
+            "confidence": 0.919301,
+            "bbox": [
+              0.0,
+              176.535,
+              264.933,
+              359.933
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "lamp",
+            "confidence": 0.791271,
+            "bbox": [
+              211.028,
+              109.025,
+              246.281,
+              188.001
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "chair",
+            "confidence": 0.777765,
+            "bbox": [
+              316.911,
+              164.022,
+              358.85,
+              234.153
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "desk",
+            "confidence": 0.664551,
+            "bbox": [
+              282.22,
+              233.732,
+              421.726,
+              359.906
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "desk",
+            "confidence": 0.609311,
+            "bbox": [
+              362.973,
+              173.368,
+              464.724,
+              255.978
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "television",
+            "confidence": 0.608369,
+            "bbox": [
+              347.239,
+              119.731,
+              449.504,
+              175.828
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "chair",
+            "confidence": 0.501053,
+            "bbox": [
+              453.87,
+              161.806,
+              480.0,
+              252.075
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "shelf",
+            "confidence": 0.351778,
+            "bbox": [
+              243.891,
+              160.916,
+              279.015,
+              216.95
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "cabinet",
+            "confidence": 0.33997,
+            "bbox": [
+              243.99,
+              161.048,
+              278.824,
+              216.825
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "chair",
+            "confidence": 0.106161,
+            "bbox": [
+              453.508,
+              199.28,
+              480.0,
+              251.292
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "sofa",
+            "confidence": 0.919844,
+            "bbox": [
+              0.0,
+              176.338,
+              265.074,
+              359.906
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "lamp",
+            "confidence": 0.792442,
+            "bbox": [
+              210.869,
+              109.129,
+              246.086,
+              188.053
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "chair",
+            "confidence": 0.790133,
+            "bbox": [
+              316.675,
+              164.307,
+              359.065,
+              233.743
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "desk",
+            "confidence": 0.665246,
+            "bbox": [
+              282.258,
+              232.988,
+              421.992,
+              359.918
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "television",
+            "confidence": 0.64953,
+            "bbox": [
+              347.212,
+              119.669,
+              449.629,
+              175.737
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "desk",
+            "confidence": 0.617327,
+            "bbox": [
+              362.795,
+              173.208,
+              464.671,
+              255.794
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "chair",
+            "confidence": 0.484806,
+            "bbox": [
+              453.761,
+              161.982,
+              480.0,
+              251.762
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "cabinet",
+            "confidence": 0.317757,
+            "bbox": [
+              244.273,
+              160.89,
+              279.299,
+              215.924
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "shelf",
+            "confidence": 0.312595,
+            "bbox": [
+              243.923,
+              160.911,
+              279.038,
+              216.384
+            ],
+            "frame_index": 1
+          }
+        ]
+      }
+    },
+    {
+      "case": "query_transition_3_unknown_intrinsics",
+      "split": "heldout",
+      "condition": "unknown_intrinsics",
+      "query": "query_transition_3",
+      "input": "inputs/query_transition_3_unknown_intrinsics.json",
+      "sha256": "0dee1abde26bee19d464bdface5503233bb7c095dddfbbf43bf4f0030d8f6899",
+      "keys": [
+        "landmarks",
+        "frames",
+        "room_objects",
+        "room_zones",
+        "object_detections"
+      ],
+      "frames": [
+        {
+          "file": "frames/f180e6aa3e6eab7c3f14a1a9c2faea5e7caed2b7d985dd4490c8343a59f7ed13.jpg",
+          "sha256": "f180e6aa3e6eab7c3f14a1a9c2faea5e7caed2b7d985dd4490c8343a59f7ed13",
+          "width": 480,
+          "height": 360,
+          "keys": [
+            "frame_base64",
+            "width",
+            "height"
+          ]
+        },
+        {
+          "file": "frames/e6e86c42139c3c1886e8d66a0c118d0edef8c36dba8525c06303fa953fa0db8d.jpg",
+          "sha256": "e6e86c42139c3c1886e8d66a0c118d0edef8c36dba8525c06303fa953fa0db8d",
+          "width": 480,
+          "height": 360,
+          "keys": [
+            "frame_base64",
+            "width",
+            "height"
+          ]
+        }
+      ],
+      "details": {
+        "object_detections": [
+          {
+            "label": "sofa",
+            "confidence": 0.919301,
+            "bbox": [
+              0.0,
+              176.535,
+              264.933,
+              359.933
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "lamp",
+            "confidence": 0.791271,
+            "bbox": [
+              211.028,
+              109.025,
+              246.281,
+              188.001
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "chair",
+            "confidence": 0.777765,
+            "bbox": [
+              316.911,
+              164.022,
+              358.85,
+              234.153
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "desk",
+            "confidence": 0.664551,
+            "bbox": [
+              282.22,
+              233.732,
+              421.726,
+              359.906
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "desk",
+            "confidence": 0.609311,
+            "bbox": [
+              362.973,
+              173.368,
+              464.724,
+              255.978
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "television",
+            "confidence": 0.608369,
+            "bbox": [
+              347.239,
+              119.731,
+              449.504,
+              175.828
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "chair",
+            "confidence": 0.501053,
+            "bbox": [
+              453.87,
+              161.806,
+              480.0,
+              252.075
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "shelf",
+            "confidence": 0.351778,
+            "bbox": [
+              243.891,
+              160.916,
+              279.015,
+              216.95
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "cabinet",
+            "confidence": 0.33997,
+            "bbox": [
+              243.99,
+              161.048,
+              278.824,
+              216.825
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "chair",
+            "confidence": 0.106161,
+            "bbox": [
+              453.508,
+              199.28,
+              480.0,
+              251.292
+            ],
+            "frame_index": 0
+          },
+          {
+            "label": "sofa",
+            "confidence": 0.919844,
+            "bbox": [
+              0.0,
+              176.338,
+              265.074,
+              359.906
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "lamp",
+            "confidence": 0.792442,
+            "bbox": [
+              210.869,
+              109.129,
+              246.086,
+              188.053
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "chair",
+            "confidence": 0.790133,
+            "bbox": [
+              316.675,
+              164.307,
+              359.065,
+              233.743
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "desk",
+            "confidence": 0.665246,
+            "bbox": [
+              282.258,
+              232.988,
+              421.992,
+              359.918
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "television",
+            "confidence": 0.64953,
+            "bbox": [
+              347.212,
+              119.669,
+              449.629,
+              175.737
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "desk",
+            "confidence": 0.617327,
+            "bbox": [
+              362.795,
+              173.208,
+              464.671,
+              255.794
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "chair",
+            "confidence": 0.484806,
+            "bbox": [
+              453.761,
+              161.982,
+              480.0,
+              251.762
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "cabinet",
+            "confidence": 0.317757,
+            "bbox": [
+              244.273,
+              160.89,
+              279.299,
+              215.924
+            ],
+            "frame_index": 1
+          },
+          {
+            "label": "shelf",
+            "confidence": 0.312595,
+            "bbox": [
+              243.923,
+              160.911,
+              279.038,
+              216.384
+            ],
+            "frame_index": 1
+          }
+        ]
+      }
+    }
+  ]
+}
