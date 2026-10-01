@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" /><title>ONE Fall Detection Debug</title><link rel="stylesheet" href="/styles.css" /></head>
+<body data-mode="fall">
+  <main>
+    <header><div><p class="eyebrow">LOCAL IRL TOOL</p><h1>Fall Detection Debug</h1><p class="sub">Isolated live copy of the person-pose and fall review pipeline</p></div><div id="workerBadge" class="badge">Worker · checking</div></header>
+    <nav class="debug-nav"><a href="/">Camera Positioning</a><a href="/faces">Face Recognition Debug</a><a class="active" href="/fall">Fall Detection Debug</a></nav>
+    <section class="card controls debug-controls">
+      <label>Email <input id="email" autocomplete="email" placeholder="your local ONE account" /></label><button id="login">Connect to local ONE</button>
+      <label>Camera <select id="camera" disabled><option>Sign in first</option></select></label><button id="startCamera" class="secondary">Open camera</button>
+      <button id="run" disabled>Start live fall check</button><button id="stop" class="secondary" disabled>Stop</button>
+    </section>
+    <section class="grid two">
+      <article class="card video-card"><div class="card-head"><h2>Live camera</h2><span id="captureState">idle</span></div><div class="video-wrap"><video id="video" autoplay muted playsinline></video><canvas id="overlay"></canvas></div><canvas id="captureCanvas" hidden></canvas></article>
+      <article class="card"><div class="card-head"><h2>Fall pipeline</h2><span id="personCount">0 people</span></div><div id="results" class="debug-results"><p class="muted">Connect, open the camera, then start the live check.</p></div><pre id="diagnostics">Pose and sequence diagnostics will appear here.</pre></article>
+    </section>
+    <section class="card privacy-note"><b>What this can and cannot tell you</b><p>The page shows pose quality, model readiness, sequence score freshness, threshold, confirmation progress, and the gate reason. “Would emit” means the isolated debug tracker would create a <code>fall_suspected / needs_review</code> signal; it does not save an event or snapshot. This is not an accuracy certification.</p><p>To establish accuracy, collect representative, consented clips covering falls and ordinary activities, label each clip independently, replay them, and count false alerts and missed falls. Keep separate clips for threshold selection and final evaluation. Tune only after reviewing those results.</p></section>
+    <section class="card"><div class="card-head"><h2>Recent checks</h2><button id="clearLog" class="text">clear</button></div><div id="log" class="log"></div></section>
+  </main>
+  <script src="/debug.js"></script>
+</body>
+</html>
