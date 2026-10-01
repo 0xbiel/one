@@ -1,4 +1,14 @@
-from app.face import best_profile_match, normalize_embedding, stable_identity, validate_embeddings
+import math
+
+from app.face import (
+    best_profile_match,
+    cancelable_template,
+    new_protected_template_payload,
+    protected_template_payload,
+    normalize_embedding,
+    stable_identity,
+    validate_embeddings,
+)
 
 
 def test_face_matching_requires_a_clear_runner_up_margin():
@@ -35,3 +45,20 @@ def test_face_enrollment_rejects_malformed_or_inconsistent_templates():
         assert "invalid dimension" in str(error)
     else:  # pragma: no cover - assertion guard
         raise AssertionError("inconsistent face template dimensions were accepted")
+
+
+def test_cancelable_template_is_revocable_and_not_the_raw_embedding():
+    embedding = normalize_embedding([1.0] + [0.0] * 15)
+    first = new_protected_template_payload([embedding] * 3, secret=b"a" * 32, profile_id="profile")
+    second = new_protected_template_payload([embedding] * 3, secret=b"a" * 32, profile_id="profile")
+    assert first["scheme"] == "cancelable-random-projection-v1"
+    assert first["transform_salt"] != second["transform_salt"]
+    parsed = protected_template_payload(first)
+    assert parsed is not None
+    templates, salt = parsed
+    assert salt == first["transform_salt"]
+    assert templates[0] != embedding
+    profile = {"profile_id": "profile", "embeddings": templates, "transform_salt": salt}
+    assert best_profile_match(embedding, [profile], transform_secret=b"a" * 32) is not None
+    recomputed = cancelable_template(embedding, secret=b"a" * 32, profile_id="profile", transform_salt=salt)
+    assert all(math.isclose(left, right, rel_tol=1e-12, abs_tol=1e-12) for left, right in zip(recomputed, templates[0]))

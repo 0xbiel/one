@@ -236,6 +236,16 @@ def _serialize_model(model: Any) -> dict[str, list[float]]:
     }
 
 
+def _view_split_masks(all_pairs, view_ids, held_out_views):
+    """Keep both endpoints of each training pair outside held-out views."""
+    anchors = np.asarray([str(view_ids[int(a)]) for a, _ in all_pairs])
+    partners = np.asarray([str(view_ids[int(b)]) for _, b in all_pairs])
+    held = np.asarray(held_out_views, dtype=str)
+    validation = np.isin(anchors, held)
+    training = ~validation & ~np.isin(partners, held)
+    return training, validation
+
+
 def _fit_matcher(
     points: np.ndarray,
     descriptors: np.ndarray,
@@ -294,11 +304,8 @@ def _fit_matcher(
         for offset in range(held_out_count)
     ]
     anchor_views = np.asarray([str(view_ids[int(anchor)]) for anchor in anchors])
-    validation_mask = np.asarray(
-        np.isin(anchor_views, np.asarray(held_out_views, dtype=str)),
-        dtype=bool,
-    )
-    if int(np.count_nonzero(validation_mask)) < 8 or int(np.count_nonzero(~validation_mask)) < 16:
+    training_mask, validation_mask = _view_split_masks(all_pairs, view_ids, held_out_views)
+    if int(np.count_nonzero(validation_mask)) < 8 or int(np.count_nonzero(training_mask)) < 16:
         return None
 
     # This model is intentionally tiny and map-specific. Run both fitting and
@@ -313,7 +320,7 @@ def _fit_matcher(
     optimizer = torch.optim.AdamW(model.parameters(), lr=0.003, weight_decay=0.0001)
     feature_tensor = torch.from_numpy(features).to(device)
     label_tensor = torch.from_numpy(labels).to(device)
-    train_indices = np.flatnonzero(~validation_mask)
+    train_indices = np.flatnonzero(training_mask)
     batch_size = 256
     model.train()
     for _epoch in range(64):
@@ -366,7 +373,7 @@ def _fit_matcher(
             "validation_auc": round(float(validation_auc), 6),
             "epochs": 64,
             "source": "roomplan-metric-nearby-landmarks",
-            "validation_strategy": "held-out-scan-views-v2",
+            "validation_strategy": "held-out-scan-views-both-endpoints-v3",
             "held_out_view": held_out_views[0],
             "held_out_views": held_out_views,
             "validation_aucs": {

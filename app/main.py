@@ -23,7 +23,7 @@ from .config import Settings, get_settings
 from .analytics import care_analytics
 from .db import Database, now_iso
 from .events import EventBus, sse
-from .fall import FallDetectionTracker, FallSignal
+from .fall import FallDetectionTracker, FallSignal, PoseSequenceWindowStore
 from .geometry import (
     HttpRoomLayoutService,
     RoomLayoutService,
@@ -34,7 +34,15 @@ from .geometry import (
 )
 from .integrations import LMStudioAdapter, livekit_jwt, verify_livekit_webhook
 from .media import EncryptedLocalClipStore, EncryptedLocalTemplateStore, image_content_type
-from .face import best_profile_match, normalize_embedding, stable_identity, validate_embeddings
+from .face import (
+    best_profile_match,
+    new_protected_template_payload,
+    protected_template_payload,
+    normalize_embedding,
+    stable_identity,
+    validate_embeddings,
+)
+from .imported_geometry import ImportedMapIn, CameraPlacementIn, normalized_geometry, build_usdz as build_imported_usdz
 from .roomplan import (
     ARVideoMapIn,
     RoomPlanMapIn,
@@ -229,7 +237,9 @@ class CameraUpdate(BaseModel):
     resolution_width: int | None = Field(default=None, gt=0, le=7680)
     resolution_height: int | None = Field(default=None, gt=0, le=4320)
     metadata: dict = Field(default_factory=dict)
-class RoomIn(BaseModel): name: str = Field(min_length=1, max_length=120)
+class RoomIn(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    id: str | None = Field(default=None, min_length=1, max_length=120)
 class RoomUpdate(BaseModel): name: str = Field(min_length=1, max_length=120)
 class MapIn(BaseModel): room_id: str | None = None; coordinate_frame: str = Field(default="manual-2d", max_length=80); map_data: dict
 class ProvisionalMapIn(BaseModel):
@@ -425,7 +435,7 @@ class CameraLocalizationIn(BaseModel):
     frames: list[CameraLocalizationFrameIn] = Field(min_length=1, max_length=16)
     intrinsics: Matrix3x3In | None = None
     fov_degrees: float | None = Field(default=None, ge=30.0, le=120.0)
-    review_only: bool = False
+    review_only: Literal[True] = True
     person_anchors: list[CameraLocalizationPersonAnchorIn] = Field(default_factory=list, max_length=16)
 
     @model_validator(mode="after")
@@ -1034,7 +1044,22 @@ def make_app(
     app.state.db, app.state.store, app.state.clip_store, app.state.template_store, app.state.bus, app.state.settings, app.state.vision = db, store, clip_store, template_store, bus, settings, vision
     app.state.vision_person_objects = {}
     app.state.vision_person_identity = {}
-    app.state.fall_detector = FallDetectionTracker()
+    app.state.face_debug_stability = {}
+    app.state.fall_pose_windows = PoseSequenceWindowStore(window_size=settings.fall_sequence_window)
+    app.state.debug_fall_pose_windows = PoseSequenceWindowStore(window_size=settings.fall_sequence_window)
+    app.state.fall_score_semaphore = asyncio.Semaphore(1)
+    app.state.debug_fall_score_semaphore = asyncio.Semaphore(1)
+    app.state.safety_clock = lambda: datetime.now(timezone.utc)
+    # Custom detectors are an explicit test seam. The real LocalServiceDetector
+    # path is strict: no learned sequence score means no production fall event.
+    app.state.fall_detector = FallDetectionTracker(
+        require_learned_model=vision_detector is None,
+        learned_threshold=settings.fall_sequence_threshold,
+    )
+    app.state.debug_fall_detector = FallDetectionTracker(
+        require_learned_model=vision_detector is None,
+        learned_threshold=settings.fall_sequence_threshold,
+    )
     app.state.geometry_service = geometry
     app.add_middleware(CORSMiddleware, allow_origins=settings.cors_list, allow_credentials=True, allow_methods=["GET", "POST", "PATCH", "DELETE"], allow_headers=["Authorization", "Content-Type", "X-Bootstrap-Secret"])
 
@@ -1168,6 +1193,8 @@ def make_app(
             "local_inference_model": settings.effective_llm_model,
             "geometry_service_configured": bool(settings.geometry_service_url),
             "geometry_service_requires_gpu": settings.geometry_require_gpu,
+            "biometric_templates_encryption": "configured" if template_store.available else "unavailable",
+            "event_media_encryption": "configured" if settings.clip_encryption_key_b64 else "ephemeral",
         }
 
     @app.get("/api/v1/me")
@@ -1523,18 +1550,35 @@ def make_app(
 
     @app.post("/api/v1/homes/{home_id}/cameras")
     def camera(home_id: str, body: CameraIn, actor: Current):
-        home_check(actor, home_id); publisher_block(actor); cid = str(uuid.uuid4()); db.execute("INSERT INTO cameras(id,home_id,name,room_id,enabled,created_at,resolution_width,resolution_height,metadata_json) VALUES (?,?,?,?,?,?,?,?,?)", (cid, home_id, body.name, body.room_id, 1, now_iso(), body.resolution_width, body.resolution_height, json.dumps(body.metadata))); return {"id": cid, **body.model_dump(), "enabled": True}
+        home_check(actor, home_id); publisher_block(actor); cid = str(uuid.uuid4())
+        metadata = dict(body.metadata)
+        if body.room_id:
+            metadata["room_assignment_source"] = "manual"
+        db.execute("INSERT INTO cameras(id,home_id,name,room_id,enabled,created_at,resolution_width,resolution_height,metadata_json) VALUES (?,?,?,?,?,?,?,?,?)", (cid, home_id, body.name, body.room_id, 1, now_iso(), body.resolution_width, body.resolution_height, json.dumps(metadata)))
+        return {"id": cid, **body.model_dump(), "metadata": metadata, "enabled": True}
 
     @app.patch("/api/v1/homes/{home_id}/cameras/{camera_id}")
     def camera_update(home_id: str, camera_id: str, body: CameraUpdate, actor: Current):
         home_check(actor, home_id); publisher_block(actor)
         row = db.one("SELECT * FROM cameras WHERE id=? AND home_id=?", (camera_id, home_id))
         if not row: raise HTTPException(404, "Camera not found")
+        original_metadata = json_object(row.get("metadata_json") or "{}")
         values = {"name": body.name if body.name is not None else row["name"], "room_id": body.room_id if "room_id" in body.model_fields_set else row["room_id"], "resolution_width": body.resolution_width if "resolution_width" in body.model_fields_set else row["resolution_width"], "resolution_height": body.resolution_height if "resolution_height" in body.model_fields_set else row["resolution_height"], "metadata_json": json.dumps(body.metadata) if "metadata" in body.model_fields_set else row.get("metadata_json", "{}")}
-        changed = any(values[key] != row.get(key) for key in ("name", "room_id", "resolution_width", "resolution_height", "metadata_json"))
+        room_changed = "room_id" in body.model_fields_set and values["room_id"] != row.get("room_id")
+        metadata = json_object(values["metadata_json"])
+        if room_changed:
+            metadata["room_assignment_source"] = "manual"
+            metadata.pop("room_assignment_zone_id", None)
+            values["metadata_json"] = json.dumps(metadata)
+        client_metadata_changed = "metadata" in body.model_fields_set and json_object(values["metadata_json"]) != original_metadata
+        calibration_changed = (
+            values["resolution_width"] != row.get("resolution_width")
+            or values["resolution_height"] != row.get("resolution_height")
+            or client_metadata_changed
+        )
         db.execute("UPDATE cameras SET name=?, room_id=?, resolution_width=?, resolution_height=?, metadata_json=? WHERE id=? AND home_id=?", (*values.values(), camera_id, home_id))
-        if changed: db.execute("UPDATE calibrations SET status='invalidated', invalidated_at=?, invalidation_reason='camera metadata or resolution changed' WHERE home_id=? AND camera_id=? AND status='active'", (now_iso(), home_id, camera_id))
-        return {"id": camera_id, "name": values["name"], "room_id": values["room_id"], "resolution_width": values["resolution_width"], "resolution_height": values["resolution_height"], "metadata": body.metadata, "calibrations_invalidated": changed}
+        if calibration_changed: db.execute("UPDATE calibrations SET status='invalidated', invalidated_at=?, invalidation_reason='camera metadata or resolution changed' WHERE home_id=? AND camera_id=? AND status='active'", (now_iso(), home_id, camera_id))
+        return {"id": camera_id, "name": values["name"], "room_id": values["room_id"], "resolution_width": values["resolution_width"], "resolution_height": values["resolution_height"], "metadata": metadata, "calibrations_invalidated": calibration_changed}
 
     @app.delete("/api/v1/homes/{home_id}/cameras/{camera_id}")
     def camera_delete(home_id: str, camera_id: str, actor: Current):
@@ -1578,9 +1622,27 @@ def make_app(
         name = body.name.strip()
         if not name:
             raise HTTPException(422, "Room name is required")
-        rid, created_at = str(uuid.uuid4()), now_iso()
+        if body.id:
+            try:
+                uuid.UUID(body.id)
+            except ValueError as exc:
+                raise HTTPException(422, "Room id must be a UUID") from exc
+            rid = body.id
+            existing = db.one("SELECT * FROM rooms WHERE id=?", (rid,))
+            if existing:
+                if existing.get("home_id") != home_id:
+                    raise HTTPException(409, "Room id already belongs to another care space")
+                if existing.get("name") != name:
+                    db.execute("UPDATE rooms SET name=? WHERE id=? AND home_id=?", (name, rid, home_id))
+                    existing["name"] = name
+                auto_assign_saved_camera_rooms(home_id, actor)
+                return existing
+        else:
+            rid = str(uuid.uuid4())
+        created_at = now_iso()
         db.execute("INSERT INTO rooms VALUES (?,?,?,?)", (rid, home_id, name, created_at))
         audit(actor, "room.create", "room", rid, home_id)
+        auto_assign_saved_camera_rooms(home_id, actor)
         return {"id": rid, "home_id": home_id, "name": name, "created_at": created_at}
 
     @app.patch("/api/v1/homes/{home_id}/rooms/{room_id}")
@@ -1630,12 +1692,12 @@ def make_app(
         # Only explicit validated producer contracts can opt into current geometry.
         # Older manual/generic rows must remain visible, but are legacy and
         # need a fresh automatic sweep before they can drive the map UI.
-        return source if source in {"camera-cv-2d", "roomplan-lidar-3d", "arkit-video-3d", "legacy-2d"} else "legacy-2d"
+        return source if source in {"camera-cv-2d", "roomplan-lidar-3d", "arkit-video-3d", "imported-3d", "legacy-2d"} else "legacy-2d"
 
     def map_dimension(row: dict, source: str) -> str:
         # A generic or legacy map can never opt into the 3D renderer by
         # putting an arbitrary value in its stored JSON.
-        return "3d" if source in {"roomplan-lidar-3d", "arkit-video-3d"} and row.get("dimension") == "3d" else "2d"
+        return "3d" if source in {"roomplan-lidar-3d", "arkit-video-3d", "imported-3d"} and row.get("dimension") == "3d" else "2d"
 
     def map_uses_real_geometry_model(row: dict) -> bool:
         """Keep historical fixture revisions out of the active map surface."""
@@ -1901,11 +1963,187 @@ def make_app(
             "distance_from_room_polygon_m": round(distance, 4),
         }
 
+    def auto_assign_camera_room_from_pose(
+        home_id: str,
+        camera_id: str,
+        map_row: dict,
+        camera_to_world: object,
+        actor: dict,
+    ) -> dict:
+        """Assign a room only when a saved RoomPlan pose falls inside one mapped floor zone."""
+        camera = db.one("SELECT id,room_id,metadata_json FROM cameras WHERE id=? AND home_id=? AND enabled=1", (camera_id, home_id))
+        if not camera:
+            return {"status": "camera_unavailable"}
+        metadata = json_object(camera.get("metadata_json") or "{}")
+        if metadata.get("room_assignment_source") == "manual":
+            return {"status": "manual_override", "room_id": camera.get("room_id")}
+
+        valid_pose, pose_diagnostics = roomplan_pose_scene_validation(map_row, camera_to_world)
+        if not valid_pose:
+            return {"status": "position_outside_map", "diagnostics": pose_diagnostics}
+        try:
+            x = float(camera_to_world[0][3])
+            y = float(camera_to_world[1][3])
+            z = float(camera_to_world[2][3])
+        except (TypeError, ValueError, IndexError):
+            return {"status": "invalid_position"}
+
+        geometry = roomplan_geometry_for_localization(map_row)
+        zones = geometry.get("room_zones") if isinstance(geometry.get("room_zones"), list) else []
+        rooms = db.many("SELECT id,name FROM rooms WHERE home_id=?", (home_id,))
+        if not zones or not rooms:
+            return {"status": "room_mapping_unavailable", "room_id": camera.get("room_id")}
+
+        def normalized_label(value: object) -> str:
+            return re.sub(r"[^a-z0-9]", "", str(value or "").casefold())
+
+        def room_for_zone(zone: dict) -> dict | None:
+            zone_id = str(zone.get("id") or "")
+            direct = next((room for room in rooms if str(room.get("id") or "").casefold() == zone_id.casefold()), None)
+            if direct:
+                return direct
+            label = normalized_label(zone.get("label"))
+            same_label_zones = [item for item in zones if isinstance(item, dict) and normalized_label(item.get("label")) == label]
+            same_label_rooms = [room for room in rooms if normalized_label(room.get("name")) == label]
+            if label and len(same_label_zones) == 1 and len(same_label_rooms) == 1:
+                return same_label_rooms[0]
+            if len(zones) == 1 and len(rooms) == 1:
+                return rooms[0]
+            return None
+
+        def contains(px: float, pz: float, polygon: list) -> bool:
+            points = [
+                (float(point["x"]), float(point["z"]))
+                for point in polygon
+                if isinstance(point, dict)
+                and isinstance(point.get("x"), (int, float))
+                and isinstance(point.get("z"), (int, float))
+                and math.isfinite(float(point["x"]))
+                and math.isfinite(float(point["z"]))
+            ]
+            if len(points) < 3:
+                return False
+            inside = False
+            previous = points[-1]
+            for current in points:
+                ax, az = previous
+                bx, bz = current
+                dx, dz = bx - ax, bz - az
+                length_sq = dx * dx + dz * dz
+                if length_sq > 1e-12:
+                    t = max(0.0, min(1.0, ((px - ax) * dx + (pz - az) * dz) / length_sq))
+                    if math.hypot(px - (ax + t * dx), pz - (az + t * dz)) <= 1e-4:
+                        return True
+                if (az > pz) != (bz > pz):
+                    crossing_x = (bx - ax) * (pz - az) / (bz - az) + ax
+                    if px < crossing_x:
+                        inside = not inside
+                previous = current
+            return inside
+
+        mapped_zone_count = 0
+        containing_rooms: dict[str, str] = {}
+        for zone in zones:
+            if not isinstance(zone, dict):
+                continue
+            room = room_for_zone(zone)
+            if room is None:
+                continue
+            mapped_zone_count += 1
+            polygon = zone.get("polygon")
+            floor_y = zone.get("floor_y")
+            confidence = zone.get("confidence")
+            if (
+                not isinstance(polygon, list)
+                or not isinstance(floor_y, (int, float))
+                or not math.isfinite(float(floor_y))
+                or not isinstance(confidence, (int, float))
+                or float(confidence) < 0.75
+                or not 0.15 <= y - float(floor_y) <= 3.50
+                or not contains(x, z, polygon)
+            ):
+                continue
+            containing_rooms[str(room["id"])] = str(zone.get("id") or "")
+
+        if mapped_zone_count == 0:
+            return {"status": "room_mapping_unavailable", "room_id": camera.get("room_id")}
+
+        if len(containing_rooms) == 1:
+            assigned_room_id, zone_id = next(iter(containing_rooms.items()))
+        else:
+            assigned_room_id = None
+            zone_id = None
+
+        current_room_id = camera.get("room_id")
+        if assigned_room_id is None and metadata.get("room_assignment_source") != "automatic":
+            return {
+                "status": "ambiguous" if len(containing_rooms) > 1 else "outside_room_bounds",
+                "room_id": current_room_id,
+            }
+
+        metadata["room_assignment_source"] = "automatic"
+        if zone_id:
+            metadata["room_assignment_zone_id"] = zone_id
+        else:
+            metadata.pop("room_assignment_zone_id", None)
+        if current_room_id != assigned_room_id or json_object(camera.get("metadata_json") or "{}") != metadata:
+            db.execute(
+                "UPDATE cameras SET room_id=?, metadata_json=? WHERE id=? AND home_id=? AND enabled=1",
+                (assigned_room_id, json.dumps(metadata), camera_id, home_id),
+            )
+            audit(actor, "camera.room.auto_assign", "camera", camera_id, home_id)
+        return {
+            "status": "assigned" if assigned_room_id else ("ambiguous" if len(containing_rooms) > 1 else "outside_room_bounds"),
+            "room_id": assigned_room_id,
+            "zone_id": zone_id,
+        }
+
+    def auto_assign_saved_camera_rooms(home_id: str, actor: dict) -> list[dict]:
+        """Recheck current-map saved poses when logical room records arrive."""
+        map_row = active_map_row(home_id)
+        if (
+            not map_row
+            or map_source(map_row) != "roomplan-lidar-3d"
+            or map_dimension(map_row, "roomplan-lidar-3d") != "3d"
+        ):
+            return []
+
+        rows = db.many(
+            """SELECT cameras.id AS camera_id, calibrations.extrinsics_json
+               FROM cameras
+               JOIN calibrations ON calibrations.home_id=cameras.home_id AND calibrations.camera_id=cameras.id
+               WHERE cameras.home_id=? AND cameras.enabled=1 AND calibrations.map_id=?
+                 AND calibrations.status='active'
+                 AND calibrations.source IN ('auto-roomplan-registration','visual-roomplan-registration')
+               ORDER BY calibrations.created_at DESC""",
+            (home_id, map_row["id"]),
+        )
+        seen_cameras: set[str] = set()
+        results: list[dict] = []
+        for row in rows:
+            camera_id = str(row.get("camera_id") or "")
+            if not camera_id or camera_id in seen_cameras:
+                continue
+            seen_cameras.add(camera_id)
+            extrinsics = json_object(row.get("extrinsics_json") or "{}")
+            camera_to_world = extrinsics.get("camera_to_world")
+            if camera_to_world is None:
+                continue
+            results.append(
+                {
+                    "camera_id": camera_id,
+                    **auto_assign_camera_room_from_pose(home_id, camera_id, map_row, camera_to_world, actor),
+                }
+            )
+        return results
+
     def active_map_row(home_id: str) -> dict | None:
         rows = db.many(
             "SELECT * FROM room_maps WHERE home_id=? ORDER BY revision DESC, created_at DESC",
             (home_id,),
         )
+        if rows and map_source(rows[0]) == "imported-3d":
+            return rows[0]
         # A native metric RoomPlan scene remains the authoritative home map
         # even when a fixed browser camera later creates a relative 2D sweep.
         # Camera sweeps remain available by id for review and calibration, but
@@ -1957,6 +2195,10 @@ def make_app(
         return canonical
 
     def camera_roomplan_calibration_state(home_id: str, camera_id: str) -> dict:
+        active = active_map_row(home_id)
+        if active and map_source(active) == "imported-3d":
+            placed = db.one("SELECT id FROM calibrations WHERE home_id=? AND camera_id=? AND map_id=? AND source='manual-geometry-registration' AND status='active'", (home_id,camera_id,active["id"]))
+            return {"calibration_needed": not bool(placed), "roomplan_registration_status": "positioned" if placed else "manual_only", "roomplan_map_id": active["id"]}
         map_row = roomplan_map_for_camera(home_id, camera_id)
         if not map_row or map_source(map_row) != "roomplan-lidar-3d" or map_dimension(map_row, "roomplan-lidar-3d") != "3d":
             return {
@@ -1972,7 +2214,7 @@ def make_app(
                 "roomplan_map_id": map_row["id"],
             }
         calibration = db.one(
-            "SELECT * FROM calibrations WHERE home_id=? AND camera_id=? AND map_id=? AND source IN ('auto-roomplan-registration','visual-roomplan-registration') AND status IN ('active','needs_rescan','needs_review') ORDER BY created_at DESC LIMIT 1",
+            "SELECT * FROM calibrations WHERE home_id=? AND camera_id=? AND map_id=? AND source IN ('auto-roomplan-registration','visual-roomplan-registration') AND status IN ('active','needs_rescan','needs_review') ORDER BY CASE WHEN status='active' THEN 0 ELSE 1 END, created_at DESC LIMIT 1",
             (home_id, camera_id, map_row["id"]),
         )
         registration_status = "unavailable"
@@ -2081,7 +2323,7 @@ def make_app(
         if map_source(map_row) != "roomplan-lidar-3d" or map_dimension(map_row, "roomplan-lidar-3d") != "3d":
             return []
         rows = db.many(
-            "SELECT * FROM calibrations WHERE home_id=? AND source IN ('auto-roomplan-registration','visual-roomplan-registration') AND status IN ('active','needs_rescan') ORDER BY created_at DESC",
+            "SELECT * FROM calibrations WHERE home_id=? AND source IN ('auto-roomplan-registration','visual-roomplan-registration') AND status IN ('active','needs_rescan') ORDER BY CASE WHEN status='active' THEN 0 ELSE 1 END, created_at DESC",
             (home_id,),
         )
         seen: set[str] = set()
@@ -2108,7 +2350,23 @@ def make_app(
             scene_valid, _ = roomplan_pose_scene_validation(calibration_map, extrinsics.get("camera_to_world"))
             positioned = calibration.get("status") == "active" and scene_valid
             camera_metadata = json_object(camera.get("metadata_json") or "{}")
-            reference_snapshot = camera_metadata.get("reference_snapshot") if isinstance(camera_metadata.get("reference_snapshot"), dict) else None
+            raw_reference_snapshot = camera_metadata.get("reference_snapshot")
+            reference_snapshot = raw_reference_snapshot if isinstance(raw_reference_snapshot, dict) else None
+            if reference_snapshot:
+                artifact_key = reference_snapshot.get("artifact_key")
+                try:
+                    reference_bytes = store.get_bytes(artifact_key) if isinstance(artifact_key, str) and artifact_key else b""
+                except (OSError, ValueError):
+                    reference_bytes = b""
+                expected_size = reference_snapshot.get("byte_count")
+                expected_sha256 = reference_snapshot.get("sha256")
+                reference_is_valid = bool(reference_bytes.startswith(b"\xff\xd8"))
+                if isinstance(expected_size, int) and expected_size > 0:
+                    reference_is_valid = reference_is_valid and len(reference_bytes) == expected_size
+                if isinstance(expected_sha256, str) and expected_sha256:
+                    reference_is_valid = reference_is_valid and hashlib.sha256(reference_bytes).hexdigest() == expected_sha256
+                if not reference_is_valid:
+                    reference_snapshot = None
             result.append(
                 {
                     "status": "positioned" if positioned else "needs_rescan",
@@ -2129,6 +2387,8 @@ def make_app(
                             "mapId": reference_snapshot.get("map_id"),
                             "width": reference_snapshot.get("width"),
                             "height": reference_snapshot.get("height"),
+                            "byteCount": reference_snapshot.get("byte_count"),
+                            "sha256": reference_snapshot.get("sha256"),
                             "downloadPath": reference_snapshot.get("download_path"),
                         }
                         if reference_snapshot else None
@@ -2154,7 +2414,7 @@ def make_app(
         )
         if rescan_required:
             geometry_status = "rescan-required"
-        elif source in {"camera-cv-2d", "roomplan-lidar-3d", "arkit-video-3d"}:
+        elif source in {"camera-cv-2d", "roomplan-lidar-3d", "arkit-video-3d", "imported-3d"}:
             geometry_status = "ready"
         else:
             geometry_status = "legacy"
@@ -2174,7 +2434,7 @@ def make_app(
             "map_data": map_data,
             "created_at": row["created_at"],
             "source": source,
-            "provenance": source,
+            "provenance": metadata.get("provenance", source),
             "dimension": dimension,
             "approximate": bool(row.get("approximate", 0)) or source == "legacy-2d",
             "metric_scale_known": dimension == "3d",
@@ -2200,7 +2460,7 @@ def make_app(
         dimension: str = "2d",
     ) -> dict:
         row = db.one("SELECT COALESCE(MAX(revision),0)+1 revision FROM room_maps WHERE home_id=? AND room_id IS ?", (home_id, room_id))
-        if source not in {"roomplan-lidar-3d", "arkit-video-3d"}:
+        if source not in {"roomplan-lidar-3d", "arkit-video-3d", "imported-3d"}:
             dimension = "2d"
         mid = str(uuid.uuid4())
         if source == "roomplan-lidar-3d" and metadata.get("map_scope") == "home" and not metadata.get("home_frame_id"):
@@ -2225,6 +2485,23 @@ def make_app(
         audit(actor, "map.create", "room_map", mid, home_id)
         return {"id": mid, "revision": row["revision"], "coordinate_frame": coordinate_frame, "artifact_key": key, "source": source, "provenance": source, "dimension": dimension, "approximate": approximate, "metric_scale_known": dimension == "3d", "scale": map_data.get("scale") if isinstance(map_data, dict) and isinstance(map_data.get("scale"), dict) else None, "localization_status": localization_status, "geometry_status": "ready", "rescan_required": localization_status == "rescan-required", "metadata": metadata, "usdz": None}
 
+    def replace_rooms_for_new_scan(home_id: str, actor: dict) -> None:
+        """Remove stale logical rooms while retaining maps, cameras, and history."""
+        previous_rooms = db.many("SELECT id FROM rooms WHERE home_id=?", (home_id,))
+        db.execute("UPDATE cameras SET room_id=NULL WHERE home_id=? AND room_id IS NOT NULL", (home_id,))
+        for camera in db.many("SELECT id,metadata_json FROM cameras WHERE home_id=?", (home_id,)):
+            metadata = json_object(camera.get("metadata_json") or "{}")
+            if "room_assignment_source" not in metadata and "room_assignment_zone_id" not in metadata:
+                continue
+            metadata.pop("room_assignment_source", None)
+            metadata.pop("room_assignment_zone_id", None)
+            db.execute("UPDATE cameras SET metadata_json=? WHERE id=? AND home_id=?", (json.dumps(metadata), camera["id"], home_id))
+        db.execute("UPDATE room_maps SET room_id=NULL WHERE home_id=? AND room_id IS NOT NULL", (home_id,))
+        db.execute("UPDATE camera_map_generation_jobs SET room_id=NULL WHERE home_id=? AND room_id IS NOT NULL", (home_id,))
+        db.execute("DELETE FROM rooms WHERE home_id=?", (home_id,))
+        for previous_room in previous_rooms:
+            audit(actor, "room.delete", "room", previous_room["id"], home_id)
+
     @app.post("/api/v1/homes/{home_id}/maps")
     def room_map(home_id: str, body: MapIn, actor: Current):
         home_check(actor, home_id); publisher_block(actor)
@@ -2236,6 +2513,63 @@ def make_app(
         camera = db.one("SELECT * FROM cameras WHERE id=? AND home_id=? AND enabled=1", (body.camera_id, home_id))
         if not camera: raise HTTPException(404, "Camera not found or disabled")
         return create_map(home_id, body.room_id, "camera-zone-local", {"zones": body.zones}, "legacy-2d", True, "rescan-required", {"camera_id": body.camera_id, "resolution_width": body.resolution_width, "resolution_height": body.resolution_height, "legacy_reason": "provisional camera zones do not contain inferred geometry"}, actor)
+
+    @app.post("/api/v1/homes/{home_id}/maps/imported-3d")
+    def import_geometry(home_id: str, body: ImportedMapIn, actor: Current):
+        home_check(actor, home_id); family_actor(actor)
+        # No native provenance is accepted here, and generic uploads remain 2D.
+        normalized = normalized_geometry(body)
+        payload = build_imported_usdz(normalized)
+        validate_roomplan_usdz(payload)
+        map_id = str(uuid.uuid4())
+        key = f"maps/{home_id}/{map_id}.usdz"
+        metadata = {"provenance": body.provenance, "model_version": "imported-cuboids-v1", "units": "m", "up_axis": "Y", "visual_landmarks": {"status": "unavailable", "reason": "geometry_only_import", "landmark_count": 0}, "usdz": roomplan_usdz_metadata(sha256=hashlib.sha256(payload).hexdigest(), byte_count=len(payload), content_type="model/vnd.usdz+zip", download_path=f"/api/v1/homes/{home_id}/maps/{map_id}/usdz")}
+        data = {"import": body.model_dump(mode="json"), "normalized_scan": normalized}
+        # Persist the immutable artifact before publishing its database pointer.
+        store.put_bytes(key, payload)
+        with db.transaction() as tx:
+            if db.backend == "postgresql":
+                tx.execute("SELECT id FROM homes WHERE id=? FOR UPDATE", (home_id,))
+            for room in body.rooms:
+                existing = tx.execute("SELECT home_id FROM rooms WHERE id=?", (str(room.id),)).fetchone()
+                if existing and existing["home_id"] != home_id:
+                    raise HTTPException(422, "Room ID belongs to another home")
+                if not existing:
+                    tx.execute("INSERT INTO rooms(id,home_id,name,created_at) VALUES (?,?,?,?)", (str(room.id),home_id,room.name,now_iso()))
+            revision=tx.execute("SELECT COALESCE(MAX(revision),0)+1 revision FROM room_maps WHERE home_id=?", (home_id,)).fetchone()["revision"]
+            tx.execute("INSERT INTO room_maps(id,home_id,revision,coordinate_frame,map_json,created_at,source,dimension,approximate,localization_status,metadata_json,usdz_artifact_key) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", (map_id,home_id,revision,"import-local",json.dumps(data),now_iso(),"imported-3d","3d",1,"manual-only",json.dumps(metadata),key))
+        audit(actor,"map.import","room_map",map_id,home_id)
+        return map_view(db.one("SELECT * FROM room_maps WHERE id=?",(map_id,)))
+
+    def imported_registrations(home_id: str, map_row: dict) -> list[dict]:
+        rows=db.many("SELECT * FROM calibrations WHERE home_id=? AND map_id=? AND source='manual-geometry-registration' AND status='active' ORDER BY created_at DESC",(home_id,map_row["id"]))
+        return [{"id":r["id"], "status":"positioned", "cameraId":r["camera_id"], "mapId":r["map_id"], "coordinateFrame":"import-local", "cameraToWorld":json.loads(r["extrinsics_json"])["camera_to_world"], "confidence":None,"trackingState":"manual","source":"manual-geometry-registration"} for r in rows]
+
+    @app.post("/api/v1/homes/{home_id}/camera-registrations/manual")
+    def manual_camera_registration(home_id: str, body: CameraPlacementIn, actor: Current):
+        home_check(actor,home_id); family_actor(actor)
+        camera_id,map_id,room_id=str(body.camera_id),str(body.map_id),str(body.room_id)
+        with db.transaction() as tx:
+            if db.backend == "postgresql":
+                tx.execute("SELECT id FROM homes WHERE id=? FOR UPDATE", (home_id,))
+            camera=tx.execute("SELECT * FROM cameras WHERE id=? AND home_id=? AND enabled=1",(camera_id,home_id)).fetchone()
+            row=tx.execute("SELECT * FROM room_maps WHERE id=? AND home_id=?",(map_id,home_id)).fetchone()
+            if not camera or not row: raise HTTPException(404,"Camera or map not found")
+            active=active_map_row(home_id)
+            if not active or active["id"] != map_id: raise HTTPException(409,"Map changed; reopen placement review")
+            if row["source"] != "imported-3d": raise HTTPException(422,"This manual contract requires imported geometry")
+            model=ImportedMapIn.model_validate(json.loads(row["map_json"])["import"])
+            room=next((r for r in model.rooms if str(r.id)==room_id),None)
+            if room is None or not tx.execute("SELECT id FROM rooms WHERE id=? AND home_id=?",(room_id,home_id)).fetchone(): raise HTTPException(422,"Choose a room in this map")
+            point=[body.camera_to_world[i][3] for i in range(3)]
+            if not room.contains(point): raise HTTPException(422,"Camera must lie inside the selected room, including mounting height")
+            cid=str(uuid.uuid4()); created=now_iso()
+            # Validation finishes before any previous placement is invalidated.
+            tx.execute("UPDATE calibrations SET status='invalidated',invalidated_at=?,invalidation_reason='caregiver confirmed replacement' WHERE home_id=? AND camera_id=? AND status='active'",(created,home_id,camera_id))
+            tx.execute("INSERT INTO calibrations(id,home_id,camera_id,map_id,intrinsics_json,extrinsics_json,created_at,metrics_json,source,status) VALUES (?,?,?,?,?,?,?,?,?,?)",(cid,home_id,camera_id,map_id,"{}",json.dumps({"camera_to_world":body.camera_to_world}),created,json.dumps({"confirmed":True,"room_id":room_id,"method":"manual","visual_verified":False}),"manual-geometry-registration","active"))
+            tx.execute("UPDATE cameras SET room_id=? WHERE id=? AND home_id=?",(room_id,camera_id,home_id))
+        audit(actor,"camera.placement.confirm","calibration",cid,home_id)
+        return {"id":cid,"status":"positioned","camera_id":camera_id,"map_id":map_id,"coordinate_frame":"import-local","camera_to_world":body.camera_to_world,"confidence":None,"tracking_state":"manual","source":"manual-geometry-registration"}
 
     @app.post("/api/v1/homes/{home_id}/maps/roomplan")
     def roomplan_map(home_id: str, body: RoomPlanMapIn, actor: Current):
@@ -2272,7 +2606,7 @@ def make_app(
             "normalized_scan": normalized_scan,
             "geometry": roomplan_geometry(body.normalized_scan),
         }
-        return create_map(
+        result = create_map(
             home_id,
             body.room_id,
             coordinate_frame,
@@ -2284,6 +2618,9 @@ def make_app(
             actor,
             dimension="3d",
         )
+
+        replace_rooms_for_new_scan(home_id, actor)
+        return result
 
     @app.post("/api/v1/homes/{home_id}/maps/arkit-video")
     def arkit_video_map(home_id: str, body: ARVideoMapIn, actor: Current):
@@ -2322,6 +2659,7 @@ def make_app(
             actor,
             dimension="3d",
         )
+        replace_rooms_for_new_scan(home_id, actor)
         map_id = created["id"]
         key = f"maps/{home_id}/{map_id}.usdz"
         store.put_bytes(key, usdz_payload)
@@ -2379,113 +2717,142 @@ def make_app(
             raise HTTPException(502, "Local visual localization service rejected the scan") from exc
         if not isinstance(result, dict) or result.get("status") not in {"ready", "needs_rescan"}:
             raise HTTPException(502, "Local visual localization service returned an invalid result")
-        landmarks = result.get("landmarks") if isinstance(result.get("landmarks"), list) else []
-        previous = metadata.get("visual_landmarks") if isinstance(metadata.get("visual_landmarks"), dict) else {}
-        previous_key = previous.get("artifact_key") if isinstance(previous, dict) else None
-        previous_payload: dict = {}
-        previous_landmarks: list[dict] = []
-        if isinstance(previous_key, str) and previous_key:
-            try:
-                loaded = json.loads(store.get_bytes(previous_key))
-                if isinstance(loaded, dict):
-                    previous_payload = loaded
-                    if isinstance(loaded.get("landmarks"), list):
-                        previous_landmarks = [item for item in loaded["landmarks"] if isinstance(item, dict)]
-            except (OSError, ValueError, json.JSONDecodeError):
-                previous_payload = {}
-                previous_landmarks = []
-
-        result_diagnostics = result.get("diagnostics") if isinstance(result.get("diagnostics"), dict) else {}
-        previous_diagnostics = previous_payload.get("diagnostics") if isinstance(previous_payload.get("diagnostics"), dict) else {}
-        next_batch_count = int(previous_diagnostics.get("incremental_batch_count") or (1 if previous_landmarks else 0)) + 1
-        view_id = f"scan-view-{next_batch_count}"
-        landmarks = [{**landmark, "view_id": view_id} for landmark in landmarks if isinstance(landmark, dict)]
-
-        # Preserve a descriptor for each scan viewpoint. ORB descriptors change
-        # with viewing angle, so collapsing all frames into one point-only voxel
-        # removes the coherent 2D-to-3D set that PnP needs. The index stays
-        # bounded and raw camera frames are still never persisted.
-        merged_landmarks = previous_landmarks
-        if landmarks:
-            voxels: dict[tuple[str, int, int, int], dict] = {}
-            for landmark in [*previous_landmarks, *landmarks]:
-                point = landmark.get("point")
-                if not isinstance(point, list) or len(point) != 3:
-                    continue
+        batch_digest = hashlib.sha256(body.model_dump_json().encode()).hexdigest()
+        # The read/merge/publish must be one locked operation. The expensive
+        # feature extraction above remains concurrent; file revisions are immutable.
+        with db.transaction() as tx:
+            lock_suffix = " FOR UPDATE" if db.backend == "postgresql" else ""
+            fresh = tx.execute("SELECT * FROM room_maps WHERE id=? AND home_id=?" + lock_suffix, (map_id,home_id)).fetchone()
+            if not fresh: raise HTTPException(404,"Map no longer exists")
+            metadata = json_object(fresh["metadata_json"] or "{}")
+            batches = metadata.get("visual_landmark_batches", [])
+            if batch_digest in batches:
+                previous = metadata.get("visual_landmarks", {})
+                return {"map_id":map_id,"status":previous.get("status","needs_rescan"),"landmark_count":previous.get("landmark_count",0),"detector":previous.get("detector","opencv-orb"),"diagnostics":{"idempotent_replay":True},"raw_frames_persisted":False}
+            if len(batches) >= 2048: raise HTTPException(413,"Too many visual batches for this map")
+            landmarks = result.get("landmarks") if isinstance(result.get("landmarks"), list) else []
+            previous = metadata.get("visual_landmarks") if isinstance(metadata.get("visual_landmarks"), dict) else {}
+            previous_key = previous.get("artifact_key") if isinstance(previous, dict) else None
+            previous_payload: dict = {}
+            previous_landmarks: list[dict] = []
+            if isinstance(previous_key, str) and previous_key:
                 try:
-                    landmark_view = str(landmark.get("view_id") or "legacy")
-                    voxel = tuple(int(round(float(value) / 0.03)) for value in point)
-                    key = (landmark_view, *voxel)
-                    response = float(landmark.get("response") or 0.0)
-                except (TypeError, ValueError):
-                    continue
-                current = voxels.get(key)
-                if current is None or response > float(current.get("response") or 0.0):
-                    voxels[key] = landmark
-            by_view: dict[str, list[dict]] = {}
-            for landmark in voxels.values():
-                by_view.setdefault(str(landmark.get("view_id") or "legacy"), []).append(landmark)
-            for group in by_view.values():
-                group.sort(key=lambda item: float(item.get("response") or 0.0), reverse=True)
-            merged_landmarks = []
-            offset = 0
-            ordered_views = sorted(by_view)
-            while len(merged_landmarks) < 8_000:
-                added = False
-                for current_view in ordered_views:
-                    group = by_view[current_view]
-                    if offset < len(group):
-                        merged_landmarks.append(group[offset])
-                        added = True
-                        if len(merged_landmarks) == 8_000:
-                            break
-                if not added:
-                    break
-                offset += 1
+                    loaded = json.loads(store.get_bytes(previous_key))
+                    if isinstance(loaded, dict):
+                        previous_payload = loaded
+                        if isinstance(loaded.get("landmarks"), list):
+                            previous_landmarks = [item for item in loaded["landmarks"] if isinstance(item, dict)]
+                except (OSError, ValueError, json.JSONDecodeError):
+                    previous_payload = {}
+                    previous_landmarks = []
 
-        source_frame_count = int(previous_diagnostics.get("source_frame_count") or 0) + int(
-            result_diagnostics.get("source_frame_count") or len(body.frames)
-        )
-        aggregate_diagnostics = {
-            **result_diagnostics,
-            "landmark_count": len(merged_landmarks),
-            "source_frame_count": source_frame_count,
-            "incremental_batch_count": next_batch_count,
-            "view_count": len({str(landmark.get("view_id") or "legacy") for landmark in merged_landmarks}),
-            "raw_frames_persisted": False,
-        }
-        aggregate_status = "ready" if merged_landmarks and (result.get("status") == "ready" or previous_landmarks) else result.get("status")
-        artifact_key = None
-        if aggregate_status == "ready" and merged_landmarks:
-            artifact_key = f"maps/{home_id}/{map_id}.visual-landmarks.json"
-            store.put_json(
-                artifact_key,
-                {
-                    "schema_version": "roomplan-visual-landmarks.v1",
-                    "map_id": map_id,
-                    "detector": result.get("detector", "opencv-orb"),
-                    "landmarks": merged_landmarks,
-                    "diagnostics": aggregate_diagnostics,
-                },
+            result_diagnostics = result.get("diagnostics") if isinstance(result.get("diagnostics"), dict) else {}
+            previous_diagnostics = previous_payload.get("diagnostics") if isinstance(previous_payload.get("diagnostics"), dict) else {}
+            next_batch_count = int(previous_diagnostics.get("incremental_batch_count") or (1 if previous_landmarks else 0)) + 1
+            view_id = f"scan-view-{batch_digest}"
+            landmarks = [{**landmark, "view_id": view_id} for landmark in landmarks if isinstance(landmark, dict)]
+
+            # Preserve a descriptor for each scan viewpoint. ORB descriptors change
+            # with viewing angle, so collapsing all frames into one point-only voxel
+            # removes the coherent 2D-to-3D set that PnP needs. The index stays
+            # bounded and raw camera frames are still never persisted.
+            merged_landmarks = previous_landmarks
+            if landmarks:
+                voxels: dict[tuple[str, int, int, int], dict] = {}
+                for landmark in [*previous_landmarks, *landmarks]:
+                    point = landmark.get("point")
+                    if not isinstance(point, list) or len(point) != 3:
+                        continue
+                    try:
+                        landmark_view = str(landmark.get("view_id") or "legacy")
+                        voxel = tuple(int(round(float(value) / 0.03)) for value in point)
+                        key = (landmark_view, *voxel)
+                        response = float(landmark.get("response") or 0.0)
+                    except (TypeError, ValueError):
+                        continue
+                    current = voxels.get(key)
+                    if current is None or response > float(current.get("response") or 0.0):
+                        voxels[key] = landmark
+                by_view: dict[str, list[dict]] = {}
+                for landmark in voxels.values():
+                    by_view.setdefault(str(landmark.get("view_id") or "legacy"), []).append(landmark)
+                for group in by_view.values():
+                    group.sort(key=lambda item: float(item.get("response") or 0.0), reverse=True)
+                merged_landmarks = []
+                offset = 0
+                ordered_views = sorted(by_view)
+                while len(merged_landmarks) < 8_000:
+                    added = False
+                    for current_view in ordered_views:
+                        group = by_view[current_view]
+                        if offset < len(group):
+                            merged_landmarks.append(group[offset])
+                            added = True
+                            if len(merged_landmarks) == 8_000:
+                                break
+                    if not added:
+                        break
+                    offset += 1
+
+            source_frame_count = int(previous_diagnostics.get("source_frame_count") or 0) + int(
+                result_diagnostics.get("source_frame_count") or len(body.frames)
             )
-        metadata["visual_landmarks"] = {
-            "status": aggregate_status,
-            "artifact_key": artifact_key,
-            "landmark_count": len(merged_landmarks),
-            "detector": result.get("detector", "opencv-orb"),
-            "updated_at": now_iso(),
-            "raw_frames_persisted": False,
-        }
-        db.execute("UPDATE room_maps SET metadata_json=? WHERE id=? AND home_id=?", (json.dumps(metadata), map_id, home_id))
-        audit(actor, "map.visual_landmarks.build", "room_map", map_id, home_id)
-        return {
-            "map_id": map_id,
-            "status": aggregate_status,
-            "landmark_count": len(merged_landmarks),
-            "detector": result.get("detector", "opencv-orb"),
-            "diagnostics": aggregate_diagnostics,
-            "raw_frames_persisted": False,
-        }
+            aggregate_diagnostics = {
+                **result_diagnostics,
+                "landmark_count": len(merged_landmarks),
+                "source_frame_count": source_frame_count,
+                "incremental_batch_count": next_batch_count,
+                "view_count": len({str(landmark.get("view_id") or "legacy") for landmark in merged_landmarks}),
+                "raw_frames_persisted": False,
+            }
+            aggregate_status = "ready" if merged_landmarks and (result.get("status") == "ready" or previous_landmarks) else result.get("status")
+            artifact_key = None
+            artifact_bytes = None
+            artifact_sha256 = None
+            if aggregate_status == "ready" and merged_landmarks:
+                artifact_key = f"maps/{home_id}/{map_id}.{hashlib.sha256(json.dumps(merged_landmarks, sort_keys=True).encode()).hexdigest()}.visual-landmarks.json"
+                store.put_json(
+                    artifact_key,
+                    {
+                        "schema_version": "roomplan-visual-landmarks.v1",
+                        "map_id": map_id,
+                        "detector": result.get("detector", "opencv-orb"),
+                        "landmarks": merged_landmarks,
+                        "diagnostics": aggregate_diagnostics,
+                    },
+                )
+                try:
+                    serialized_artifact = store.get_bytes(artifact_key)
+                except (OSError, ValueError) as exc:
+                    raise HTTPException(500, "The RoomPlan visual landmark index could not be verified after saving") from exc
+                artifact_bytes = len(serialized_artifact)
+                artifact_sha256 = hashlib.sha256(serialized_artifact).hexdigest()
+                aggregate_diagnostics = {
+                    **aggregate_diagnostics,
+                    "artifact_byte_count": artifact_bytes,
+                    "artifact_sha256": artifact_sha256,
+                }
+            metadata["visual_landmark_batches"] = [*batches, batch_digest]
+            metadata["visual_landmarks"] = {
+                "status": aggregate_status,
+                "artifact_key": artifact_key,
+                "landmark_count": len(merged_landmarks),
+                "view_count": len({str(landmark.get("view_id") or "legacy") for landmark in merged_landmarks}),
+                "artifact_byte_count": artifact_bytes,
+                "artifact_sha256": artifact_sha256,
+                "detector": result.get("detector", "opencv-orb"),
+                "updated_at": now_iso(),
+                "raw_frames_persisted": False,
+            }
+            tx.execute("UPDATE room_maps SET metadata_json=? WHERE id=? AND home_id=?", (json.dumps(metadata), map_id, home_id))
+            return {
+                "map_id": map_id,
+                "status": aggregate_status,
+                "landmark_count": len(merged_landmarks),
+                "detector": result.get("detector", "opencv-orb"),
+                "diagnostics": aggregate_diagnostics,
+                "raw_frames_persisted": False,
+            }
 
     def update_roomplan_localization_progress(
         key: tuple[str, str],
@@ -2541,12 +2908,82 @@ def make_app(
         if not isinstance(landmark_key, str) or not landmark_key:
             raise HTTPException(409, "This RoomPlan scan does not have a visual landmark index; rescan it with the current iPhone app")
         try:
-            landmark_payload = json.loads(store.get_bytes(landmark_key))
+            landmark_bytes = store.get_bytes(landmark_key)
+            landmark_payload = json.loads(landmark_bytes)
         except (OSError, ValueError, json.JSONDecodeError) as exc:
             raise HTTPException(409, "The RoomPlan visual landmark index is unavailable; rebuild the scan") from exc
-        landmarks = landmark_payload.get("landmarks") if isinstance(landmark_payload, dict) else None
+        if not isinstance(landmark_payload, dict) or landmark_payload.get("schema_version") != "roomplan-visual-landmarks.v1":
+            raise HTTPException(409, "The RoomPlan visual landmark index has an unsupported schema; rebuild the scan")
+        if landmark_payload.get("map_id") not in (None, map_row["id"]):
+            raise HTTPException(409, "The RoomPlan visual landmark index belongs to a different map; rebuild the scan")
+        expected_artifact_bytes = landmark_meta.get("artifact_byte_count")
+        expected_artifact_sha256 = landmark_meta.get("artifact_sha256")
+        if isinstance(expected_artifact_bytes, int) and expected_artifact_bytes > 0 and len(landmark_bytes) != expected_artifact_bytes:
+            raise HTTPException(409, "The RoomPlan visual landmark index is truncated; rebuild the scan")
+        if isinstance(expected_artifact_sha256, str) and expected_artifact_sha256 and hashlib.sha256(landmark_bytes).hexdigest() != expected_artifact_sha256:
+            raise HTTPException(409, "The RoomPlan visual landmark index failed its integrity check; rebuild the scan")
+        landmarks = landmark_payload.get("landmarks")
         if not isinstance(landmarks, list) or len(landmarks) < 6:
             raise HTTPException(409, "The RoomPlan visual landmark index is incomplete; rebuild the scan")
+        declared_landmark_count = landmark_meta.get("landmark_count")
+        if isinstance(declared_landmark_count, int) and declared_landmark_count != len(landmarks):
+            raise HTTPException(409, "The RoomPlan visual landmark count does not match its artifact; rebuild the scan")
+        invalid_landmark_count = 0
+        landmark_view_ids: set[str] = set()
+        for landmark in landmarks:
+            if not isinstance(landmark, dict):
+                invalid_landmark_count += 1
+                continue
+            point = landmark.get("point")
+            try:
+                point_is_valid = isinstance(point, list) and len(point) == 3 and all(math.isfinite(float(value)) for value in point)
+                descriptor = base64.b64decode(str(landmark.get("descriptor_base64") or ""), validate=True)
+                descriptor_is_valid = len(descriptor) == 32
+                sift_descriptor = landmark.get("sift_descriptor_base64")
+                sift_is_valid = True
+                if sift_descriptor:
+                    sift_is_valid = len(base64.b64decode(str(sift_descriptor), validate=True)) == 512
+                view_id = str(landmark.get("view_id") or "").strip()
+                view_is_valid = bool(view_id)
+            except (binascii.Error, TypeError, ValueError, OverflowError):
+                point_is_valid = descriptor_is_valid = sift_is_valid = view_is_valid = False
+                view_id = ""
+            if not (point_is_valid and descriptor_is_valid and sift_is_valid and view_is_valid):
+                invalid_landmark_count += 1
+            else:
+                landmark_view_ids.add(view_id)
+        if invalid_landmark_count:
+            raise HTTPException(409, "The RoomPlan visual landmark index contains invalid descriptors; rebuild the scan")
+        landmark_integrity = {
+            "artifact_key": landmark_key,
+            "artifact_byte_count": len(landmark_bytes),
+            "artifact_sha256": hashlib.sha256(landmark_bytes).hexdigest(),
+            "landmark_count": len(landmarks),
+            "view_count": len(landmark_view_ids),
+            "schema_version": landmark_payload.get("schema_version"),
+        }
+        camera_metadata = json_object(camera.get("metadata_json") or "{}")
+        raw_reference_snapshot = camera_metadata.get("reference_snapshot")
+        reference_snapshot_integrity = {"available": False}
+        if isinstance(raw_reference_snapshot, dict):
+            reference_key = raw_reference_snapshot.get("artifact_key")
+            try:
+                reference_bytes = store.get_bytes(reference_key) if isinstance(reference_key, str) and reference_key else b""
+            except (OSError, ValueError):
+                reference_bytes = b""
+            expected_size = raw_reference_snapshot.get("byte_count")
+            expected_sha256 = raw_reference_snapshot.get("sha256")
+            reference_valid = bool(reference_bytes.startswith(b"\xff\xd8"))
+            if isinstance(expected_size, int) and expected_size > 0:
+                reference_valid = reference_valid and len(reference_bytes) == expected_size
+            if isinstance(expected_sha256, str) and expected_sha256:
+                reference_valid = reference_valid and hashlib.sha256(reference_bytes).hexdigest() == expected_sha256
+            reference_snapshot_integrity = {
+                "available": reference_valid,
+                "artifact_key": reference_key,
+                "byte_count": len(reference_bytes),
+                "sha256": hashlib.sha256(reference_bytes).hexdigest() if reference_bytes else None,
+            }
         landmarks = roomplan_landmarks_for_localization(map_row, [item for item in landmarks if isinstance(item, dict)])
         map_data = json_object(map_row.get("map_json") or "{}")
         map_geometry = roomplan_geometry_for_localization(map_row)
@@ -2697,6 +3134,10 @@ def make_app(
             **result_diagnostics,
             "scene_validation": scene_diagnostics,
             "search_prior": search_prior,
+            "input_integrity": {
+                "roomplan_visual_landmarks": landmark_integrity,
+                "camera_reference_snapshot": reference_snapshot_integrity,
+            },
         }
         result_diagnostics = _stabilize_camera_localization_diagnostics(
             result_diagnostics,
@@ -2749,6 +3190,11 @@ def make_app(
                 storage_status,
             ),
         )
+        room_assignment = (
+            auto_assign_camera_room_from_pose(home_id, camera_id, map_row, result.get("camera_to_world"), actor)
+            if storage_status == "active" and positioned
+            else {"status": "awaiting_position_confirmation" if body.review_only and positioned else "position_unavailable"}
+        )
         audit(actor, "camera.register.visual_roomplan", "calibration", cid, home_id)
         return {
             "id": cid,
@@ -2766,6 +3212,7 @@ def make_app(
             "intrinsics_source": result.get("intrinsics_source"),
             "diagnostics": result_diagnostics,
             "review_required": bool(body.review_only and positioned),
+            "room_assignment": room_assignment,
         }
 
     @app.get("/api/v1/homes/{home_id}/cameras/{camera_id}/localize-roomplan/progress")
@@ -3065,7 +3512,7 @@ def make_app(
             encoded = encoded.partition(",")[2]
         try:
             jpeg = base64.b64decode(encoded, validate=True)
-        except ValueError as exc:
+        except (binascii.Error, ValueError) as exc:
             raise HTTPException(422, "reference snapshot must be valid base64 JPEG") from exc
         if not jpeg or len(jpeg) > 3_000_000:
             raise HTTPException(413, "reference snapshot is empty or exceeds the 3 MB limit")
@@ -3076,6 +3523,13 @@ def make_app(
             raise HTTPException(404, "Camera not found or disabled")
         artifact_key = f"camera-references/{home_id}/{camera_id}.jpg"
         store.put_bytes(artifact_key, jpeg)
+        sha256 = hashlib.sha256(jpeg).hexdigest()
+        try:
+            stored_jpeg = store.get_bytes(artifact_key)
+        except OSError as exc:
+            raise HTTPException(500, "Camera reference view could not be verified after saving") from exc
+        if stored_jpeg != jpeg:
+            raise HTTPException(500, "Camera reference view failed its integrity check after saving")
         metadata = json_object(camera.get("metadata_json") or "{}")
         snapshot = {
             "artifact_key": artifact_key,
@@ -3084,6 +3538,7 @@ def make_app(
             "width": int(width),
             "height": int(height),
             "byte_count": len(jpeg),
+            "sha256": sha256,
             "content_type": "image/jpeg",
             "download_path": f"/api/v1/homes/{home_id}/cameras/{camera_id}/reference-snapshot",
         }
@@ -3095,6 +3550,8 @@ def make_app(
             "map_id": map_id,
             "width": int(width),
             "height": int(height),
+            "byte_count": len(jpeg),
+            "sha256": sha256,
             "download_path": snapshot["download_path"],
         }
 
@@ -3212,6 +3669,14 @@ def make_app(
             payload = store.get_bytes(artifact_key)
         except OSError as exc:
             raise HTTPException(404, "Camera reference view not found") from exc
+        expected_size = snapshot.get("byte_count")
+        if isinstance(expected_size, int) and expected_size > 0 and len(payload) != expected_size:
+            raise HTTPException(500, "Camera reference view failed its stored-size integrity check")
+        expected_sha256 = snapshot.get("sha256")
+        if isinstance(expected_sha256, str) and expected_sha256 and hashlib.sha256(payload).hexdigest() != expected_sha256:
+            raise HTTPException(500, "Camera reference view failed its stored-hash integrity check")
+        if not payload.startswith(b"\xff\xd8"):
+            raise HTTPException(500, "Camera reference view is not a JPEG artifact")
         return Response(payload, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=60"})
 
     @app.get("/api/v1/homes/{home_id}/cameras/{camera_id}/localization-history")
@@ -3577,7 +4042,7 @@ def make_app(
 
     def roomplan_usdz_response(home_id: str, map_id: str) -> Response:
         row = db.one("SELECT * FROM room_maps WHERE id=? AND home_id=?", (map_id, home_id))
-        if not row or map_source(row) not in {"roomplan-lidar-3d", "arkit-video-3d"} or map_dimension(row, map_source(row)) != "3d":
+        if not row or map_source(row) not in {"roomplan-lidar-3d", "arkit-video-3d", "imported-3d"} or map_dimension(row, map_source(row)) != "3d":
             raise HTTPException(404, "USDZ model not found")
         key = row.get("usdz_artifact_key")
         if not key:
@@ -3980,7 +4445,7 @@ def make_app(
         openings = stored_geometry.get("openings", []) if isinstance(stored_geometry.get("openings", []), list) else []
         camera = stored_geometry.get("camera_pose") if view["dimension"] == "2d" and isinstance(stored_geometry.get("camera_pose"), dict) else None
         camera_registration = roomplan_camera_registration_view(home_id, row)
-        camera_registrations = roomplan_camera_registration_views(home_id, row)
+        camera_registrations = imported_registrations(home_id, row) if view["source"] == "imported-3d" else roomplan_camera_registration_views(home_id, row)
         if view["dimension"] == "2d" and view["rescan_required"]:
             # A rejected camera sweep must never keep rendering stale or
             # misleading image-space geometry. Preserve the revision for audit
@@ -3993,7 +4458,7 @@ def make_app(
             camera = None
         geometry = stored_geometry if view["dimension"] == "3d" else {"polygons": polygons, "walls": walls, "furniture": furniture, "openings": openings, "camera_pose": camera, "zones": zones}
         canonical_geometry = map_data.get("normalized_scan") if view["dimension"] == "3d" and isinstance(map_data.get("normalized_scan"), dict) else None
-        return {"sceneId": row["id"], "version": row["revision"], "dimension": view["dimension"], "source": view["source"], "provenance": view["provenance"], "approximate": view["approximate"], "metricScaleKnown": view["metric_scale_known"], "scale": view["scale"], "geometryStatus": view["geometry_status"], "rescanRequired": view["rescan_required"], "confidence": map_data.get("confidence"), "modelVersion": view["model_version"], "zones": zones, "polygons": polygons, "walls": walls, "camera": camera, "cameraRegistration": camera_registration, "cameraRegistrations": camera_registrations, "roomPlanFragments": roomplan_fragments, "canonicalGeometry": canonical_geometry, "geometry": geometry, "mapId": row["id"], "coordinateFrame": row["coordinate_frame"], "usdz": view["usdz"]}
+        return {"sceneId": row["id"], "version": row["revision"], "dimension": view["dimension"], "source": view["source"], "provenance": view["provenance"], "approximate": view["approximate"], "metricScaleKnown": view["metric_scale_known"], "scale": view["scale"], "geometryStatus": view["geometry_status"], "rescanRequired": view["rescan_required"], "confidence": map_data.get("confidence"), "modelVersion": view["model_version"], "zones": zones, "polygons": polygons, "walls": walls, "camera": camera, "cameraRegistration": camera_registration, "cameraRegistrations": camera_registrations, "roomPlanFragments": roomplan_fragments, "canonicalGeometry": canonical_geometry, "geometry": geometry, "mapId": row["id"], "coordinateFrame": row["coordinate_frame"], "usdz": view["usdz"], "visualIndexStatus": json_object(row.get("metadata_json") or "{}").get("visual_landmarks", {}).get("status", "unavailable")}
 
     @app.get("/api/v1/homes/{home_id}/scene")
     def scene(home_id: str, actor: Current):
@@ -4065,9 +4530,13 @@ def make_app(
             status_value = "needs_rescan"
             response_status = "needs_rescan"
         cid = str(uuid.uuid4())
+        if status_value == "active":
+            valid_pose, _ = roomplan_pose_scene_validation(map_row, stored_camera_to_world)
+            if not valid_pose:
+                raise HTTPException(422, "Camera pose lies outside the map; previous placement is unchanged")
         db.execute(
-            "UPDATE calibrations SET status='invalidated', invalidated_at=?, invalidation_reason='superseded by RoomPlan camera registration' WHERE home_id=? AND camera_id=? AND status IN ('active','needs_review')",
-            (created, home_id, body.camera_id),
+            "UPDATE calibrations SET status='invalidated', invalidated_at=?, invalidation_reason='superseded by RoomPlan camera registration' WHERE home_id=? AND camera_id=? AND status IN ('active','needs_review') AND ?='active'",
+            (created, home_id, body.camera_id, status_value),
         )
         db.execute(
             "INSERT INTO calibrations(id,home_id,camera_id,map_id,intrinsics_json,extrinsics_json,accuracy_m,created_at,resolution_width,resolution_height,camera_metadata_json,metrics_json,source,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
@@ -4088,6 +4557,11 @@ def make_app(
                 status_value,
             ),
         )
+        room_assignment = (
+            auto_assign_camera_room_from_pose(home_id, body.camera_id, map_row, stored_camera_to_world, actor)
+            if status_value == "active"
+            else {"status": "position_unavailable"}
+        )
         audit(actor, "camera.register.roomplan", "calibration", cid, home_id)
         return {
             "id": cid,
@@ -4099,6 +4573,7 @@ def make_app(
             "confidence": body.confidence,
             "tracking_state": body.tracking_state,
             "source": "auto-roomplan-registration",
+            "room_assignment": room_assignment,
         }
 
     @app.post("/api/v1/homes/{home_id}/calibrations")
@@ -4314,7 +4789,10 @@ def make_app(
         for row in rows:
             try:
                 payload = json.loads(template_store.get(home_id, row["id"]))
-                embeddings = validate_embeddings(payload, minimum=3, maximum=8)
+                protected = protected_template_payload(payload, minimum=3, maximum=8)
+                if protected is None:
+                    continue
+                embeddings, transform_salt = protected
             except (FileNotFoundError, OSError, RuntimeError, ValueError, json.JSONDecodeError):
                 continue
             profiles.append(
@@ -4325,6 +4803,7 @@ def make_app(
                     "model_version": row["model_version"],
                     "sample_count": row["sample_count"],
                     "embeddings": embeddings,
+                    "transform_salt": transform_salt,
                 }
             )
         return profiles
@@ -4339,10 +4818,16 @@ def make_app(
         # with a care recipient.
         if len(faces) == 1:
             face = faces[0]
-            try:
-                candidate = best_profile_match(normalize_embedding(face.get("embedding")), profiles)
-            except (TypeError, ValueError):
-                candidate = None
+            liveness = face.get("liveness") if isinstance(face.get("liveness"), dict) else {}
+            if liveness.get("status") == "live":
+                try:
+                    candidate = best_profile_match(
+                        normalize_embedding(face.get("embedding")),
+                        profiles,
+                        transform_secret=template_store.key,
+                    )
+                except (TypeError, ValueError):
+                    candidate = None
         track_id = item.get("track_id")
         if not isinstance(track_id, int):
             return {"status": "unknown"}
@@ -4486,21 +4971,72 @@ def make_app(
         evidence = [observation["id"]] if observation else []
         identity = item.get("identity") if isinstance(item.get("identity"), dict) else {}
         care_recipient_id = identity.get("care_recipient_id") if identity.get("status") == "matched" else None
+        if care_recipient_id is None and object_id:
+            linked_object = db.one(
+                "SELECT care_recipient_id FROM objects WHERE id=? AND home_id=? AND enabled=1",
+                (object_id, home_id),
+            )
+            if linked_object and linked_object.get("care_recipient_id"):
+                # A person object is only bound after an earlier stable,
+                # consented identity match. Preserve that established binding
+                # if the alert frame itself has an occluded/unknown face.
+                care_recipient_id = linked_object["care_recipient_id"]
         projection = item.get("projection") if isinstance(item.get("projection"), dict) else {}
         room_zone = projection.get("room_zone") if isinstance(projection.get("room_zone"), dict) else None
         explanation = signal.explanation
         if room_zone and room_zone.get("label"):
             explanation = f"{explanation} Approximate location: {room_zone['label']}."
         timestamp = signal.observed_at.isoformat()
-        event_id = str(uuid.uuid4())
         expires = (datetime.now(timezone.utc) + timedelta(days=30)).replace(microsecond=0).isoformat()
-        db.execute(
-            "INSERT INTO events(id,home_id,event_type,status,explanation,confidence,evidence_json,first_seen_at,last_seen_at,expires_at,care_recipient_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-            (event_id, home_id, "fall_suspected", "needs_review", explanation, signal.confidence, json.dumps(evidence), timestamp, timestamp, expires, care_recipient_id),
-        )
+        event_group_key = f"fall:recipient:{care_recipient_id}" if care_recipient_id else None
+        active_event = None
+        if event_group_key:
+            cutoff = (signal.observed_at - timedelta(seconds=15)).isoformat()
+            active_event = db.one(
+                "SELECT id,evidence_json,confidence,observation_count FROM events "
+                "WHERE home_id=? AND event_type='fall_suspected' AND status='needs_review' "
+                "AND event_group_key=? AND last_seen_at>=? ORDER BY last_seen_at DESC LIMIT 1",
+                (home_id, event_group_key, cutoff),
+            )
+
+        if active_event:
+            event_id = active_event["id"]
+            try:
+                evidence_ids = json.loads(active_event.get("evidence_json") or "[]")
+            except (TypeError, json.JSONDecodeError):
+                evidence_ids = []
+            if not isinstance(evidence_ids, list):
+                evidence_ids = []
+            if observation:
+                evidence_ids.append(observation["id"])
+            evidence_ids = list(dict.fromkeys(str(value) for value in evidence_ids if value))[-32:]
+            observation_count = int(active_event.get("observation_count") or 1) + 1
+            confidence = max(float(active_event.get("confidence") or 0.0), float(signal.confidence))
+            db.execute(
+                "UPDATE events SET confidence=?, evidence_json=?, last_seen_at=?, expires_at=?, observation_count=? "
+                "WHERE id=? AND home_id=?",
+                (confidence, json.dumps(evidence_ids), timestamp, expires, observation_count, event_id, home_id),
+            )
+            event_updated = True
+        else:
+            event_id = str(uuid.uuid4())
+            observation_count = 1
+            confidence = signal.confidence
+            db.execute(
+                "INSERT INTO events(id,home_id,event_type,status,explanation,confidence,evidence_json,first_seen_at,last_seen_at,expires_at,care_recipient_id,event_group_key,observation_count) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (event_id, home_id, "fall_suspected", "needs_review", explanation, confidence, json.dumps(evidence), timestamp, timestamp, expires, care_recipient_id, event_group_key, observation_count),
+            )
+            event_updated = False
+
         snapshot_path = None
-        snapshot_content_type = image_content_type(snapshot)
-        if snapshot_content_type:
+        existing_snapshot = db.one(
+            "SELECT content_type FROM event_snapshots WHERE event_id=? AND home_id=?",
+            (event_id, home_id),
+        )
+        snapshot_content_type = existing_snapshot.get("content_type") if existing_snapshot else image_content_type(snapshot)
+        if existing_snapshot:
+            snapshot_path = f"/api/v1/homes/{home_id}/events/{event_id}/snapshot"
+        elif snapshot_content_type:
             object_key = None
             try:
                 object_key = app.state.clip_store.put_snapshot(home_id, event_id, snapshot)
@@ -4524,14 +5060,16 @@ def make_app(
                 "type": "fall_suspected",
                 "event_type": "fall_suspected",
                 "status": "needs_review",
-                "confidence": signal.confidence,
+                "confidence": confidence,
                 "care_recipient_id": care_recipient_id,
                 "observed_at": timestamp,
                 "snapshot_path": snapshot_path,
                 "snapshot_content_type": snapshot_content_type,
+                "event_updated": event_updated,
+                "occurrence_count": observation_count,
             },
         )
-        return {"event_id": event_id, "type": "fall_suspected", "status": "needs_review", "confidence": signal.confidence, "observation_id": observation["id"] if observation else None, "snapshot_path": snapshot_path, "snapshot_content_type": snapshot_content_type}
+        return {"event_id": event_id, "type": "fall_suspected", "status": "needs_review", "confidence": confidence, "observation_id": observation["id"] if observation else None, "snapshot_path": snapshot_path, "snapshot_content_type": snapshot_content_type, "event_updated": event_updated, "occurrence_count": observation_count}
 
     async def persist_vision_observation(home_id: str, camera_id: str, map_id: str | None, item: dict, detector_version: str) -> dict | None:
         label = str(item.get("label") or "").strip().lower()
@@ -4574,13 +5112,49 @@ def make_app(
             "INSERT INTO observations(id,home_id,object_id,camera_id,map_id,x,y,z,uncertainty_m,confidence,detector_version,observed_at,care_recipient_id,identity_confidence) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (observation_id, home_id, object_id, camera_id, map_id, x, y, z, uncertainty, confidence, detector_version, observed, recipient_id, identity_confidence),
         )
-        event_id = str(uuid.uuid4())
-        expires = (datetime.now(timezone.utc) + timedelta(days=30)).replace(microsecond=0).isoformat()
-        db.execute(
-            "INSERT INTO events(id,home_id,event_type,status,explanation,confidence,evidence_json,first_seen_at,last_seen_at,expires_at,care_recipient_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-            (event_id, home_id, "object_observed", "new", "Approximate household observation; not a diagnosis.", confidence, json.dumps([observation_id]), observed, observed, expires, recipient_id),
+        event_group_key = f"vision:{camera_id}:{object_id}"
+        event_cutoff = (datetime.now(timezone.utc) - timedelta(seconds=60)).isoformat()
+        active_event = db.one(
+            "SELECT id,evidence_json,observation_count FROM events "
+            "WHERE home_id=? AND event_type='object_observed' AND event_group_key=? AND last_seen_at>=? "
+            "ORDER BY last_seen_at DESC LIMIT 1",
+            (home_id, event_group_key, event_cutoff),
         )
-        await bus.publish(home_id, {"event_id": event_id, "observation_id": observation_id, "home_id": home_id, "type": "object_observed", "observed_at": observed})
+        expires = (datetime.now(timezone.utc) + timedelta(days=30)).replace(microsecond=0).isoformat()
+        if active_event:
+            try:
+                evidence_ids = json.loads(active_event.get("evidence_json") or "[]")
+            except (TypeError, json.JSONDecodeError):
+                evidence_ids = []
+            if not isinstance(evidence_ids, list):
+                evidence_ids = []
+            evidence_ids = [*evidence_ids, observation_id][-32:]
+            observation_count = max(int(active_event.get("observation_count") or 1) + 1, len(evidence_ids))
+            event_id = active_event["id"]
+            db.execute(
+                "UPDATE events SET confidence=?, evidence_json=?, last_seen_at=?, expires_at=?, observation_count=?, "
+                "care_recipient_id=COALESCE(?,care_recipient_id) WHERE id=? AND home_id=?",
+                (confidence, json.dumps(evidence_ids), observed, expires, observation_count, recipient_id, event_id, home_id),
+            )
+            await bus.publish(
+                home_id,
+                {
+                    "event_id": event_id,
+                    "observation_id": observation_id,
+                    "home_id": home_id,
+                    "type": "object_observed",
+                    "observed_at": observed,
+                    "event_updated": True,
+                    "occurrence_count": observation_count,
+                },
+            )
+        else:
+            event_id = str(uuid.uuid4())
+            db.execute(
+                "INSERT INTO events(id,home_id,event_type,status,explanation,confidence,evidence_json,first_seen_at,last_seen_at,expires_at,care_recipient_id,event_group_key,observation_count) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (event_id, home_id, "object_observed", "new", "Approximate household observation; not a diagnosis.", confidence, json.dumps([observation_id]), observed, observed, expires, recipient_id, event_group_key, 1),
+            )
+            await bus.publish(home_id, {"event_id": event_id, "observation_id": observation_id, "home_id": home_id, "type": "object_observed", "observed_at": observed, "occurrence_count": 1})
         zone = roomplan_zone_for_point(map_id, home_id, x, z)
         return {"observation_id": observation_id, "event_id": event_id, "object_id": object_id, "track_id": track_id, "zone": zone.get("label") if zone else None, "identity": identity}
 
@@ -4618,7 +5192,18 @@ def make_app(
             raise HTTPException(422, "frame_base64 must be valid base64") from exc
         if not frame_bytes or len(frame_bytes) > 3_000_000:
             raise HTTPException(413, "frame is empty or exceeds the 3 MB in-memory limit")
-        captured = body.captured_at or datetime.now(timezone.utc)
+        received_at = app.state.safety_clock()
+        if received_at.tzinfo is None:
+            received_at = received_at.replace(tzinfo=timezone.utc)
+        else:
+            received_at = received_at.astimezone(timezone.utc)
+        captured = body.captured_at or received_at
+        if captured.tzinfo is None:
+            captured = captured.replace(tzinfo=timezone.utc)
+        else:
+            captured = captured.astimezone(timezone.utc)
+        if abs((captured - received_at).total_seconds()) > 30.0:
+            raise HTTPException(422, "captured_at must be within 30 seconds of server time for live vision frames")
         calibration, map_id = vision_calibration(home_id, body.camera_id, body.width, body.height)
         face_profiles = active_face_profiles(home_id)
         try:
@@ -4635,6 +5220,71 @@ def make_app(
         for item in result:
             if str(item.get("label") or "").strip().lower() == "person":
                 item["identity"] = identify_person(home_id, body.camera_id, item, face_profiles)
+        # Keep only derived joints in a bounded per-track window. The learned
+        # model runs in the local GPU worker; a worker outage is visible on the
+        # item and cannot turn into a heuristic-only production signal.
+        for item in result:
+            if str(item.get("label") or "").strip().lower() != "person":
+                continue
+            window = app.state.fall_pose_windows.append(
+                body.camera_id,
+                item,
+                observed_at=received_at,
+            )
+            if window is None:
+                item["fall_sequence_status"] = "missing_pose"
+                continue
+            scorer = getattr(app.state.geometry_service, "score_fall_sequence", None)
+            score_result: object | None = None
+            score_failed = False
+            if window.should_score:
+                if not callable(scorer):
+                    score_failed = True
+                else:
+                    try:
+                        async with app.state.fall_score_semaphore:
+                            score_result = await asyncio.to_thread(
+                                scorer,
+                                frames=list(window.frames),
+                                width=body.width,
+                                height=body.height,
+                            )
+                    except (RoomLayoutServiceUnavailable, RoomLayoutServiceError, RuntimeError):
+                        score_failed = True
+            if isinstance(score_result, dict) and score_result.get("status") == "ready":
+                probability = score_result.get("probability")
+                if isinstance(probability, (int, float)) and math.isfinite(float(probability)):
+                    app.state.fall_pose_windows.record_score(
+                        body.camera_id,
+                        int(item["track_id"]),
+                        probability=float(probability),
+                        threshold=score_result.get("threshold"),
+                        model_version=score_result.get("model_version"),
+                    )
+                    item["fall_sequence_probability"] = round(float(probability), 6)
+                    item["fall_sequence_threshold"] = score_result.get("threshold", settings.fall_sequence_threshold)
+                    item["fall_sequence_model_version"] = str(score_result.get("model_version") or "unknown")[:120]
+                    item["fall_sequence_status"] = "ready"
+                    item["fall_sequence_score_fresh"] = True
+                    continue
+                score_failed = True
+            elif window.should_score:
+                score_failed = True
+            if score_failed:
+                item["fall_sequence_status"] = "unavailable"
+                # Do not reuse a previous positive score when the window that
+                # should refresh it could not be evaluated.
+                item.pop("fall_sequence_probability", None)
+                item.pop("fall_sequence_threshold", None)
+                item.pop("fall_sequence_model_version", None)
+            elif window.latest_probability is not None:
+                item["fall_sequence_probability"] = round(window.latest_probability, 6)
+                item["fall_sequence_threshold"] = window.latest_threshold or settings.fall_sequence_threshold
+                item["fall_sequence_model_version"] = window.latest_model_version or "unknown"
+                item["fall_sequence_status"] = "ready"
+                item["fall_sequence_score_fresh"] = False
+            else:
+                item["fall_sequence_status"] = "warming_up"
         persisted = [saved for item in result if (saved := await persist_vision_observation(home_id, body.camera_id, map_id, item, detector_version)) is not None]
         for item in result:
             projection = item.get("projection") if isinstance(item.get("projection"), dict) else None
@@ -4651,7 +5301,7 @@ def make_app(
                 item,
                 frame_width=body.width,
                 frame_height=body.height,
-                observed_at=captured,
+                observed_at=received_at,
             )
             if signal:
                 safety_events.append(await persist_fall_event(home_id, body.camera_id, item, signal, frame_bytes))
@@ -4690,6 +5340,225 @@ def make_app(
             "frames_persisted": False,
             "event_snapshots_persisted": sum(1 for event in safety_events if event.get("snapshot_path")),
             "privacy": "frame bytes and biometric embeddings were processed in memory by the local real model; only a confirmed fall-safety event may store one encrypted event snapshot",
+        }
+
+    @app.post("/api/v1/homes/{home_id}/vision/debug/fall")
+    async def vision_debug_fall(home_id: str, body: VisionIn, actor: Current):
+        """Run an isolated, non-persisting copy of the live fall pipeline for the local lab."""
+        home_check(actor, home_id)
+        require_video_capture(home_id)
+        if not db.one("SELECT id FROM cameras WHERE id=? AND home_id=? AND enabled=1", (body.camera_id, home_id)):
+            raise HTTPException(404, "Camera not found or disabled")
+        try:
+            frame_bytes = base64.b64decode(body.frame_base64, validate=True)
+        except ValueError as exc:
+            raise HTTPException(422, "frame_base64 must be valid base64") from exc
+        if not frame_bytes or len(frame_bytes) > 3_000_000:
+            raise HTTPException(413, "frame is empty or exceeds the 3 MB in-memory limit")
+        received_at = app.state.safety_clock()
+        debug_camera_id = f"local-fall-debug:{home_id}:{body.camera_id}"
+        try:
+            items = app.state.vision.ingest(
+                Frame(debug_camera_id, frame_bytes, body.width, body.height, received_at),
+                ["person"],
+                include_faces=False,
+            )
+        except (RoomLayoutServiceUnavailable, RoomLayoutServiceError, RuntimeError) as exc:
+            raise HTTPException(503, "Local person-pose model is unavailable") from exc
+        diagnostics = []
+        for item in items:
+            if str(item.get("label") or "").lower() != "person":
+                continue
+            track_id = item.get("track_id")
+            window = app.state.debug_fall_pose_windows.append(debug_camera_id, item, observed_at=received_at)
+            if window is None:
+                item["fall_sequence_status"] = "missing_pose"
+            else:
+                score_result = None
+                score_failed = False
+                scorer = getattr(geometry, "score_fall_sequence", None)
+                if window.should_score:
+                    if callable(scorer):
+                        try:
+                            async with app.state.debug_fall_score_semaphore:
+                                score_result = await asyncio.to_thread(
+                                    scorer, frames=list(window.frames), width=body.width, height=body.height,
+                                )
+                        except (RoomLayoutServiceUnavailable, RoomLayoutServiceError, RuntimeError):
+                            score_failed = True
+                    else:
+                        score_failed = True
+                if isinstance(score_result, dict) and score_result.get("status") == "ready":
+                    probability = score_result.get("probability")
+                    if isinstance(probability, (int, float)) and math.isfinite(float(probability)):
+                        app.state.debug_fall_pose_windows.record_score(
+                            debug_camera_id, int(track_id), probability=float(probability),
+                            threshold=score_result.get("threshold"), model_version=score_result.get("model_version"),
+                        )
+                        item.update({
+                            "fall_sequence_probability": round(float(probability), 6),
+                            "fall_sequence_threshold": score_result.get("threshold", settings.fall_sequence_threshold),
+                            "fall_sequence_model_version": str(score_result.get("model_version") or "unknown")[:120],
+                            "fall_sequence_status": "ready", "fall_sequence_score_fresh": True,
+                        })
+                    else:
+                        score_failed = True
+                elif window.should_score:
+                    score_failed = True
+                if score_failed:
+                    item["fall_sequence_status"] = "unavailable"
+                elif "fall_sequence_status" not in item:
+                    if window.latest_probability is not None:
+                        item.update({
+                            "fall_sequence_probability": round(window.latest_probability, 6),
+                            "fall_sequence_threshold": window.latest_threshold or settings.fall_sequence_threshold,
+                            "fall_sequence_model_version": window.latest_model_version or "unknown",
+                            "fall_sequence_status": "ready", "fall_sequence_score_fresh": False,
+                        })
+                    else:
+                        item["fall_sequence_status"] = "warming_up"
+            signal = app.state.debug_fall_detector.update(
+                debug_camera_id, item, frame_width=body.width, frame_height=body.height, observed_at=received_at,
+            )
+            gate = app.state.debug_fall_detector.debug_status(
+                debug_camera_id, item, frame_width=body.width, frame_height=body.height, observed_at=received_at,
+            )
+            diagnostics.append({
+                "track_id": track_id,
+                "bbox": item.get("bbox"),
+                "person_confidence": item.get("confidence"),
+                "pose_keypoints": item.get("pose_keypoints"),
+                "pose_model_version": item.get("pose_model_version"),
+                "fall_sequence_status": item.get("fall_sequence_status"),
+                "fall_sequence_probability": item.get("fall_sequence_probability"),
+                "fall_sequence_threshold": item.get("fall_sequence_threshold", settings.fall_sequence_threshold),
+                "fall_sequence_model_version": item.get("fall_sequence_model_version"),
+                "fall_sequence_score_fresh": item.get("fall_sequence_score_fresh", False),
+                "gate": gate,
+                "would_emit": bool(signal),
+                "event_type": "fall_suspected" if signal else None,
+                "event_status": "needs_review" if signal else None,
+            })
+        return {
+            "status": "ready",
+            "diagnostics": diagnostics,
+            "detector_version": app.state.vision.detector.model_version,
+            "raw_frames_persisted": False,
+            "observations_persisted": False,
+            "events_persisted": False,
+            "debug_tracker_isolated": True,
+        }
+
+    @app.post("/api/v1/homes/{home_id}/vision/debug/faces")
+    async def vision_debug_faces(home_id: str, body: VisionIn, actor: Current):
+        """Local-lab diagnostic: face-only inference with no persistence or fall scoring."""
+        home_check(actor, home_id)
+        require_video_capture(home_id)
+        if not db.one("SELECT id FROM cameras WHERE id=? AND home_id=? AND enabled=1", (body.camera_id, home_id)):
+            raise HTTPException(404, "Camera not found or disabled")
+        try:
+            frame_bytes = base64.b64decode(body.frame_base64, validate=True)
+        except ValueError as exc:
+            raise HTTPException(422, "frame_base64 must be valid base64") from exc
+        if not frame_bytes or len(frame_bytes) > 3_000_000:
+            raise HTTPException(413, "frame is empty or exceeds the 3 MB in-memory limit")
+        profiles = active_face_profiles(home_id)
+        if not profiles:
+            app.state.face_debug_stability.pop((home_id, body.camera_id), None)
+            return {
+                "status": "blocked",
+                "model_version": None,
+                "faces": [],
+                "diagnostics": {"reason": "no_active_consented_face_profiles", "raw_frames_persisted": False},
+                "raw_frames_persisted": False,
+                "fall_scoring_ran": False,
+            }
+        detect_faces = getattr(geometry, "debug_faces", None)
+        if not callable(detect_faces):
+            raise HTTPException(503, "Local face recognition model is unavailable")
+        try:
+            result = await asyncio.to_thread(
+                detect_faces,
+                frame_base64=body.frame_base64,
+                width=body.width,
+                height=body.height,
+            )
+        except (RoomLayoutServiceUnavailable, RoomLayoutServiceError, RuntimeError) as exc:
+            raise HTTPException(503, "Local face recognition model is unavailable") from exc
+        if not isinstance(result, dict) or result.get("status") != "ready":
+            return {
+                "status": result.get("status", "unavailable") if isinstance(result, dict) else "unavailable",
+                "model_version": result.get("model_version") if isinstance(result, dict) else None,
+                "faces": [],
+                "diagnostics": result.get("diagnostics", {}) if isinstance(result, dict) else {},
+                "raw_frames_persisted": False,
+            }
+
+        raw_faces = result.get("faces") if isinstance(result.get("faces"), list) else []
+        now = app.state.safety_clock()
+        key = (home_id, body.camera_id)
+        for stale_key, value in list(app.state.face_debug_stability.items()):
+            if now - value.get("last_seen", now) > timedelta(seconds=3):
+                app.state.face_debug_stability.pop(stale_key, None)
+        prior = app.state.face_debug_stability.get(key, {})
+        candidate = None
+        reason = "unknown"
+        if len(raw_faces) > 1:
+            reason = "multiple_faces_visible"
+        elif not raw_faces:
+            reason = "no_face_detected"
+        elif not profiles:
+            reason = "no_consented_face_profiles"
+        else:
+            face = raw_faces[0]
+            liveness = face.get("liveness") if isinstance(face, dict) and isinstance(face.get("liveness"), dict) else {}
+            if liveness.get("status") != "live":
+                reason = "liveness_not_passed"
+            else:
+                try:
+                    candidate = best_profile_match(
+                        normalize_embedding(face.get("embedding")),
+                        profiles,
+                        transform_secret=template_store.key,
+                    )
+                except (TypeError, ValueError):
+                    candidate = None
+                reason = "no_confident_profile_match" if candidate is None else "identity_stabilizing"
+
+        if candidate:
+            candidate_id = str(candidate.get("profile_id") or "")
+            recent = now - prior.get("last_seen", now) <= timedelta(seconds=3)
+            hits = int(prior.get("hits", 0)) + 1 if recent and prior.get("profile_id") == candidate_id else 1
+            app.state.face_debug_stability[key] = {"profile_id": candidate_id, "hits": hits, "last_seen": now}
+            if hits >= 3:
+                reason = "matched"
+            else:
+                candidate = None
+        else:
+            app.state.face_debug_stability.pop(key, None)
+
+        faces = []
+        for raw in raw_faces[:8]:
+            if not isinstance(raw, dict):
+                continue
+            view = {name: raw[name] for name in ("bbox", "confidence", "liveness") if name in raw}
+            if len(raw_faces) == 1 and candidate is not None and reason == "matched":
+                view["identity"] = {
+                    "status": "matched",
+                    "display_name": candidate.get("display_name"),
+                    "confidence": candidate.get("score"),
+                    "stability_hits": 3,
+                }
+            else:
+                view["identity"] = {"status": "unknown", "reason": reason}
+            faces.append(view)
+        return {
+            "status": "ready",
+            "model_version": result.get("model_version"),
+            "faces": faces,
+            "diagnostics": result.get("diagnostics", {}),
+            "raw_frames_persisted": False,
+            "fall_scoring_ran": False,
         }
 
     @app.post("/api/v1/homes/{home_id}/observations")
@@ -4927,6 +5796,10 @@ def make_app(
             raise HTTPException(503, "Local face recognition model is unavailable") from exc
         if not isinstance(result, dict) or result.get("status") != "ready":
             raise HTTPException(503, "Local face recognition model is unavailable")
+        result_diagnostics = result.get("diagnostics") if isinstance(result.get("diagnostics"), dict) else {}
+        liveness_diagnostics = result_diagnostics.get("liveness") if isinstance(result_diagnostics.get("liveness"), dict) else {}
+        if liveness_diagnostics.get("status") != "passed":
+            raise HTTPException(422, "Face liveness and anti-spoof checks did not pass")
         try:
             embeddings = validate_embeddings(result.get("embeddings"), minimum=3, maximum=8)
         except ValueError as exc:
@@ -4934,7 +5807,16 @@ def make_app(
         now = now_iso()
         profile = db.one("SELECT id FROM face_profiles WHERE home_id=? AND care_recipient_id=?", (home_id, recipient_id))
         profile_id = profile["id"] if profile else str(uuid.uuid4())
-        template_store.put(home_id, profile_id, json.dumps(embeddings, separators=(",", ":")).encode("utf-8"))
+        protected_payload = new_protected_template_payload(
+            embeddings,
+            secret=template_store.key or b"",
+            profile_id=profile_id,
+        )
+        template_store.put(
+            home_id,
+            profile_id,
+            json.dumps(protected_payload, separators=(",", ":")).encode("utf-8"),
+        )
         db.execute(
             """
             INSERT INTO face_profiles(id,home_id,care_recipient_id,template_artifact_key,model_version,sample_count,status,created_at,updated_at)

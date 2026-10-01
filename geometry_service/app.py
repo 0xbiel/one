@@ -21,8 +21,11 @@ from .contracts import (
     CameraLocalizationRequest,
     CameraLocalizationObjectDetection,
     CameraLocalizationResponse,
+    FaceDebugRequest,
     FaceEnrollmentRequest,
     FaceEnrollmentResponse,
+    FallSequenceScoreRequest,
+    FallSequenceScoreResponse,
     RoomLayoutRequest,
     RoomLayoutResponse,
     VisionFrameRequest,
@@ -31,10 +34,12 @@ from .contracts import (
     VisualLandmarkBuildResponse,
 )
 from .frames import FrameInputError, decode_jpeg, decode_request_frames
-from .face import FaceEngine
+from .face import FaceEngine, active_liveness_challenge
+from .fall_sequence import FallSequenceEngine
 from .geometry import ConfidenceBelowThreshold, ModelOutputError, normalize_model_output
 from .localization import LocalizationInputError, build_visual_landmarks, localize_camera
 from .model_input import DependencyUnavailable, build_torch_batch
+from .pose import PoseEngine, attach_pose_detections
 from .runtime import RuntimeInferenceError, RuntimeNeedsRescan, RuntimeUnavailable, RoomLayoutRuntime
 
 
@@ -64,6 +69,8 @@ def create_app(settings: ServiceSettings | None = None) -> FastAPI:
     service_settings = settings or ServiceSettings.from_env()
     runtime = RoomLayoutRuntime(service_settings)
     face_engine = FaceEngine(service_settings)
+    pose_engine = PoseEngine(service_settings, runtime)
+    fall_sequence_engine = FallSequenceEngine(service_settings, runtime)
     positioning_executor = ThreadPoolExecutor(
         max_workers=service_settings.positioning_workers,
         thread_name_prefix="one-positioning",
@@ -117,7 +124,7 @@ def create_app(settings: ServiceSettings | None = None) -> FastAPI:
 
     @api.middleware("http")
     async def enforce_request_bound(request: Request, call_next: Any) -> Any:
-        if request.url.path in {"/v1/room-layout", "/v1/vision/detect", "/v1/face/enroll", "/v1/visual-landmarks", "/v1/camera-localization"} or request.url.path.startswith("/v1/camera-localization/jobs"):
+        if request.url.path in {"/v1/room-layout", "/v1/vision/detect", "/v1/face/debug", "/v1/face/enroll", "/v1/fall/score", "/v1/visual-landmarks", "/v1/camera-localization"} or request.url.path.startswith("/v1/camera-localization/jobs"):
             content_length = request.headers.get("content-length")
             if content_length:
                 try:
@@ -401,6 +408,8 @@ def create_app(settings: ServiceSettings | None = None) -> FastAPI:
     async def health() -> JSONResponse:
         health_payload = runtime.health()
         health_payload["face"] = face_engine.health()
+        health_payload["pose"] = pose_engine.health()
+        health_payload["fall_sequence"] = fall_sequence_engine.health()
         health_payload["positioning"] = {
             "executor": "thread-pool",
             "workers": service_settings.positioning_workers,
@@ -572,6 +581,13 @@ def create_app(settings: ServiceSettings | None = None) -> FastAPI:
                 payload.height,
                 payload.candidate_labels,
             )
+            pose_diagnostics = pose_engine.health()
+            if pose_engine.ready and "person" in payload.candidate_labels:
+                poses = await run_detector_work(pose_engine.extract, jpeg, payload.width, payload.height)
+                detections = attach_pose_detections(detections, poses)
+                for detection in detections:
+                    if detection.get("pose_keypoints"):
+                        detection["pose_model_version"] = pose_engine.model_version
             faces: list[dict[str, Any]] = []
             face_diagnostics = face_engine.health()
             if payload.include_faces and face_engine.ready:
@@ -581,12 +597,41 @@ def create_app(settings: ServiceSettings | None = None) -> FastAPI:
                 "model_version": runtime.model_version,
                 "detections": detections,
                 "faces": faces,
-                "diagnostics": {"device": runtime.device_label, "raw_frames_persisted": False, "face": face_diagnostics},
+                "pose_model_version": pose_engine.model_version if pose_engine.ready else None,
+                "diagnostics": {
+                    "device": runtime.device_label,
+                    "raw_frames_persisted": False,
+                    "face": face_diagnostics,
+                    "pose": pose_diagnostics,
+                },
             }
         except FrameInputError as exc:
             return JSONResponse(status_code=exc.status_code, content={"status": "failed", "model_version": runtime.model_version, "detections": [], "faces": [], "diagnostics": {"reason": exc.code, "raw_frames_persisted": False}})
         except (RuntimeUnavailable, RuntimeInferenceError) as exc:
             return JSONResponse(status_code=503, content={"status": "unavailable", "model_version": runtime.model_version, "detections": [], "faces": [], "diagnostics": {"reason": str(exc), "raw_frames_persisted": False}})
+
+    @api.post("/v1/face/debug")
+    async def face_debug(payload: FaceDebugRequest) -> Any:
+        health_payload = face_engine.health()
+        if not face_engine.ready:
+            return JSONResponse(
+                status_code=503,
+                content={"status": "unavailable", "model_version": face_engine.model_version,
+                         "faces": [], "diagnostics": {**health_payload, "raw_frames_persisted": False}},
+            )
+        try:
+            jpeg = decode_jpeg(payload.frame_base64, service_settings)
+            faces = await run_detector_work(face_engine.extract, jpeg, payload.width, payload.height)
+            return {"status": "ready", "model_version": face_engine.model_version,
+                    "faces": faces, "diagnostics": {**health_payload, "raw_frames_persisted": False}}
+        except FrameInputError as exc:
+            return JSONResponse(status_code=exc.status_code,
+                                content={"status": "failed", "model_version": face_engine.model_version,
+                                         "faces": [], "diagnostics": {"reason": exc.code, "raw_frames_persisted": False}})
+        except (RuntimeUnavailable, RuntimeInferenceError) as exc:
+            return JSONResponse(status_code=503,
+                                content={"status": "unavailable", "model_version": face_engine.model_version,
+                                         "faces": [], "diagnostics": {"reason": str(exc), "raw_frames_persisted": False}})
 
     @api.post("/v1/face/enroll", response_model=FaceEnrollmentResponse)
     async def face_enroll(payload: FaceEnrollmentRequest) -> Any:
@@ -601,6 +646,7 @@ def create_app(settings: ServiceSettings | None = None) -> FastAPI:
                 },
             )
         embeddings: list[list[float]] = []
+        accepted_yaws: list[float] = []
         sample_diagnostics: list[dict[str, Any]] = []
         try:
             for index, frame in enumerate(payload.frames):
@@ -616,8 +662,28 @@ def create_app(settings: ServiceSettings | None = None) -> FastAPI:
                 if face_width < frame.width * 0.12 or face_height < frame.height * 0.12:
                     sample_diagnostics.append({"index": index, "status": "rejected", "reason": "face_too_small"})
                     continue
+                liveness = face.get("liveness") if isinstance(face.get("liveness"), dict) else {}
+                if liveness.get("status") != "live":
+                    sample_diagnostics.append(
+                        {
+                            "index": index,
+                            "status": "rejected",
+                            "reason": "anti_spoof_check_failed",
+                            "liveness": liveness,
+                        }
+                    )
+                    continue
                 embeddings.append(face["embedding"])
-                sample_diagnostics.append({"index": index, "status": "accepted", "confidence": face["confidence"]})
+                accepted_yaws.append(float(face.get("yaw") or 0.0))
+                sample_diagnostics.append(
+                    {
+                        "index": index,
+                        "status": "accepted",
+                        "confidence": face["confidence"],
+                        "yaw": round(float(face.get("yaw") or 0.0), 4),
+                        "liveness": liveness,
+                    }
+                )
             if len(embeddings) < 3:
                 return JSONResponse(
                     status_code=422,
@@ -628,16 +694,95 @@ def create_app(settings: ServiceSettings | None = None) -> FastAPI:
                         "diagnostics": {"reason": "not_enough_usable_samples", "accepted_samples": len(embeddings), "samples": sample_diagnostics, "raw_frames_persisted": False},
                     },
                 )
+            challenge = active_liveness_challenge(accepted_yaws)
+            if challenge["status"] != "passed":
+                return JSONResponse(
+                    status_code=422,
+                    content={
+                        "status": "failed",
+                        "model_version": face_engine.model_version,
+                        "embeddings": [],
+                        "diagnostics": {
+                            "reason": "active_liveness_challenge_failed",
+                            "accepted_samples": len(embeddings),
+                            "samples": sample_diagnostics,
+                            "challenge": challenge,
+                            "raw_frames_persisted": False,
+                        },
+                    },
+                )
             return {
                 "status": "ready",
                 "model_version": face_engine.model_version,
                 "embeddings": embeddings,
-                "diagnostics": {"accepted_samples": len(embeddings), "samples": sample_diagnostics, "raw_frames_persisted": False},
+                "diagnostics": {
+                    "accepted_samples": len(embeddings),
+                    "samples": sample_diagnostics,
+                    "liveness": {
+                        "status": "passed",
+                        "method": "minifas-anti-spoof-plus-active-yaw-challenge-v1",
+                        "yaw_span": challenge["yaw_span"],
+                    },
+                    "raw_frames_persisted": False,
+                },
             }
         except FrameInputError as exc:
             return JSONResponse(status_code=exc.status_code, content={"status": "failed", "model_version": face_engine.model_version, "embeddings": [], "diagnostics": {"reason": exc.code, "raw_frames_persisted": False}})
         except (RuntimeUnavailable, RuntimeInferenceError) as exc:
             return JSONResponse(status_code=503, content={"status": "unavailable", "model_version": face_engine.model_version, "embeddings": [], "diagnostics": {"reason": str(exc), "raw_frames_persisted": False}})
+
+    @api.post("/v1/fall/score", response_model=FallSequenceScoreResponse)
+    async def fall_score(payload: FallSequenceScoreRequest) -> Any:
+        if not fall_sequence_engine.ready:
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "status": "unavailable",
+                    "model_version": fall_sequence_engine.model_version,
+                    "probability": None,
+                    "threshold": fall_sequence_engine.threshold,
+                    "diagnostics": {
+                        "reason": fall_sequence_engine.reason or "fall sequence model is unavailable",
+                        "raw_frames_persisted": False,
+                    },
+                },
+            )
+        try:
+            window = [frame.model_dump(mode="json") for frame in payload.frames]
+            if len(window) > fall_sequence_engine.window_size:
+                window = window[-fall_sequence_engine.window_size:]
+            if len(window) != fall_sequence_engine.window_size:
+                raise RuntimeInferenceError(
+                    f"fall sequence model requires {fall_sequence_engine.window_size} frames"
+                )
+            return await run_detector_work(
+                fall_sequence_engine.score,
+                frames=window,
+                width=payload.width,
+                height=payload.height,
+            )
+        except RuntimeInferenceError as exc:
+            return JSONResponse(
+                status_code=422,
+                content={
+                    "status": "failed",
+                    "model_version": fall_sequence_engine.model_version,
+                    "probability": None,
+                    "threshold": fall_sequence_engine.threshold,
+                    "diagnostics": {"reason": str(exc), "raw_frames_persisted": False},
+                },
+            )
+        except RuntimeUnavailable as exc:
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "status": "unavailable",
+                    "model_version": fall_sequence_engine.model_version,
+                    "probability": None,
+                    "threshold": fall_sequence_engine.threshold,
+                    "diagnostics": {"reason": str(exc), "raw_frames_persisted": False},
+                },
+            )
 
     @api.post("/v1/visual-landmarks", response_model=VisualLandmarkBuildResponse)
     async def visual_landmarks(payload: VisualLandmarkBuildRequest) -> Any:

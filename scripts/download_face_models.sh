@@ -32,5 +32,8 @@ download \
 download \
   "$MODEL_DIR/face_recognition_sface_2021dec.onnx" \
   "https://media.githubusercontent.com/media/opencv/opencv_zoo/main/models/face_recognition_sface/face_recognition_sface_2021dec.onnx"
+download \
+  "$MODEL_DIR/face_antispoof_minifas_v2se.onnx" \
+  "https://raw.githubusercontent.com/facenox/face-antispoof-onnx/main/models/best/98.20/best_model.onnx"
 
-print -- "Face models are ready in $MODEL_DIR"
+print -- "Face recognition and anti-spoof models are ready in $MODEL_DIR"

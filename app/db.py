@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS camera_map_generation_jobs (id TEXT PRIMARY KEY, home
 CREATE INDEX IF NOT EXISTS camera_map_generation_jobs_camera_idx ON camera_map_generation_jobs(home_id, camera_id, updated_at);
 CREATE TABLE IF NOT EXISTS objects (id TEXT PRIMARY KEY, home_id TEXT NOT NULL, label TEXT NOT NULL, display_name TEXT, enabled INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, care_recipient_id TEXT, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE, FOREIGN KEY(care_recipient_id) REFERENCES care_recipients(id) ON DELETE SET NULL);
 CREATE TABLE IF NOT EXISTS observations (id TEXT PRIMARY KEY, home_id TEXT NOT NULL, object_id TEXT, camera_id TEXT, map_id TEXT, x REAL, y REAL, z REAL, uncertainty_m REAL, confidence REAL, detector_version TEXT, observed_at TEXT NOT NULL, care_recipient_id TEXT, identity_confidence REAL, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE, FOREIGN KEY(care_recipient_id) REFERENCES care_recipients(id) ON DELETE SET NULL);
-CREATE TABLE IF NOT EXISTS events (id TEXT PRIMARY KEY, home_id TEXT NOT NULL, event_type TEXT NOT NULL, status TEXT NOT NULL, explanation TEXT, confidence REAL, evidence_json TEXT NOT NULL, first_seen_at TEXT NOT NULL, last_seen_at TEXT NOT NULL, expires_at TEXT NOT NULL, care_recipient_id TEXT, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE, FOREIGN KEY(care_recipient_id) REFERENCES care_recipients(id) ON DELETE SET NULL);
+CREATE TABLE IF NOT EXISTS events (id TEXT PRIMARY KEY, home_id TEXT NOT NULL, event_type TEXT NOT NULL, status TEXT NOT NULL, explanation TEXT, confidence REAL, evidence_json TEXT NOT NULL, first_seen_at TEXT NOT NULL, last_seen_at TEXT NOT NULL, expires_at TEXT NOT NULL, care_recipient_id TEXT, event_group_key TEXT, observation_count INTEGER NOT NULL DEFAULT 1, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE, FOREIGN KEY(care_recipient_id) REFERENCES care_recipients(id) ON DELETE SET NULL);
 CREATE TABLE IF NOT EXISTS face_profiles (id TEXT PRIMARY KEY, home_id TEXT NOT NULL, care_recipient_id TEXT NOT NULL, template_artifact_key TEXT NOT NULL, model_version TEXT NOT NULL, sample_count INTEGER NOT NULL, status TEXT NOT NULL CHECK(status IN ('ready','unavailable','revoked')), created_at TEXT NOT NULL, updated_at TEXT NOT NULL, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE, FOREIGN KEY(care_recipient_id) REFERENCES care_recipients(id) ON DELETE CASCADE);
 CREATE UNIQUE INDEX IF NOT EXISTS face_profiles_recipient_idx ON face_profiles(home_id, care_recipient_id);
 CREATE INDEX IF NOT EXISTS face_profiles_home_status_idx ON face_profiles(home_id, status);
@@ -417,6 +417,14 @@ class Database:
                     self.conn.execute("ALTER TABLE summaries ADD COLUMN care_recipient_id TEXT REFERENCES care_recipients(id) ON DELETE CASCADE")
                 self.conn.execute("CREATE INDEX IF NOT EXISTS summaries_recipient_idx ON summaries(home_id, care_recipient_id, created_at)")
                 self._record_sqlite_migration(15)
+            if not self._sqlite_migration_applied(16):
+                event_columns = {row[1] for row in self.conn.execute("PRAGMA table_info(events)").fetchall()}
+                if "event_group_key" not in event_columns:
+                    self.conn.execute("ALTER TABLE events ADD COLUMN event_group_key TEXT")
+                if "observation_count" not in event_columns:
+                    self.conn.execute("ALTER TABLE events ADD COLUMN observation_count INTEGER NOT NULL DEFAULT 1")
+                self.conn.execute("CREATE INDEX IF NOT EXISTS events_group_idx ON events(home_id, event_type, event_group_key, last_seen_at)")
+                self._record_sqlite_migration(16)
             # Keep the zero-setup SQLite adapter forward-compatible with a
             # database created before caregiver assignment was introduced.
             plan_columns = {row[1] for row in self.conn.execute("PRAGMA table_info(medication_plans)").fetchall()}

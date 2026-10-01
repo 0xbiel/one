@@ -52,6 +52,16 @@ class ServiceSettings:
     face_detector_model_path: Path | None = None
     face_recognizer_model_path: Path | None = None
     face_detector_confidence: float = 0.90
+    face_liveness_model_path: Path | None = None
+    face_liveness_threshold: float = 0.0
+    face_liveness_min_real_probability: float = 0.65
+    face_liveness_min_saturation: float = 0.04
+    pose_model_path: Path | None = None
+    pose_detector_confidence: float = 0.25
+    pose_keypoint_confidence: float = 0.35
+    fall_sequence_model_path: Path | None = None
+    fall_sequence_threshold: float = 0.65
+    fall_sequence_window: int = 15
 
     @classmethod
     def from_env(cls) -> "ServiceSettings":
@@ -95,6 +105,37 @@ class ServiceSettings:
             max(_env_float("ONE_FACE_DETECTOR_CONFIDENCE", 0.90), 0.50),
             0.99,
         )
+        face_liveness = os.getenv("ONE_FACE_LIVENESS_MODEL_PATH", "").strip()
+        face_liveness_threshold = min(
+            max(_env_float("ONE_FACE_LIVENESS_THRESHOLD", 0.0), -10.0),
+            10.0,
+        )
+        face_liveness_min_real_probability = min(
+            max(_env_float("ONE_FACE_LIVENESS_MIN_REAL_PROBABILITY", 0.65), 0.50),
+            0.99,
+        )
+        face_liveness_min_saturation = min(
+            max(_env_float("ONE_FACE_LIVENESS_MIN_SATURATION", 0.04), 0.0),
+            1.0,
+        )
+        pose_model = os.getenv("ONE_POSE_MODEL_PATH", "").strip()
+        pose_detector_confidence = min(
+            max(_env_float("ONE_POSE_DETECTOR_CONFIDENCE", 0.25), 0.05),
+            0.95,
+        )
+        pose_keypoint_confidence = min(
+            max(_env_float("ONE_POSE_KEYPOINT_CONFIDENCE", 0.35), 0.05),
+            0.95,
+        )
+        fall_sequence_model = os.getenv("ONE_FALL_SEQUENCE_MODEL_PATH", "").strip()
+        fall_sequence_threshold = min(
+            max(_env_float("ONE_FALL_SEQUENCE_THRESHOLD", 0.65), 0.50),
+            0.99,
+        )
+        fall_sequence_window = min(
+            max(_env_int("ONE_FALL_SEQUENCE_WINDOW", 15), 8),
+            64,
+        )
 
         return cls(
             mode=mode,
@@ -114,4 +155,14 @@ class ServiceSettings:
             face_detector_model_path=Path(face_detector).expanduser() if face_detector else None,
             face_recognizer_model_path=Path(face_recognizer).expanduser() if face_recognizer else None,
             face_detector_confidence=face_detector_confidence,
+            face_liveness_model_path=Path(face_liveness).expanduser() if face_liveness else None,
+            face_liveness_threshold=face_liveness_threshold,
+            face_liveness_min_real_probability=face_liveness_min_real_probability,
+            face_liveness_min_saturation=face_liveness_min_saturation,
+            pose_model_path=Path(pose_model).expanduser() if pose_model else None,
+            pose_detector_confidence=pose_detector_confidence,
+            pose_keypoint_confidence=pose_keypoint_confidence,
+            fall_sequence_model_path=Path(fall_sequence_model).expanduser() if fall_sequence_model else None,
+            fall_sequence_threshold=fall_sequence_threshold,
+            fall_sequence_window=fall_sequence_window,
         )

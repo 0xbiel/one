@@ -71,17 +71,45 @@ starting the API.
 
 LiveKit webhook tokens are verified with HS256 issuer/expiry checks and an optional body digest claim when API credentials are configured. The official `livekit-server-sdk` is not bundled, so pin and prefer it for a production deployment matching the server version.
 
-`app/fall.py` adds the first safety-signal preparation layer. It observes only
-stable person tracks, requires an upright-to-low posture transition and several
-confirming frames, then creates a `fall_suspected` event with
-`status=needs_review`. The event is surfaced through the normal Events API and
-SSE stream for the iOS and web caregiver views. At that moment only, the
-current JPEG/PNG frame may be stored as one AES-GCM encrypted event snapshot;
-the event list exposes metadata and an authorized private/no-store image route,
-with the same bounded retention and privacy deletion path as the event. It is
-intentionally a bounded heuristic, not an emergency detector or diagnosis; a
-later pose/temporal model can replace the tracker behind the same event
-contract.
+`app/fall.py` adds the pose-sequence safety-signal layer. It observes only
+stable person tracks with 17-joint poses, sends bounded derived windows to the
+local GPU worker's learned ST-GCN/causal-TCN endpoint, requires the learned
+score plus an upright-to-low posture transition and several confirming frames,
+then creates a `fall_suspected` event with `status=needs_review`. If the learned
+worker is unavailable, the API exposes `fall_sequence_status=unavailable` and
+does not fall back to a rectangle heuristic. The event is surfaced through the
+normal Events API and SSE stream for the iOS and web caregiver views. At that
+moment only, the current JPEG/PNG frame may be stored as one AES-GCM encrypted
+event snapshot; the event list exposes metadata and an authorized private/no-
+store image route, with the same bounded retention and privacy deletion path as
+the event. A 15-second per-track refractory interval suppresses duplicate alerts
+caused by brief post-fall pose reclassification. It remains a bounded safety signal, not an emergency detector or
+diagnosis; see the geometry worker evaluation receipt for the current small
+URFD holdout result and limitations.
+
+### Local detection diagnostics
+
+Run `./camera_positioning_lab/run_lab.sh`, sign in, and open **Face Recognition
+Debug** or **Fall Detection Debug** from the lab navigation. Face debug calls a
+separate worker endpoint that runs only face detection, liveness, and temporary
+embedding inference. It requires an active consented face profile before
+processing frames, reports `unknown` until the same profile matches three
+consecutive frames, and never returns embeddings or saves frames. It does not
+run person/pose detection or fall scoring.
+
+Fall debug runs the person-pose and learned sequence path with its own in-memory
+tracker and bounded pose window. It shows score readiness/freshness, threshold,
+pose quality, gate reason, and confirmation progress. A confirmed debug result
+is labelled as a would-be `fall_suspected / needs_review` signal; debug frames,
+observations, events, and snapshots are not persisted, and the debug tracker
+cannot suppress or advance production fall events.
+
+These pages are for inspecting live behavior, not for claiming accuracy. Before
+tuning thresholds, collect consented and independently labelled examples of
+falls and ordinary activities under representative camera positions, replay
+them, and count false alerts and missed falls. Keep separate data for threshold
+selection and final evaluation; one person's repeated clips are not an
+independent test of generalization.
 
 ## Family mode (bounded MVP)
 
