@@ -132,6 +132,9 @@ def test_postgres_health_pairing_transaction_and_cascade(postgres_client: TestCl
         "medication_check_ins",
         "email_verifications",
         "camera_map_generation_jobs",
+        "tracking_devices",
+        "location_points",
+        "safe_places",
     } <= actual_tables
     expected_versions = _migration_versions()
     assert [row["version"] for row in db.many("SELECT version FROM schema_migrations ORDER BY version")] == expected_versions
@@ -204,6 +207,9 @@ def test_migration_files_are_ordered_and_cover_schema_when_postgres_enabled():
         "medication_check_ins",
         "email_verifications",
         "camera_map_generation_jobs",
+        "tracking_devices",
+        "location_points",
+        "safe_places",
     }
     missing = [
         table

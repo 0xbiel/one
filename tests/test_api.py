@@ -293,6 +293,115 @@ def test_care_recipient_crud_is_separate_from_home_membership(tmp_path):
     assert c.get("/api/v1/homes/not-this-home/care-recipients", headers=headers).status_code == 403
 
 
+def test_outside_location_tracking_is_consent_gated_idempotent_and_bounded(tmp_path):
+    c = client(tmp_path)
+    token, home = auth(c)
+    headers = {"Authorization": f"Bearer {token}"}
+    recipient = c.post(
+        f"/api/v1/homes/{home}/care-recipients",
+        headers=headers,
+        json={"display_name": "María"},
+    ).json()["data"]
+    base = f"/api/v1/homes/{home}/care-recipients/{recipient['id']}"
+
+    assert c.post(f"{base}/tracking-devices", headers=headers, json={"label": "María phone"}).status_code == 403
+    assert c.post(
+        f"/api/v1/homes/{home}/consents",
+        headers=headers,
+        json={"purpose": "outside_location", "policy_version": "2026-09", "granted": True, "care_recipient_id": recipient["id"]},
+    ).status_code == 200
+
+    registered = c.post(f"{base}/tracking-devices", headers=headers, json={"label": "María phone"})
+    assert registered.status_code == 201
+    device = registered.json()["data"]
+    captured_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    batch = {
+        "device_id": device["id"],
+        "points": [{
+            "client_sample_id": "sample-1", "latitude": 38.3452, "longitude": -0.4810,
+            "accuracy_m": 12.5, "speed_mps": 1.2, "bearing_deg": 90,
+            "battery_percent": 78, "captured_at": captured_at,
+        }],
+    }
+    first = c.post(f"{base}/location-points", headers=headers, json=batch)
+    second = c.post(f"{base}/location-points", headers=headers, json=batch)
+    assert first.status_code == 200 and first.json()["accepted"] == 1
+    assert second.status_code == 200 and second.json() == {"accepted": 0, "duplicates": 1, "discarded": 0, "retention_days": 7}
+    latest = c.get(f"{base}/locations/latest", headers=headers)
+    assert latest.status_code == 200 and latest.json()["data"]["battery_percent"] == 78
+    history = c.get(f"{base}/locations", headers=headers)
+    assert history.status_code == 200 and len(history.json()["data"]) == 1
+
+    place = c.post(
+        f"{base}/safe-places", headers=headers,
+        json={"name": "Home", "latitude": 38.3452, "longitude": -0.4810, "radius_m": 120},
+    )
+    assert place.status_code == 201
+    place_id = place.json()["data"]["id"]
+    assert c.patch(f"{base}/safe-places/{place_id}", headers=headers, json={"radius_m": 180, "revision": 1}).json()["data"]["radius_m"] == 180
+    assert c.patch(f"{base}/safe-places/{place_id}", headers=headers, json={"radius_m": 20, "revision": 1}).status_code == 409
+    assert c.delete(f"{base}/safe-places/{place_id}?revision=2", headers=headers).status_code == 200
+
+    paused = c.patch(f"{base}/tracking-devices/{device['id']}", headers=headers, json={"status": "paused"})
+    assert paused.status_code == 200
+    assert c.post(f"{base}/location-points", headers=headers, json={**batch, "points": [{**batch["points"][0], "client_sample_id": "sample-2"}]}).status_code == 409
+    assert c.get(f"/api/v1/homes/not-this-home/care-recipients/{recipient['id']}/locations/latest", headers=headers).status_code == 403
+
+
+def test_outside_history_pages_clear_and_home_radius(tmp_path):
+    c = client(tmp_path)
+    token, home = auth(c)
+    headers = {"Authorization": f"Bearer {token}"}
+    recipient = c.post(f"/api/v1/homes/{home}/care-recipients", headers=headers, json={"display_name": "María"}).json()["data"]
+    base = f"/api/v1/homes/{home}/care-recipients/{recipient['id']}"
+    c.post(f"/api/v1/homes/{home}/consents", headers=headers,
+           json={"purpose": "outside_location", "policy_version": "2026-09", "granted": True, "care_recipient_id": recipient["id"]})
+    device = c.post(f"{base}/tracking-devices", headers=headers, json={"label": "phone"}).json()["data"]
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    for batch_number in range(3):
+        points = [{"client_sample_id": f"sample-{batch_number}-{index}", "latitude": 38.3, "longitude": -0.4,
+                   "captured_at": now.isoformat(),
+                   "street_name": "Calle Mayor", "dwell_duration_millis": 300000} for index in range(200)]
+        response = c.post(f"{base}/location-points", headers=headers, json={"device_id": device["id"], "points": points})
+        assert response.status_code == 200, response.text
+    page1 = c.get(f"{base}/locations", headers=headers, params={"limit": 500})
+    assert page1.status_code == 200 and len(page1.json()["data"]) == 500
+    page2 = c.get(f"{base}/locations", headers=headers, params={"limit": 500, "cursor": page1.json()["next_cursor"]})
+    assert page2.status_code == 200 and len(page2.json()["data"]) == 100
+    assert len({row["id"] for row in page1.json()["data"] + page2.json()["data"]}) == 600
+    assert page1.json()["data"][0]["street_name"] == "Calle Mayor"
+    assert page1.json()["data"][0]["dwell_duration_millis"] == 300000
+    state = c.get(f"{base}/locations/state", headers=headers)
+    assert state.status_code == 200 and state.json()["latest"]["street_name"] == "Calle Mayor"
+    assert c.get(f"{base}/geo/reverse", headers=headers, params={"lat": 38.3, "lon": -0.4}).status_code == 503
+    place = c.post(f"{base}/safe-places", headers=headers, json={"kind": "home", "name": "Home", "latitude": 38.3,
+                   "longitude": -0.4, "radius_m": 20})
+    assert place.status_code == 201 and place.json()["data"]["radius_m"] == 20
+    assert c.post(f"{base}/safe-places", headers=headers, json={"kind": "home", "name": "Home", "latitude": 38.3,
+                  "longitude": -0.4, "radius_m": 20}).status_code == 409
+    assert c.post(f"/api/v1/homes/{home}/consents", headers=headers,
+                  json={"purpose": "family_mode", "policy_version": "2026-09-01"}).status_code == 200
+    invite = c.post(f"/api/v1/homes/{home}/family/invites", headers=headers,
+                    json={"display_name": "Caregiver", "role": "caregiver"}).json()
+    caregiver = c.post("/api/v1/family/invites/accept", json={"code": invite["code"]}).json()
+    caregiver_headers = {"Authorization": f"Bearer {caregiver['access_token']}"}
+    assert c.delete(f"{base}/locations", headers=caregiver_headers).status_code == 403
+    clear = c.delete(f"{base}/locations", headers=headers)
+    assert clear.status_code == 200
+    assert c.get(f"{base}/locations", headers=headers).json()["data"] == []
+    assert c.get(f"{base}/locations/state", headers=headers).json()["cleared_at"] == clear.json()["cleared_at"]
+    retry = c.post(f"{base}/location-points", headers=headers, json={"device_id": device["id"], "points": points})
+    assert retry.status_code == 200 and retry.json()["discarded"] == 200
+    old_time = (now - timedelta(days=8)).isoformat()
+    c.app.state.db.execute(
+        "INSERT INTO location_points(id,home_id,care_recipient_id,device_id,client_sample_id,latitude,longitude,captured_at,received_at) "
+        "VALUES (?,?,?,?,?,?,?,?,?)",
+        ("expired-test-point", home, recipient["id"], device["id"], "expired-test-sample", 38.3, -0.4, old_time, old_time),
+    )
+    assert c.get(f"{base}/locations/state", headers=headers).status_code == 200
+    assert c.app.state.db.one("SELECT id FROM location_points WHERE id=?", ("expired-test-point",)) is None
+
+
 def test_face_profile_is_consent_gated_encrypted_and_revocable(tmp_path):
     c = face_client(tmp_path)
     token, home = auth(c)
@@ -510,6 +619,8 @@ def test_camera_map_observation_and_sse_schema(tmp_path):
     assert observed.status_code == 200 and observed.json()["approximate_location"]["uncertainty_m"] == 0.8
     events = c.get(f"/api/v1/homes/{home}/events", headers=h).json()["data"]
     assert events[0]["event_type"] == "object_observed"
+    assert events[0]["care_recipient_id"] is None
+    assert events[0]["source"] == {"camera_id": camera["id"], "camera_name": "Kitchen", "room_name": None, "object_id": obj["id"]}
     assert c.get(f"/api/v1/homes/{home}/cameras", headers=h).json()["data"][0]["id"] == camera["id"]
     assert c.get(f"/api/v1/homes/{home}/maps", headers=h).json()["data"][0]["id"] == room_map["id"]
     assert c.get(f"/api/v1/homes/{home}/maps/current", headers=h).json()["id"] == room_map["id"]
@@ -517,9 +628,34 @@ def test_camera_map_observation_and_sse_schema(tmp_path):
     assert scene.status_code == 200 and scene.json()["sceneId"] == room_map["id"]
     objects = c.get(f"/api/v1/homes/{home}/objects/last-seen", headers=h)
     assert objects.status_code == 200 and objects.json()["data"][0]["lastSeenAt"]
+    assert objects.json()["data"][0]["careRecipientId"] is None
     with c.stream("GET", f"/api/v1/homes/{home}/events/stream?once=true", headers=h) as response:
         assert response.status_code == 200
         assert next(response.iter_lines()).startswith(": connected")
+
+
+def test_events_filter_care_recipient_and_keep_household_separate(tmp_path):
+    c = client(tmp_path); token, home = auth(c); h = {"Authorization": f"Bearer {token}"}
+    first = c.post(f"/api/v1/homes/{home}/care-recipients", headers=h, json={"display_name": "First"}).json()["data"]["id"]
+    second = c.post(f"/api/v1/homes/{home}/care-recipients", headers=h, json={"display_name": "Second"}).json()["data"]["id"]
+    for event_id, recipient_id in (("first-event", first), ("second-event", second), ("household-event", None)):
+        c.app.state.db.execute(
+            "INSERT INTO events(id,home_id,event_type,status,explanation,confidence,evidence_json,first_seen_at,last_seen_at,expires_at,care_recipient_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (event_id, home, "object_observed", "new", event_id, None, "[]", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z", "2026-02-01T00:00:00Z", recipient_id),
+        )
+    base = f"/api/v1/homes/{home}/events?care_recipient_id={first}"
+    assert {item["id"] for item in c.get(base, headers=h).json()["data"]} == {"first-event", "household-event"}
+    assert {item["id"] for item in c.get(base + "&include_household=false", headers=h).json()["data"]} == {"first-event"}
+    assert c.get(f"/api/v1/homes/{home}/events?care_recipient_id=unknown", headers=h).status_code == 404
+
+
+def test_last_seen_objects_expose_recorded_care_recipient(tmp_path):
+    c = client(tmp_path); token, home = auth(c); h = {"Authorization": f"Bearer {token}"}
+    recipient = c.post(f"/api/v1/homes/{home}/care-recipients", headers=h, json={"display_name": "First"}).json()["data"]["id"]
+    obj = c.post(f"/api/v1/homes/{home}/objects", headers=h, json={"label": "glasses"}).json()
+    c.app.state.db.execute("UPDATE objects SET care_recipient_id=? WHERE id=? AND home_id=?", (recipient, obj["id"], home))
+    rows = c.get(f"/api/v1/homes/{home}/objects/last-seen", headers=h).json()["data"]
+    assert next(item for item in rows if item["id"] == obj["id"])["careRecipientId"] == recipient
 
 
 def test_caregiver_can_remove_camera_without_erasing_history(tmp_path):
