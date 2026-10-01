@@ -619,6 +619,8 @@ def test_camera_map_observation_and_sse_schema(tmp_path):
     assert observed.status_code == 200 and observed.json()["approximate_location"]["uncertainty_m"] == 0.8
     events = c.get(f"/api/v1/homes/{home}/events", headers=h).json()["data"]
     assert events[0]["event_type"] == "object_observed"
+    assert events[0]["care_recipient_id"] is None
+    assert events[0]["source"] == {"camera_id": camera["id"], "camera_name": "Kitchen", "room_name": None, "object_id": obj["id"]}
     assert c.get(f"/api/v1/homes/{home}/cameras", headers=h).json()["data"][0]["id"] == camera["id"]
     assert c.get(f"/api/v1/homes/{home}/maps", headers=h).json()["data"][0]["id"] == room_map["id"]
     assert c.get(f"/api/v1/homes/{home}/maps/current", headers=h).json()["id"] == room_map["id"]
@@ -629,6 +631,21 @@ def test_camera_map_observation_and_sse_schema(tmp_path):
     with c.stream("GET", f"/api/v1/homes/{home}/events/stream?once=true", headers=h) as response:
         assert response.status_code == 200
         assert next(response.iter_lines()).startswith(": connected")
+
+
+def test_events_filter_care_recipient_and_keep_household_separate(tmp_path):
+    c = client(tmp_path); token, home = auth(c); h = {"Authorization": f"Bearer {token}"}
+    first = c.post(f"/api/v1/homes/{home}/care-recipients", headers=h, json={"display_name": "First"}).json()["data"]["id"]
+    second = c.post(f"/api/v1/homes/{home}/care-recipients", headers=h, json={"display_name": "Second"}).json()["data"]["id"]
+    for event_id, recipient_id in (("first-event", first), ("second-event", second), ("household-event", None)):
+        c.app.state.db.execute(
+            "INSERT INTO events(id,home_id,event_type,status,explanation,confidence,evidence_json,first_seen_at,last_seen_at,expires_at,care_recipient_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (event_id, home, "object_observed", "new", event_id, None, "[]", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z", "2026-02-01T00:00:00Z", recipient_id),
+        )
+    base = f"/api/v1/homes/{home}/events?care_recipient_id={first}"
+    assert {item["id"] for item in c.get(base, headers=h).json()["data"]} == {"first-event", "household-event"}
+    assert {item["id"] for item in c.get(base + "&include_household=false", headers=h).json()["data"]} == {"first-event"}
+    assert c.get(f"/api/v1/homes/{home}/events?care_recipient_id=unknown", headers=h).status_code == 404
 
 
 def test_caregiver_can_remove_camera_without_erasing_history(tmp_path):

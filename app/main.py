@@ -584,6 +584,34 @@ class CareRecipientListResponse(BaseModel):
     data: list[CareRecipientOut]
 
 
+class EventSourceOut(BaseModel):
+    camera_id: str | None = None
+    camera_name: str | None = None
+    room_name: str | None = None
+    object_id: str | None = None
+
+
+class HomeEventOut(BaseModel):
+    id: str
+    home_id: str
+    event_type: str
+    status: str
+    explanation: str | None = None
+    confidence: float | None = None
+    evidence_json: str
+    first_seen_at: str
+    last_seen_at: str
+    expires_at: str | None = None
+    care_recipient_id: str | None = None
+    source: EventSourceOut | None = None
+    snapshot_path: str | None = None
+    snapshot_content_type: str | None = None
+
+
+class HomeEventListResponse(BaseModel):
+    data: list[HomeEventOut]
+
+
 class FaceEnrollmentFrameIn(BaseModel):
     frame_base64: str = Field(min_length=1, max_length=4_000_000)
     width: int = Field(gt=0, le=7680)
@@ -4823,8 +4851,12 @@ def make_app(
         )
         payload = {"event_id": event_id, "observation_id": oid, "home_id": home_id, "type": "object_observed", "observed_at": observed}; await bus.publish(home_id, payload); return {"observation_id": oid, "event_id": event_id, "approximate_location": {"x": body.x, "y": body.y, "z": body.z, "uncertainty_m": body.uncertainty_m}}
 
-    def event_rows(home_id: str, limit: int) -> list[dict]:
-        rows = db.many("SELECT * FROM events WHERE home_id=? ORDER BY last_seen_at DESC LIMIT ?", (home_id, limit))
+    def event_rows(home_id: str, limit: int, care_recipient_id: str | None = None, include_household: bool = True) -> list[dict]:
+        if care_recipient_id:
+            condition = "(care_recipient_id=? OR care_recipient_id IS NULL)" if include_household else "care_recipient_id=?"
+            rows = db.many(f"SELECT * FROM events WHERE home_id=? AND {condition} ORDER BY last_seen_at DESC LIMIT ?", (home_id, care_recipient_id, limit))
+        else:
+            rows = db.many("SELECT * FROM events WHERE home_id=? ORDER BY last_seen_at DESC LIMIT ?", (home_id, limit))
         for row in rows:
             snapshot = db.one(
                 "SELECT content_type FROM event_snapshots WHERE event_id=? AND home_id=? AND expires_at>?",
@@ -4832,13 +4864,31 @@ def make_app(
             )
             row["snapshot_path"] = f"/api/v1/homes/{home_id}/events/{row['id']}/snapshot" if snapshot else None
             row["snapshot_content_type"] = snapshot["content_type"] if snapshot else None
+            row["source"] = None
+            try:
+                evidence_ids = json.loads(row.get("evidence_json") or "[]")
+            except (TypeError, ValueError):
+                evidence_ids = []
+            if isinstance(evidence_ids, list):
+                for evidence_id in evidence_ids:
+                    if not isinstance(evidence_id, str):
+                        continue
+                    observation = db.one("SELECT camera_id, object_id FROM observations WHERE id=? AND home_id=?", (evidence_id, home_id))
+                    if not observation:
+                        continue
+                    camera = db.one("SELECT name, room_id FROM cameras WHERE id=? AND home_id=?", (observation["camera_id"], home_id)) if observation["camera_id"] else None
+                    room = db.one("SELECT name FROM rooms WHERE id=? AND home_id=?", (camera["room_id"], home_id)) if camera and camera["room_id"] else None
+                    row["source"] = {"camera_id": observation["camera_id"], "camera_name": camera["name"] if camera else None, "room_name": room["name"] if room else None, "object_id": observation["object_id"]}
+                    break
         return rows
 
-    @app.get("/api/v1/homes/{home_id}/events")
-    def events(home_id: str, actor: Current, limit: int = 50):
+    @app.get("/api/v1/homes/{home_id}/events", response_model=HomeEventListResponse)
+    def events(home_id: str, actor: Current, limit: int = 50, care_recipient_id: str | None = None, include_household: bool = True):
         home_check(actor, home_id); publisher_block(actor)
+        if care_recipient_id:
+            care_recipient_row(home_id, care_recipient_id)
         limit = min(max(limit, 1), 100)
-        return {"data": event_rows(home_id, limit)}
+        return {"data": event_rows(home_id, limit, care_recipient_id, include_household)}
 
     @app.get(
         "/api/v1/homes/{home_id}/events/{event_id}/snapshot",
