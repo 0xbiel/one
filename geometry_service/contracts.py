@@ -7,6 +7,7 @@ never writes those bytes to disk or includes them in a response.
 from __future__ import annotations
 
 from datetime import datetime
+import math
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -207,6 +208,9 @@ class VisionDetection(BaseModel):
     label: str = Field(min_length=1, max_length=80)
     confidence: float = Field(ge=0.0, le=1.0)
     bbox: list[float] = Field(min_length=4, max_length=4)
+    pose_keypoints: list[list[float]] | None = Field(default=None, min_length=17, max_length=17)
+    pose_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    pose_model_version: str | None = Field(default=None, max_length=120)
 
 
 class FaceObservation(BaseModel):
@@ -214,6 +218,7 @@ class FaceObservation(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0)
     landmarks: list[float] = Field(min_length=10, max_length=10)
     embedding: list[float] = Field(min_length=1, max_length=2048)
+    liveness: dict[str, Any] | None = None
 
 
 class VisionFrameResponse(BaseModel):
@@ -221,6 +226,52 @@ class VisionFrameResponse(BaseModel):
     model_version: str
     detections: list[VisionDetection] = Field(default_factory=list, max_length=100)
     faces: list[FaceObservation] = Field(default_factory=list, max_length=8)
+    pose_model_version: str | None = None
+    diagnostics: dict[str, Any] = Field(default_factory=dict)
+
+
+class FallSequenceFrame(BaseModel):
+    """One derived COCO-17 pose sample; raw RGB is intentionally absent."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    keypoints: list[list[float]] = Field(min_length=17, max_length=17)
+    bbox: list[float] = Field(min_length=4, max_length=4)
+
+    @field_validator("keypoints")
+    @classmethod
+    def validate_keypoints(cls, value: list[list[float]]) -> list[list[float]]:
+        if any(
+            len(point) != 3
+            or any(not math.isfinite(float(component)) for component in point)
+            for point in value
+        ):
+            raise ValueError("keypoints must contain 17 finite [x, y, confidence] triples")
+        return value
+
+    @field_validator("bbox")
+    @classmethod
+    def validate_bbox(cls, value: list[float]) -> list[float]:
+        if any(not math.isfinite(float(component)) for component in value):
+            raise ValueError("bbox must contain four finite values")
+        if value[2] <= value[0] or value[3] <= value[1]:
+            raise ValueError("bbox must have positive width and height")
+        return value
+
+
+class FallSequenceScoreRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    frames: list[FallSequenceFrame] = Field(min_length=8, max_length=64)
+    width: int = Field(gt=0, le=7_680)
+    height: int = Field(gt=0, le=4_320)
+
+
+class FallSequenceScoreResponse(BaseModel):
+    status: Literal["ready", "unavailable", "failed"]
+    model_version: str
+    probability: float | None = Field(default=None, ge=0.0, le=1.0)
+    threshold: float | None = Field(default=None, ge=0.0, le=1.0)
     diagnostics: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -236,6 +287,16 @@ class FaceEnrollmentRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     frames: list[FaceEnrollmentFrame] = Field(min_length=1, max_length=MAX_FACE_ENROLLMENT_FRAMES)
+
+
+class FaceDebugRequest(BaseModel):
+    """One transient frame for the face-only local diagnostic path."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    frame_base64: str = Field(min_length=1, max_length=MAX_FRAME_BASE64_CHARS)
+    width: int = Field(gt=0, le=7_680)
+    height: int = Field(gt=0, le=4_320)
 
 
 class FaceEnrollmentResponse(BaseModel):

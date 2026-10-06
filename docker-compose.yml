@@ -33,6 +33,7 @@ services:
 
   api:
     build: .
+    restart: unless-stopped
     env_file:
       - path: .env
         required: false
@@ -77,6 +78,7 @@ services:
       args:
         VITE_API_BASE_URL: ${ONE_FRONTEND_API_BASE_URL:-/api/v1}
         VITE_DEMO_MODE: ${ONE_FRONTEND_DEMO_MODE:-false}
+    restart: unless-stopped
     depends_on: [api]
     # Keep the default private to this Mac. Set ONE_FRONTEND_BIND=0.0.0.0
     # only for a controlled LAN test; Tailscale Serve can proxy the loopback
@@ -86,11 +88,13 @@ services:
     profiles: ["demo"]
     build:
       context: ../one-demo-service
+    restart: unless-stopped
     ports: ["127.0.0.1:8100:8100"]
     # Demo data and sessions are isolated from the production API service.
 
   postgres:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_DB: ${ONE_POSTGRES_DB:-one}
       POSTGRES_USER: ${ONE_POSTGRES_USER:-one}
@@ -103,8 +107,10 @@ services:
       retries: 12
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
   minio:
     image: quay.io/minio/minio:latest
+    restart: unless-stopped
     command: server /data --console-address :9001
     environment:
       MINIO_ROOT_USER: ${ONE_MINIO_ROOT_USER:-one-local}
@@ -112,6 +118,7 @@ services:
     volumes: ["one_minio:/data"]
   livekit:
     image: livekit/livekit-server:latest
+    restart: unless-stopped
     # Self-hosted development server; no LiveKit Cloud subscription required.
     environment:
       # The WebRTC media path must advertise an address reachable by the
@@ -127,6 +134,7 @@ services:
   caddy:
     profiles: ["web"]
     image: caddy:2-alpine
+    restart: unless-stopped
     depends_on: [api, frontend]
     # Bind the local HTTPS proxy to the LAN for trusted same-Wi-Fi devices.
     # Caddy's internal CA certificate must be installed and trusted on those

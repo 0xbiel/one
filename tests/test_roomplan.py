@@ -127,10 +127,11 @@ def test_roomplan_attachment_is_persisted_downloadable_and_deleted(tmp_path):
     exported = c.post(f"/api/v1/homes/{home}/privacy/export", headers=headers)
     assert exported.status_code == 200
     exported_maps = exported.json()["data"]["room_maps"]
-    assert exported_maps[0]["usdz_artifact_key"].endswith(f"/{map_id}.usdz")
-    assert '"sha256"' in exported_maps[0]["metadata_json"]
+    assert "usdz_artifact_key" not in exported_maps[0]
+    assert '"sha256"' in exported_maps[0]["metadata_json"]  # Integrity checksum is not a credential.
+    assert exported_maps[0]["id"] == map_id
 
-    deleted = c.post(f"/api/v1/homes/{home}/privacy/delete", headers=headers)
+    deleted = c.post(f"/api/v1/homes/{home}/privacy/delete", headers=headers, json={"confirmed": True, "confirmation_home_id": home})
     assert deleted.status_code == 200
     assert not (tmp_path / "objects" / "maps" / home / f"{map_id}.usdz").exists()
 

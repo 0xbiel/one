@@ -40,7 +40,45 @@ class FallSequenceDetector:
     def detect(self, frame, candidate_labels):
         step = frame.data[-1]
         bbox = (220, 80, 420, 460) if step < 3 else (150, 250, 490, 390)
-        return [Detection("person", 0.92, bbox, frame.captured_at)]
+        x1, y1, x2, y2 = bbox
+        upright = step < 3
+        template = (
+            [(0.50, 0.05), (0.45, 0.07), (0.55, 0.07), (0.38, 0.10), (0.62, 0.10),
+             (0.38, 0.35), (0.62, 0.35), (0.25, 0.52), (0.75, 0.52), (0.15, 0.68),
+             (0.85, 0.68), (0.42, 0.65), (0.58, 0.65), (0.34, 0.84), (0.66, 0.84),
+             (0.30, 0.98), (0.70, 0.98)]
+            if upright else
+            [(0.08, 0.50), (0.10, 0.45), (0.10, 0.55), (0.14, 0.38), (0.14, 0.62),
+             (0.30, 0.45), (0.40, 0.45), (0.46, 0.30), (0.50, 0.68), (0.56, 0.24),
+             (0.58, 0.75), (0.62, 0.52), (0.70, 0.52), (0.80, 0.38), (0.82, 0.66),
+             (0.98, 0.35), (0.98, 0.70)]
+        )
+        pose = tuple((x1 + (x2 - x1) * px, y1 + (y2 - y1) * py, 0.95) for px, py in template)
+        return [Detection("person", 0.92, bbox, frame.captured_at, pose_keypoints=pose, pose_confidence=0.95)]
+
+
+class IdentifiedFallSequenceDetector(FallSequenceDetector):
+    def detect(self, frame, candidate_labels, *, include_faces=False):
+        detection = super().detect(frame, candidate_labels)[0]
+        faces = ()
+        if include_faces:
+            faces = ({
+                "bbox": [205.0, 75.0, 305.0, 185.0],
+                "confidence": 0.99,
+                "landmarks": [220.0, 110.0, 290.0, 110.0, 255.0, 140.0, 230.0, 165.0, 280.0, 165.0],
+                "embedding": [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                "liveness": {"status": "live", "score": 0.99},
+            },)
+        return [Detection(
+            detection.label,
+            detection.confidence,
+            detection.bbox,
+            detection.frame_at,
+            face_observations=faces,
+            pose_keypoints=detection.pose_keypoints,
+            pose_confidence=detection.pose_confidence,
+            pose_model_version=detection.pose_model_version,
+        )]
 
 
 class FacePersonDetector:
@@ -54,6 +92,7 @@ class FacePersonDetector:
                 "confidence": 0.99,
                 "landmarks": [220.0, 110.0, 290.0, 110.0, 255.0, 140.0, 230.0, 165.0, 280.0, 165.0],
                 "embedding": [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                "liveness": {"status": "live", "score": 0.99},
             },)
         return [Detection("person", 0.95, (180, 70, 330, 430), frame.captured_at, face_observations=faces)]
 
@@ -68,6 +107,7 @@ class FaceEnrollmentGeometry:
                 [0.99, 0.01, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
                 [0.98, 0.02, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
             ],
+            "diagnostics": {"liveness": {"status": "passed", "method": "test-active-liveness-v1"}},
         }
 
 
@@ -739,6 +779,7 @@ def test_deleted_paired_camera_revokes_reconnect_link(tmp_path):
 
 def test_camera_provisional_roomplan_revision_and_calibration_invalidation(tmp_path):
     c = client(tmp_path); token, home = auth(c); h = {"Authorization": f"Bearer {token}"}
+    old_room = c.post(f"/api/v1/homes/{home}/rooms", headers=h, json={"name": "Old room"}).json()
     camera = c.post(f"/api/v1/homes/{home}/cameras", headers=h, json={"name": "Hall", "resolution_width": 640, "resolution_height": 480}).json()
     provisional = c.post(f"/api/v1/homes/{home}/maps/provisional", headers=h, json={"camera_id": camera["id"], "resolution_width": 640, "resolution_height": 480, "zones": [{"id": "hall", "confidence": 0.4}]})
     assert provisional.status_code == 200 and provisional.json()["approximate"] is True and provisional.json()["localization_status"] == "rescan-required" and provisional.json()["source"] == "legacy-2d"
@@ -750,6 +791,9 @@ def test_camera_provisional_roomplan_revision_and_calibration_invalidation(tmp_p
     roomplan_payload = json.loads((Path(__file__).parent / "fixtures" / "roomplan-lidar-valid.json").read_text())
     roomplan = c.post(f"/api/v1/homes/{home}/maps/roomplan", headers=h, json=roomplan_payload)
     assert roomplan.status_code == 200 and roomplan.json()["source"] == "roomplan-lidar-3d" and roomplan.json()["dimension"] == "3d"
+    assert c.get(f"/api/v1/homes/{home}/rooms", headers=h).json()["data"] == []
+    assert c.app.state.db.one("SELECT room_id FROM cameras WHERE id=?", (camera["id"],))["room_id"] is None
+    assert c.app.state.db.one("SELECT action FROM audit_log WHERE action='room.delete' AND target_id=?", (old_room["id"],))
     assert roomplan.json()["coordinate_frame"] == "roomplan-local"
     non_lidar_payload = json.loads(json.dumps(roomplan_payload))
     non_lidar_payload["scan_metadata"]["lidar"] = False
@@ -784,7 +828,8 @@ def test_roomplan_camera_registration_tracks_only_active_metric_map(tmp_path):
     registered = c.post(
         f"/api/v1/homes/{home}/camera-registrations/roomplan",
         headers=h,
-        json={"camera_id": camera["id"], "map_id": first_map["id"], "camera_to_world": identity_pose, "confidence": 0.94, "tracking_state": "normal"},
+        # Foundation's UUID encoder sends uppercase; stored IDs are canonical lowercase.
+        json={"camera_id": camera["id"].upper(), "map_id": first_map["id"].upper(), "camera_to_world": identity_pose, "confidence": 0.94, "tracking_state": "normal"},
     )
     assert registered.status_code == 200 and registered.json()["status"] == "positioned"
     positioned = c.get(f"/api/v1/homes/{home}/scene", headers=h).json()["cameraRegistration"]
@@ -813,7 +858,8 @@ def test_roomplan_camera_registration_tracks_only_active_metric_map(tmp_path):
         json={"camera_id": camera["id"], "map_id": first_map["id"], "camera_to_world": identity_pose, "confidence": 0.4, "tracking_state": "limited"},
     )
     assert needs_rescan.status_code == 200 and needs_rescan.json()["status"] == "needs_rescan"
-    assert c.get(f"/api/v1/homes/{home}/scene", headers=h).json()["cameraRegistration"]["cameraToWorld"] is None
+    # A failed replacement must preserve the previously committed position.
+    assert c.get(f"/api/v1/homes/{home}/scene", headers=h).json()["cameraRegistration"]["cameraToWorld"] == identity_pose
 
     second_map = c.post(f"/api/v1/homes/{home}/maps/roomplan", headers=h, json=roomplan_payload).json()
     current = c.get(f"/api/v1/homes/{home}/scene", headers=h).json()
@@ -854,7 +900,8 @@ def test_assistant_degraded_and_consent_export_delete(tmp_path):
     export = c.post(f"/api/v1/homes/{home}/privacy/export", headers=h)
     assert export.status_code == 200 and "consents" in export.json()["data"]
     assert export.json()["data"]["audit_log"]
-    deletion = c.post(f"/api/v1/homes/{home}/privacy/delete", headers=h)
+    assert c.post(f"/api/v1/homes/{home}/privacy/delete", headers=h).status_code == 422
+    deletion = c.post(f"/api/v1/homes/{home}/privacy/delete", headers=h, json={"confirmed": True, "confirmation_home_id": home})
     assert deletion.status_code == 200 and deletion.json()["status"] == "completed"
     request = c.app.state.db.one("SELECT status, completed_at FROM deletion_requests WHERE id=?", (deletion.json()["request_id"],))
     proof = c.app.state.db.one("SELECT action FROM audit_log WHERE action='privacy.delete.completed' AND target_id=?", (home,))
@@ -873,6 +920,20 @@ def test_bounded_vision_ingestion_requires_camera_and_stabilizes(tmp_path):
     assert c.post(f"/api/v1/homes/{home}/vision/frames", headers=h, json=payload).json()["data"] == []
     stable = c.post(f"/api/v1/homes/{home}/vision/frames", headers=h, json=payload).json()
     assert stable["detector_version"] == "demo-deterministic-v1" and stable["data"][0]["projection"]["quality"] == "zone-fallback"
+    first_events = [event for event in c.get(f"/api/v1/homes/{home}/events", headers=h).json()["data"] if event["event_type"] == "object_observed"]
+    assert len(first_events) == 1 and first_events[0]["observation_count"] == 1
+
+    # The detector normally suppresses repeated writes inside its short
+    # persistence window. Move the stored observation outside that window so
+    # this test can exercise the longer event grouping window without a sleep.
+    c.app.state.db.execute(
+        "UPDATE observations SET observed_at=? WHERE home_id=?",
+        ((datetime.now(timezone.utc) - timedelta(seconds=10)).isoformat(), home),
+    )
+    repeated = c.post(f"/api/v1/homes/{home}/vision/frames", headers=h, json=payload)
+    assert repeated.status_code == 200
+    grouped_events = [event for event in c.get(f"/api/v1/homes/{home}/events", headers=h).json()["data"] if event["event_type"] == "object_observed"]
+    assert len(grouped_events) == 1 and grouped_events[0]["observation_count"] == 2
     prohibited = {**payload, "candidate_labels": ["person identity"]}
     assert c.post(f"/api/v1/homes/{home}/vision/frames", headers=h, json=prohibited).status_code == 422
 
@@ -901,6 +962,9 @@ def test_bounded_vision_persists_multiple_people_as_distinct_live_objects(tmp_pa
 
 def test_fall_pattern_creates_a_reviewable_event(tmp_path):
     c = client(tmp_path, FallSequenceDetector()); token, home = auth(c); h = {"Authorization": f"Bearer {token}"}
+    safety_start = datetime(2026, 9, 20, 12, 0, tzinfo=timezone.utc)
+    safety_times = iter(safety_start + timedelta(seconds=step) for step in range(6))
+    c.app.state.safety_clock = lambda: next(safety_times)
     camera = c.post(f"/api/v1/homes/{home}/cameras", headers=h, json={"name": "Living room"}).json()
     assert c.post(
         f"/api/v1/homes/{home}/consents",
@@ -945,7 +1009,99 @@ def test_fall_pattern_creates_a_reviewable_event(tmp_path):
     assert analytics.status_code == 200
     assert analytics.json()["data"]["fall"]["total_signals"] == 1
     assert analytics.json()["data"]["fall"]["needs_review"] == 1
-    assert "raw_frames" in analytics.json()["data"]["assistant_context"]["excludes"]
+
+
+def test_client_capture_timestamps_cannot_accelerate_fall_persistence(tmp_path):
+    c = client(tmp_path, FallSequenceDetector()); token, home = auth(c); h = {"Authorization": f"Bearer {token}"}
+    received_at = datetime(2026, 9, 20, 12, 0, tzinfo=timezone.utc)
+    c.app.state.safety_clock = lambda: received_at
+    camera = c.post(f"/api/v1/homes/{home}/cameras", headers=h, json={"name": "Living room"}).json()
+    assert c.post(
+        f"/api/v1/homes/{home}/consents",
+        headers=h,
+        json={"purpose": "video_capture", "policy_version": "2026-09-01", "granted": True},
+    ).status_code == 200
+
+    safety_events = []
+    for step in range(6):
+        frame = base64.b64encode(b"\xff\xd8\xff" + bytes([step])).decode()
+        response = c.post(
+            f"/api/v1/homes/{home}/vision/frames",
+            headers=h,
+            json={
+                "camera_id": camera["id"],
+                "frame_base64": frame,
+                "width": 640,
+                "height": 480,
+                "captured_at": (received_at + timedelta(seconds=step)).isoformat(),
+            },
+        )
+        assert response.status_code == 200
+        safety_events.extend(response.json()["safety_events"])
+
+    assert safety_events == []
+
+
+def test_identified_cross_camera_fall_signals_are_deduplicated(tmp_path):
+    c = client(tmp_path, FallSequenceDetector())
+    token, home = auth(c); h = {"Authorization": f"Bearer {token}"}
+    recipient = c.post(
+        f"/api/v1/homes/{home}/care-recipients",
+        headers=h,
+        json={"display_name": "María"},
+    ).json()["data"]
+    recipient_id = recipient["id"]
+    assert c.post(
+        f"/api/v1/homes/{home}/consents",
+        headers=h,
+        json={"purpose": "video_capture", "policy_version": "2026-09-01", "granted": True},
+    ).status_code == 200
+    camera_a = c.post(f"/api/v1/homes/{home}/cameras", headers=h, json={"name": "Room A"}).json()
+    camera_b = c.post(f"/api/v1/homes/{home}/cameras", headers=h, json={"name": "Room B"}).json()
+    safety_start = datetime(2026, 9, 20, 12, 0, tzinfo=timezone.utc)
+    safety_times = iter(safety_start + timedelta(seconds=step) for step in range(12))
+    c.app.state.safety_clock = lambda: next(safety_times)
+
+    event_ids = []
+    for camera in (camera_a, camera_b):
+        for step in range(5):
+            frame = base64.b64encode(b"\xff\xd8\xff" + bytes([step])).decode()
+            response = c.post(
+                f"/api/v1/homes/{home}/vision/frames",
+                headers=h,
+                json={"camera_id": camera["id"], "frame_base64": frame, "width": 640, "height": 480},
+            )
+            assert response.status_code == 200
+            assert response.json()["safety_events"] == []
+        object_id = next(
+            value[0]
+            for key, value in c.app.state.vision_person_objects.items()
+            if key[0] == home and key[1] == camera["id"]
+        )
+        c.app.state.db.execute(
+            "UPDATE objects SET care_recipient_id=? WHERE id=? AND home_id=?",
+            (recipient_id, object_id, home),
+        )
+        frame = base64.b64encode(b"\xff\xd8\xff" + bytes([5])).decode()
+        response = c.post(
+            f"/api/v1/homes/{home}/vision/frames",
+            headers=h,
+            json={"camera_id": camera["id"], "frame_base64": frame, "width": 640, "height": 480},
+        )
+        assert response.status_code == 200
+        event_ids.extend(event["event_id"] for event in response.json()["safety_events"])
+
+    assert len(event_ids) == 2
+    assert len(set(event_ids)) == 1
+    events = [
+        event for event in c.get(f"/api/v1/homes/{home}/events", headers=h).json()["data"]
+        if event["event_type"] == "fall_suspected"
+    ]
+    assert len(events) == 1
+    assert events[0]["care_recipient_id"] == recipient_id
+    assert events[0]["observation_count"] == 2
+    stored = list((tmp_path / "objects" / "encrypted-clips" / "snapshots" / home).glob("*.bin"))
+    assert len(stored) == 1
 
 
 def test_anonymous_person_handoff_moves_latest_presence_to_the_new_camera(tmp_path):
@@ -1180,7 +1336,7 @@ def test_medication_plan_reminders_checkins_and_bounded_assistant(tmp_path):
     checkin = c.post(f"/api/v1/homes/{home}/medication-plans/{plan_id}/check-ins", headers=h, json={"scheduled_for": "2026-09-12T08:00:00+00:00", "status": "taken"})
     assert checkin.status_code == 200 and checkin.json()["data"]["status"] == "taken"
     summary = c.post(f"/api/v1/homes/{home}/family-assistant", headers=h, json={"message": "What is pending today?"})
-    assert summary.status_code == 200 and summary.json()["context_scope"] == "medication plans, medication check-ins, daily check-ins, and bounded fall-safety analytics" and summary.json()["degraded"] is True
+    assert summary.status_code == 200 and "recipient-scoped" in summary.json()["context_scope"] and summary.json()["degraded"] is True
     assert "medical advice" in summary.json()["data"]["limitations"]
 
 

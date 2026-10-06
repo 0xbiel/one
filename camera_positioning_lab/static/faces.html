@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>ONE Face Recognition Debug</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body data-mode="faces">
+  <main>
+    <header><div><p class="eyebrow">LOCAL IRL TOOL</p><h1>Face Recognition Debug</h1><p class="sub">Face model only · transient frames · no enrollment or fall scoring</p></div><div id="workerBadge" class="badge">Worker · checking</div></header>
+    <nav class="debug-nav"><a href="/">Camera Positioning</a><a class="active" href="/faces">Face Recognition Debug</a><a href="/fall">Fall Detection Debug</a></nav>
+    <section class="card controls debug-controls">
+      <label>Email <input id="email" autocomplete="email" placeholder="your local ONE account" /></label><button id="login">Connect to local ONE</button>
+      <label>Camera <select id="camera" disabled><option>Sign in first</option></select></label><button id="startCamera" class="secondary">Open camera</button>
+      <button id="run" disabled>Start live face check</button><button id="stop" class="secondary" disabled>Stop</button>
+    </section>
+    <section class="grid two">
+      <article class="card video-card"><div class="card-head"><h2>Live camera</h2><span id="captureState">idle</span></div><div class="video-wrap"><video id="video" autoplay muted playsinline></video><canvas id="overlay"></canvas></div><canvas id="captureCanvas" hidden></canvas></article>
+      <article class="card"><div class="card-head"><h2>Face results</h2><span id="faceCount">0 faces</span></div><div id="results" class="debug-results"><p class="muted">Connect, open the camera, then start the live check.</p></div><pre id="diagnostics">Face model status will appear here.</pre></article>
+    </section>
+    <section class="card privacy-note"><b>How to read this page</b><p>A match appears only after liveness passes and the same enrolled identity matches three consecutive frames. Unknown is the safe result when there is no clear, consented match. The API returns no embeddings; captured frames are processed in memory and are not saved.</p></section>
+    <section class="card"><div class="card-head"><h2>Recent checks</h2><button id="clearLog" class="text">clear</button></div><div id="log" class="log"></div></section>
+  </main>
+  <script src="/debug.js"></script>
+</body>
+</html>

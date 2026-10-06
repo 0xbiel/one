@@ -6,7 +6,7 @@ import pytest
 from app.integrations import livekit_jwt, verify_livekit_webhook
 from app.media import EncryptedLocalClipStore, FrameRingBuffer, clip_from_ring
 from app.storage import LocalObjectStore
-from app.vision import Calibration, Detection, DeterministicDemoDetector, Frame, TemporalStabilityTracker, project_detection
+from app.vision import Calibration, Detection, DeterministicDemoDetector, Frame, LocalServiceDetector, TemporalStabilityTracker, project_detection
 
 
 def test_temporal_tracker_requires_stable_hits_and_demo_is_deterministic():
@@ -36,6 +36,56 @@ def test_temporal_tracker_keeps_concurrent_people_on_distinct_tracks():
     stable = tracker.update(second_frame)
     assert len(stable) == 2
     assert len({item.track_id for item in stable}) == 2
+
+
+def test_temporal_tracker_global_assignment_is_detection_order_independent():
+    at = datetime.now(timezone.utc)
+
+    def run(second_frame):
+        tracker = TemporalStabilityTracker(min_hits=1, iou_threshold=0.2)
+        first = tracker.update([
+            Detection("person", 0.91, (0, 0, 100, 100), at),
+            Detection("person", 0.89, (60, 0, 160, 100), at),
+        ])
+        left_track_id = min(first, key=lambda item: item.center[0]).track_id
+        stable = tracker.update(second_frame)
+        exact_left = min(stable, key=lambda item: abs(item.center[0] - 50))
+        return left_track_id, exact_left.track_id
+
+    ambiguous = Detection("person", 0.90, (30, 0, 130, 100), at + timedelta(milliseconds=300))
+    exact_left = Detection("person", 0.92, (0, 0, 100, 100), at + timedelta(milliseconds=300))
+    assert run([ambiguous, exact_left])[0] == run([ambiguous, exact_left])[1]
+    assert run([exact_left, ambiguous])[0] == run([exact_left, ambiguous])[1]
+
+
+def test_temporal_tracker_replayed_frame_does_not_increment_existing_track():
+    at = datetime.now(timezone.utc)
+    tracker = TemporalStabilityTracker(min_hits=2, iou_threshold=0.1)
+    detection = Detection("person", 0.9, (80, 80, 220, 420), at)
+    assert tracker.update([detection]) == []
+    assert tracker.update([detection]) == []
+
+
+def test_face_observation_is_assigned_to_only_one_overlapping_person():
+    class Service:
+        @staticmethod
+        def detect(**_kwargs):
+            return {
+                "status": "ready",
+                "model_version": "test",
+                "detections": [
+                    {"label": "person", "confidence": 0.9, "bbox": [20, 20, 300, 460]},
+                    {"label": "person", "confidence": 0.9, "bbox": [100, 40, 220, 440]},
+                ],
+                "faces": [{"bbox": [140, 70, 180, 120], "quality": 0.9}],
+            }
+
+    frame = Frame("cam", b"frame", 640, 480, datetime.now(timezone.utc))
+    detections = LocalServiceDetector(Service()).detect(frame, ["person"], include_faces=True)
+
+    assert sum(len(item.face_observations) for item in detections) == 1
+    assert detections[0].face_observations == ()
+    assert len(detections[1].face_observations) == 1
 
 
 def test_projection_is_approximate_and_has_zone_fallback():

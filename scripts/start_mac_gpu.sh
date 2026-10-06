@@ -12,7 +12,11 @@ ROOT_DIR="${SCRIPT_DIR:h}"
 RUNTIME_DIR="$ROOT_DIR/camera_positioning_lab/.runtime"
 GPU_PID_FILE="$RUNTIME_DIR/geometry-gpu.pid"
 GPU_LOG_FILE="$RUNTIME_DIR/geometry-gpu.log"
-GEOMETRY_PYTHON="$ROOT_DIR/.geometry-venv/bin/python"
+# Keep the worker runtime outside cloud-synced checkouts and temporary folders.
+GEOMETRY_PYTHON="${ONE_GEOMETRY_PYTHON:-$HOME/.local/share/one-geometry-venv/bin/python}"
+if [[ ! -x "$GEOMETRY_PYTHON" ]]; then
+  GEOMETRY_PYTHON="$ROOT_DIR/.geometry-venv/bin/python"
+fi
 
 die() {
   print -u2 -- "start_mac_gpu.sh: $*"
@@ -94,8 +98,10 @@ set +a
 
 : "${ONE_GEOMETRY_MODEL_PATH:?ONE_GEOMETRY_MODEL_PATH is required in .env}"
 : "${ONE_GEOMETRY_MODEL_CONFIG:?ONE_GEOMETRY_MODEL_CONFIG is required in .env}"
+: "${ONE_FALL_SEQUENCE_MODEL_PATH:?ONE_FALL_SEQUENCE_MODEL_PATH is required in .env}"
 [[ -f "$ONE_GEOMETRY_MODEL_PATH" ]] || die "model checkpoint not found: $ONE_GEOMETRY_MODEL_PATH"
 [[ -f "$ONE_GEOMETRY_MODEL_CONFIG" ]] || die "model configuration not found: $ONE_GEOMETRY_MODEL_CONFIG"
+[[ -f "$ONE_FALL_SEQUENCE_MODEL_PATH" ]] || die "fall sequence artifact not found: $ONE_FALL_SEQUENCE_MODEL_PATH"
 
 # These are deliberate launcher overrides. The Compose worker stays CPU-only,
 # but the API must never select it for camera localization.
@@ -130,6 +136,16 @@ else
     ONE_GEOMETRY_ALLOW_CPU=false \
     ONE_FACE_DETECTOR_MODEL_PATH="${ONE_FACE_DETECTOR_MODEL_PATH:-}" \
     ONE_FACE_RECOGNIZER_MODEL_PATH="${ONE_FACE_RECOGNIZER_MODEL_PATH:-}" \
+    ONE_FACE_LIVENESS_MODEL_PATH="${ONE_FACE_LIVENESS_MODEL_PATH:-}" \
+    ONE_FACE_LIVENESS_THRESHOLD="${ONE_FACE_LIVENESS_THRESHOLD:-0.0}" \
+    ONE_FACE_LIVENESS_MIN_REAL_PROBABILITY="${ONE_FACE_LIVENESS_MIN_REAL_PROBABILITY:-0.65}" \
+    ONE_FACE_LIVENESS_MIN_SATURATION="${ONE_FACE_LIVENESS_MIN_SATURATION:-0.04}" \
+    ONE_POSE_MODEL_PATH="${ONE_POSE_MODEL_PATH:-}" \
+    ONE_POSE_DETECTOR_CONFIDENCE="${ONE_POSE_DETECTOR_CONFIDENCE:-0.25}" \
+    ONE_POSE_KEYPOINT_CONFIDENCE="${ONE_POSE_KEYPOINT_CONFIDENCE:-0.35}" \
+    ONE_FALL_SEQUENCE_MODEL_PATH="${ONE_FALL_SEQUENCE_MODEL_PATH:-}" \
+    ONE_FALL_SEQUENCE_WINDOW="${ONE_FALL_SEQUENCE_WINDOW:-15}" \
+    ONE_FALL_SEQUENCE_THRESHOLD="${ONE_FALL_SEQUENCE_THRESHOLD:-0.65}" \
     ONE_POSITIONING_WORKERS="${ONE_POSITIONING_WORKERS:-3}" \
     nohup "$GEOMETRY_PYTHON" -m geometry_service \
       >"$GPU_LOG_FILE" 2>&1 &

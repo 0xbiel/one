@@ -68,15 +68,21 @@ def _matrix(value: list[list[float]], shape: tuple[int, int]) -> np.ndarray:
 
 
 def _depth_at(depth: np.ndarray, u: float, v: float, image_width: int, image_height: int) -> float | None:
-    x = int(round(u / max(1, image_width - 1) * (depth.shape[1] - 1)))
-    y = int(round(v / max(1, image_height - 1) * (depth.shape[0] - 1)))
-    x0, x1 = max(0, x - 1), min(depth.shape[1], x + 2)
-    y0, y1 = max(0, y - 1), min(depth.shape[0], y + 2)
+    if not (0 <= u < image_width and 0 <= v < image_height):
+        return None
+    # ARKit intrinsics scale by image/depth dimensions, not endpoint ratios.
+    x = min(depth.shape[1]-1, int(round(u * depth.shape[1] / image_width)))
+    y = min(depth.shape[0]-1, int(round(v * depth.shape[0] / image_height)))
+    center = float(depth[y, x])
+    if not math.isfinite(center) or not 0.20 <= center <= 15.0:
+        return None
+    x0, x1 = max(0, x-1), min(depth.shape[1], x+2)
+    y0, y1 = max(0, y-1), min(depth.shape[0], y+2)
     values = depth[y0:y1, x0:x1].reshape(-1)
     values = values[np.isfinite(values) & (values >= 0.20) & (values <= 15.0)]
-    if values.size == 0:
-        return None
-    return float(np.median(values))
+    # Never mix foreground/background surfaces across a depth discontinuity.
+    values = values[np.abs(values-center) <= max(0.05, center*0.02)]
+    return float(np.median(values)) if values.size else None
 
 
 def _world_point(u: float, v: float, depth_m: float, intrinsics: np.ndarray, camera_to_world: np.ndarray) -> np.ndarray:
@@ -174,6 +180,15 @@ def _triangulated_candidates(frames: list[dict[str, Any]]) -> list[tuple[np.ndar
                 second_depth = float((second["world_to_cv"] @ point_h)[2])
                 if not (0.20 <= first_depth <= 15.0 and 0.20 <= second_depth <= 15.0):
                     continue
+                consistent = True
+                for frame, uv, predicted in ((first, first_uv, first_depth), (second, second_uv, second_depth)):
+                    depth_grid = frame.get("depth")
+                    if depth_grid is not None:
+                        measured = _depth_at(depth_grid, *uv, frame["width"], frame["height"])
+                        if measured is not None and abs(measured-predicted) > max(0.10, measured*0.05):
+                            consistent = False
+                if not consistent:
+                    continue
 
                 ray_first = point - first_center
                 ray_second = point - second_center
@@ -257,6 +272,7 @@ def build_visual_landmarks(payload: VisualLandmarkBuildRequest) -> dict[str, Any
         sift_accepted = 0
         if frame.depth_base64 is not None and frame.depth_width is not None and frame.depth_height is not None:
             depth = _depth_array(frame.depth_base64, frame.depth_width, frame.depth_height)
+            feature_frames[-1].update(depth=depth, width=frame.width, height=frame.height)
             for keypoint, descriptor in zip(keypoints, descriptors):
                 depth_m = _depth_at(depth, keypoint.pt[0], keypoint.pt[1], frame.width, frame.height)
                 if depth_m is None:
@@ -581,6 +597,67 @@ def _merge_descriptor_matches(
         used_queries.add(query_index)
         used_landmarks.add(train_index)
         selected.append(match)
+    return selected
+
+
+def _balanced_view_matches(
+    matched_groups: list[tuple[str, np.ndarray, list[Any]]],
+    *,
+    max_matches: int = 96,
+    per_view_seed: int = 6,
+) -> list[Any]:
+    """Build one bounded match pool with evidence from several scan views.
+
+    The ordinary all-landmark matcher keeps the best descriptor for each live
+    keypoint. That is fast, but a single RoomPlan viewpoint can win every
+    descriptor tie even when another viewpoint contains valid matches for the
+    same fixed camera. Seed the pool from each strong per-view group first,
+    then fill it by descriptor quality. RANSAC and the existing room/consensus
+    gates still decide whether the resulting hypothesis is usable.
+    """
+    if len(matched_groups) < 2 or max_matches <= 0:
+        return []
+
+    ranked_groups = [
+        sorted(matches, key=lambda match: (float(match.distance), int(match.queryIdx), int(match.trainIdx)))
+        for _view_id, _landmark_indices, matches in matched_groups
+    ]
+    selected: list[Any] = []
+    used_queries: set[int] = set()
+    used_landmarks: set[int] = set()
+
+    def append_unique(match: Any) -> bool:
+        query_index = int(match.queryIdx)
+        landmark_index = int(match.trainIdx)
+        if query_index in used_queries or landmark_index in used_landmarks:
+            return False
+        used_queries.add(query_index)
+        used_landmarks.add(landmark_index)
+        selected.append(match)
+        return True
+
+    # Give each ranked RoomPlan view a small chance to contribute. A weak
+    # match is not manufactured: only matches already accepted by the normal
+    # ratio/reverse-uniqueness filters enter this pool.
+    for group in ranked_groups:
+        added = 0
+        for match in group:
+            if append_unique(match):
+                added += 1
+                if added >= per_view_seed or len(selected) >= max_matches:
+                    break
+        if len(selected) >= max_matches:
+            break
+
+    if len(selected) < max_matches:
+        remainder = sorted(
+            (match for group in ranked_groups for match in group),
+            key=lambda match: (float(match.distance), int(match.queryIdx), int(match.trainIdx)),
+        )
+        for match in remainder:
+            append_unique(match)
+            if len(selected) >= max_matches:
+                break
     return selected
 
 
@@ -3825,7 +3902,7 @@ def _candidate_scan_views(candidate: dict[str, Any]) -> set[str]:
     # masquerade as several agreeing hypotheses.  Its direct cross-view support
     # is tracked separately by `inlier_landmark_view_count`.
     fallback = diagnostics.get("landmark_view_id")
-    if isinstance(fallback, str) and fallback and fallback != "all-views":
+    if isinstance(fallback, str) and fallback and fallback not in {"all-views", "balanced-views"}:
         return {fallback}
     return set()
 
@@ -3859,10 +3936,10 @@ def _consensus_stats(candidate: dict[str, Any], candidates: list[dict[str, Any]]
         scan_views.update(_candidate_scan_views(other))
     fovs = [value for value in (_candidate_fov(other) for other in agreeing) if value is not None]
     return {
-        "frame_count": len({int(other["diagnostics"]["frame_index"]) for other in agreeing}),
+        "frame_count": len({int(other["diagnostics"]["frame_index"]) for other in agreeing if int(other["diagnostics"]["frame_index"]) >= 0}),
         "scan_view_count": len(scan_views),
         "scan_views": sorted(scan_views),
-        "pose_only_frame_count": len({int(other["diagnostics"]["frame_index"]) for other in pose_agreeing}),
+        "pose_only_frame_count": len({int(other["diagnostics"]["frame_index"]) for other in pose_agreeing if int(other["diagnostics"]["frame_index"]) >= 0}),
         "fov_span_degrees": round(max(fovs) - min(fovs), 3) if fovs else 0.0,
     }
 
@@ -3925,28 +4002,49 @@ def _person_feature_mask(
             return 0.35
         return 0.20
 
-    dynamic_boxes = [
-        detection.bbox
+    dynamic_detections = [
+        (detection.label.strip().lower(), detection.bbox, float(detection.confidence))
         for detection in payload.object_detections
         if detection.frame_index == frame_index
         and detection.label.strip().lower() in _DYNAMIC_FEATURE_LABELS
         and detection.confidence >= mask_confidence_floor(detection.label.strip().lower())
     ]
-    if not dynamic_boxes:
+    if not dynamic_detections:
         return None, None, False
 
     mask = np.full((height, width), 255, dtype=np.uint8)
-    for box in dynamic_boxes:
+    person_detections = [
+        item for item in dynamic_detections
+        if item[0] in {"person", "people", "human"}
+    ]
+    optional_detections = [
+        item for item in dynamic_detections
+        if item[0] not in {"person", "people", "human"}
+    ]
+
+    def apply_box(target: np.ndarray, box: list[float]) -> None:
         x1, y1, x2, y2 = (float(value) for value in box)
         if not all(math.isfinite(value) for value in (x1, y1, x2, y2)) or x2 <= x1 or y2 <= y1:
-            continue
+            return
         pad_x = max(12.0, (x2 - x1) * 0.08)
         pad_y = max(12.0, (y2 - y1) * 0.08)
         left = max(0, min(width - 1, int(math.floor(x1 - pad_x))))
         top = max(0, min(height - 1, int(math.floor(y1 - pad_y))))
         right = max(left + 1, min(width, int(math.ceil(x2 + pad_x))))
         bottom = max(top + 1, min(height, int(math.ceil(y2 + pad_y))))
-        mask[top:bottom, left:right] = 0
+        target[top:bottom, left:right] = 0
+
+    # People are transient and are always excluded. Static furniture and
+    # reflective openings are only optional masks: a detector box can cover
+    # most of a useful wall/window boundary, and masking 70% of a fixed frame
+    # makes the visual solver less reliable than the unmasked PnP outlier gate.
+    for _label, box, _confidence in person_detections:
+        apply_box(mask, box)
+    for _label, box, _confidence in sorted(optional_detections, key=lambda item: item[2], reverse=True):
+        candidate = mask.copy()
+        apply_box(candidate, box)
+        if float(np.mean(candidate == 0)) <= 0.45:
+            mask = candidate
 
     masked_ratio = float(np.mean(mask == 0))
     if masked_ratio <= 0.0:
@@ -4503,6 +4601,15 @@ def localize_camera(
             record_burst_matches("all-views", frame_index, pose_keypoints, all_matches)
             if len(all_matches) >= 6:
                 solve_groups.append(("all-views", all_landmark_indices, all_matches))
+
+        # The global pool above can collapse onto one scan viewpoint because
+        # that view happens to have the closest descriptor distances. Preserve
+        # a second bounded pool seeded from several strong per-view groups so
+        # a real fixed view can earn multi-view support in one PnP solve.
+        balanced_matches = _balanced_view_matches(matched_groups)
+        if len(balanced_matches) >= 6:
+            record_burst_matches("balanced-views", frame_index, pose_keypoints, balanced_matches)
+            solve_groups.append(("balanced-views", all_landmark_indices, balanced_matches))
 
         solve_group_count = max(1, len(solve_groups))
         for group_rank, (view_id, _landmark_indices, matches) in enumerate(solve_groups):

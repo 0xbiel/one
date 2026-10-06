@@ -1053,7 +1053,9 @@ def test_roomplan_visual_localization_rejects_pose_below_scanned_floor(tmp_path)
     assert scene_validation["camera_height_above_floor_m"] == -0.45
 
     scene = client.get(f"/api/v1/homes/{home_id}/scene", headers=admin_headers).json()
-    assert scene["cameraRegistration"]["status"] == "needs_rescan"
+    assert scene["cameraRegistration"]["status"] == "unavailable"
+    # A rejected tentative attempt cannot replace the committed scene.
+    assert client.app.state.db.one("SELECT status FROM calibrations WHERE id=?", (localized.json()["id"],))["status"] == "needs_review"
     assert scene["cameraRegistration"]["cameraToWorld"] is None
 
     # Historical versions could persist this same impossible pose as active.

@@ -172,14 +172,83 @@ Raw JPEG bytes and derived tensors are held only for the request and are not
 written to disk, returned, or emitted in logs. A low-confidence or structurally
 unstable sweep is rejected; it must not replace the previous map.
 
-## Optional local face identity runtime
+## Local pose and safety runtime
+
+Fall safety does not use the room detector's person rectangle as its final
+signal. The worker loads the explicit `ONE_POSE_MODEL_PATH` COCO keypoint
+checkpoint (the local setup uses `yolo11n-pose.pt` on MPS), attaches 17-joint
+poses to person detections, and returns `pose_keypoints` plus a pose model
+version in `/v1/vision/detect`. The API keeps a bounded per-camera pose
+sequence and sends derived COCO-17 windows to `/v1/fall/score`. That endpoint
+loads an evaluated ST-GCN plus causal-TCN artifact from
+`ONE_FALL_SEQUENCE_MODEL_PATH`; the API then requires the learned probability,
+an upright-to-low transition, sufficient visible joints, and persistence across
+several frames before creating a review-only event.
+After confirmation, a 15-second per-track refractory interval prevents a brief
+pose reclassification from generating a duplicate alert for the same episode.
+If the pose model is missing, the health response reports it as unavailable;
+if the learned artifact is missing, `fall_sequence.status` reports it as
+unavailable and production emits no heuristic-only fall event. The fall path
+does not silently fall back to bounding-box aspect ratios.
+
+Download the local pose checkpoint with:
+
+```bash
+./scripts/download_pose_models.sh
+```
+
+This remains a safety review signal, not a medical diagnosis, and should be
+calibrated against representative fall and non-fall sequences before clinical
+or emergency use. The local artifact is trained by
+`scripts/train_fall_sequence_model.py`; its ignored evaluation receipt is
+`data/fall-models/fall_sequence_stgcn_tcn.pt.evaluation.json`.
+
+The design follows the evidence-backed two-stage pattern used in skeleton
+action recognition: estimate joints first, then model a time window of the
+tracked skeleton. ST-GCN learns spatial joint relationships, while the causal
+TCN models temporal motion without using future frames. The checked-in runtime
+uses the same architecture as the locally trained artifact. On the current
+18-fall/18-ADL URFD subset, the grouped eight-sequence holdout is 0.75 balanced
+accuracy (3 TP, 3 TN, 1 FP, 1 FN); this is a small research regression result,
+not clinical validation. The receipt also records the exact groups, threshold,
+device, and limitations.
+
+For face presentation-attack detection, the passive MiniFAS score is paired
+with the guided yaw challenge and a narrow face-crop color-diversity quality
+gate. The local receipt from `scripts/evaluate_biometrics.py` reports APCER,
+BPCER, and ACER over 20 bona-fide camera frames plus 60 in-memory synthetic
+screen/print proxies; after the quality gate, this run is APCER 0.00, BPCER
+0.00, ACER 0.00. Those proxies are regression checks, not an ISO/IEC
+30107-3 certification: performance can shift with lighting, screens, printed
+photos, masks, optics, and demographics. The encrypted, keyed projection
+protects and revokes templates, but the report's synthetic embedding test is
+not a claim of cross-demographic biometric accuracy or irreversible security
+under every attack model.
+
+Research references: [ST-GCN](https://arxiv.org/abs/1801.07455), [a fall
+detection review](https://pmc.ncbi.nlm.nih.gov/articles/PMC7866979/), [the UR
+Fall dataset](https://www.fenix.ur.edu.pl/~mkepski/ds/uf.html), [the face
+anti-spoofing survey](https://arxiv.org/abs/2106.14948), [MiniFAS ONNX
+implementation](https://github.com/facenox/face-antispoof-onnx), [NIST
+biometric guidance](https://pages.nist.gov/800-63-3/sp800-63b.html), and
+[cancelable face-template research](https://arxiv.org/abs/2404.16255).
+
+## Local face identity and anti-spoof runtime
 
 Face identity is a separate, consent-gated capability from anonymous person
 detection. It uses OpenCV Zoo YuNet for face detection and SFace for derived
 embeddings. The worker processes JPEGs in memory and never writes raw
-enrollment photos, aligned crops, or live frames. The API stores only encrypted
-embedding templates, and requires a separate
-`ONE_BIOMETRIC_ENCRYPTION_KEY_B64` value before enrollment can succeed.
+enrollment photos, aligned crops, or live frames. Before encryption, the API
+applies a profile-specific, keyed, dimension-reducing cancelable projection
+with a fresh enrollment salt. Re-enrollment rotates the salt and invalidates
+the previous transform. This is a practical cancelable-template layer, not a
+claim of completed biometric certification or cross-demographic accuracy
+evaluation.
+
+Enrollment and live identity matching also require the local MiniFAS
+anti-spoof model. Enrollment must pass both the real-face score and the
+iPhone's ordered center/turn-one-side/turn-opposite-side challenge. A face
+that fails liveness is never matched to a cared-for person.
 
 Download the model files into the Compose bind mount with:
 
@@ -187,16 +256,23 @@ Download the model files into the Compose bind mount with:
 ./scripts/download_face_models.sh
 ```
 
-For a host-side worker, set the two explicit model paths before starting it:
+For a host-side worker, set the explicit face, liveness, and pose paths before
+starting it:
 
 ```bash
 ONE_FACE_DETECTOR_MODEL_PATH="$PWD/data/face-models/face_detection_yunet_2023mar.onnx" \
 ONE_FACE_RECOGNIZER_MODEL_PATH="$PWD/data/face-models/face_recognition_sface_2021dec.onnx" \
+ONE_FACE_LIVENESS_MODEL_PATH="$PWD/data/face-models/face_antispoof_minifas_v2se.onnx" \
+ONE_FACE_LIVENESS_MIN_SATURATION=0.04 \
+ONE_POSE_MODEL_PATH="$PWD/data/pose-models/yolo11n-pose.pt" \
+ONE_FALL_SEQUENCE_MODEL_PATH="$PWD/data/fall-models/fall_sequence_stgcn_tcn.pt" \
 ONE_GEOMETRY_MODEL_PATH="/path/to/yolov8s-worldv2.pt" \
 ONE_GEOMETRY_MODEL_CONFIG="$PWD/geometry_service/model_config.yolo-world.json" \
 .geometry-venv/bin/python -m geometry_service
 ```
 
-The `/health` response reports the face runtime separately under `face`. A
-worker can therefore continue serving anonymous presence while face identity
-remains `unavailable` until both model files are configured.
+The `/health` response reports the face runtime separately under `face` and the
+learned fall scorer under `fall_sequence`. A worker can therefore continue
+serving anonymous presence while face identity remains `unavailable` until the
+detector, recognizer, and liveness files are configured; in contrast, the API
+will not emit a production fall signal while `fall_sequence` is unavailable.

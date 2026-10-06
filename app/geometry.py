@@ -82,8 +82,20 @@ class RoomLayoutService(Protocol):
     ) -> object:
         """Run the configured real local detector on one transient frame."""
 
+    def score_fall_sequence(
+        self,
+        *,
+        frames: Sequence[dict],
+        width: int,
+        height: int,
+    ) -> object:
+        """Score a derived COCO-17 pose window with the learned local model."""
+
     def enroll_faces(self, *, frames: Sequence[dict]) -> object:
         """Extract transient face templates for a consented enrollment."""
+
+    def debug_faces(self, *, frame_base64: str, width: int, height: int) -> object:
+        """Run only local face detection, liveness, and embedding inference."""
 
     def build_visual_landmarks(self, *, map_id: str, frames: Sequence[dict]) -> object:
         """Build derived RoomPlan visual landmarks from transient RGB/depth samples."""
@@ -336,8 +348,31 @@ class HttpRoomLayoutService:
             },
         )
 
+    def score_fall_sequence(
+        self,
+        *,
+        frames: Sequence[dict],
+        width: int,
+        height: int,
+    ) -> object:
+        return self._post(
+            "fall/score",
+            {
+                "frames": list(frames),
+                "width": width,
+                "height": height,
+            },
+        )
+
     def enroll_faces(self, *, frames: Sequence[dict]) -> object:
         return self._post("face/enroll", {"frames": list(frames)})
+
+    def debug_faces(self, *, frame_base64: str, width: int, height: int) -> object:
+        return self._post("face/debug", {
+            "frame_base64": frame_base64,
+            "width": width,
+            "height": height,
+        })
 
     def build_visual_landmarks(self, *, map_id: str, frames: Sequence[dict]) -> object:
         return self._post(

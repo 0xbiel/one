@@ -44,6 +44,12 @@ class LocalizeRequest(BaseModel):
     fov_degrees: float | None = Field(default=None, ge=30.0, le=120.0)
 
 
+class DebugFrame(BaseModel):
+    frame_base64: str = Field(min_length=100)
+    width: int = Field(ge=160, le=4096)
+    height: int = Field(ge=120, le=4096)
+
+
 def _request_json(
     url: str,
     *,
@@ -84,6 +90,16 @@ def index() -> FileResponse:
     return FileResponse(STATIC / "index.html")
 
 
+@app.get("/faces")
+def face_debug_page() -> FileResponse:
+    return FileResponse(STATIC / "faces.html")
+
+
+@app.get("/fall")
+def fall_debug_page() -> FileResponse:
+    return FileResponse(STATIC / "fall.html")
+
+
 @app.get("/app.js")
 def app_js() -> FileResponse:
     return FileResponse(STATIC / "app.js", media_type="application/javascript")
@@ -92,6 +108,11 @@ def app_js() -> FileResponse:
 @app.get("/styles.css")
 def styles_css() -> FileResponse:
     return FileResponse(STATIC / "styles.css", media_type="text/css")
+
+
+@app.get("/debug.js")
+def debug_js() -> FileResponse:
+    return FileResponse(STATIC / "debug.js", media_type="application/javascript")
 
 
 @app.get("/api/status")
@@ -190,4 +211,28 @@ def localize(camera_id: str, body: LocalizeRequest) -> dict[str, Any]:
         },
         token=token,
         timeout=120.0,
+    )
+
+
+@app.post("/api/cameras/{camera_id}/face-debug")
+def face_debug(camera_id: str, body: DebugFrame) -> dict[str, Any]:
+    token, home_id = _require_session()
+    return _request_json(
+        f"{API_BASE}/homes/{home_id}/vision/debug/faces",
+        method="POST",
+        payload={"camera_id": camera_id, **body.model_dump(mode="json")},
+        token=token,
+        timeout=30.0,
+    )
+
+
+@app.post("/api/cameras/{camera_id}/fall-debug")
+def fall_debug(camera_id: str, body: DebugFrame) -> dict[str, Any]:
+    token, home_id = _require_session()
+    return _request_json(
+        f"{API_BASE}/homes/{home_id}/vision/debug/fall",
+        method="POST",
+        payload={"camera_id": camera_id, **body.model_dump(mode="json")},
+        token=token,
+        timeout=45.0,
     )

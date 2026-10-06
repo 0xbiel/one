@@ -16,6 +16,7 @@ from geometry_service.contracts import (
 from geometry_service.localization import (
     _camera_matrix_candidates,
     _camera_to_world,
+    _balanced_view_matches,
     _candidate_is_positioned,
     _consensus_stats,
     _descriptor_matches,
@@ -282,6 +283,27 @@ class LocalizationTests(unittest.TestCase):
         merged = _merge_descriptor_matches(orb_matches, sift_matches, sift_query_offset=4)
 
         self.assertEqual([(match.queryIdx, match.trainIdx) for match in merged], [(4, 0), (5, 1)])
+
+    def test_balanced_view_matches_seed_independent_scan_views(self) -> None:
+        groups = [
+            ("scan-view-a", np.asarray([0, 1]), [
+                cv2.DMatch(_queryIdx=0, _trainIdx=0, _distance=8.0),
+                cv2.DMatch(_queryIdx=1, _trainIdx=1, _distance=9.0),
+            ]),
+            ("scan-view-b", np.asarray([2, 3]), [
+                cv2.DMatch(_queryIdx=2, _trainIdx=2, _distance=14.0),
+                cv2.DMatch(_queryIdx=3, _trainIdx=3, _distance=15.0),
+            ]),
+            ("scan-view-c", np.asarray([4, 5]), [
+                cv2.DMatch(_queryIdx=4, _trainIdx=4, _distance=20.0),
+            ]),
+        ]
+
+        balanced = _balanced_view_matches(groups, max_matches=5, per_view_seed=1)
+
+        self.assertEqual([match.trainIdx for match in balanced[:3]], [0, 2, 4])
+        self.assertEqual(len({match.queryIdx for match in balanced}), len(balanced))
+        self.assertEqual(len({match.trainIdx for match in balanced}), len(balanced))
 
     def test_fresh_scale_robust_index_reaches_high_confidence_only_with_independent_evidence(self) -> None:
         rng = np.random.default_rng(19)

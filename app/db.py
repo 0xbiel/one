@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS camera_map_generation_jobs (id TEXT PRIMARY KEY, home
 CREATE INDEX IF NOT EXISTS camera_map_generation_jobs_camera_idx ON camera_map_generation_jobs(home_id, camera_id, updated_at);
 CREATE TABLE IF NOT EXISTS objects (id TEXT PRIMARY KEY, home_id TEXT NOT NULL, label TEXT NOT NULL, display_name TEXT, enabled INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, care_recipient_id TEXT, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE, FOREIGN KEY(care_recipient_id) REFERENCES care_recipients(id) ON DELETE SET NULL);
 CREATE TABLE IF NOT EXISTS observations (id TEXT PRIMARY KEY, home_id TEXT NOT NULL, object_id TEXT, camera_id TEXT, map_id TEXT, x REAL, y REAL, z REAL, uncertainty_m REAL, confidence REAL, detector_version TEXT, observed_at TEXT NOT NULL, care_recipient_id TEXT, identity_confidence REAL, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE, FOREIGN KEY(care_recipient_id) REFERENCES care_recipients(id) ON DELETE SET NULL);
-CREATE TABLE IF NOT EXISTS events (id TEXT PRIMARY KEY, home_id TEXT NOT NULL, event_type TEXT NOT NULL, status TEXT NOT NULL, explanation TEXT, confidence REAL, evidence_json TEXT NOT NULL, first_seen_at TEXT NOT NULL, last_seen_at TEXT NOT NULL, expires_at TEXT NOT NULL, care_recipient_id TEXT, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE, FOREIGN KEY(care_recipient_id) REFERENCES care_recipients(id) ON DELETE SET NULL);
+CREATE TABLE IF NOT EXISTS events (id TEXT PRIMARY KEY, home_id TEXT NOT NULL, event_type TEXT NOT NULL, status TEXT NOT NULL, explanation TEXT, confidence REAL, evidence_json TEXT NOT NULL, first_seen_at TEXT NOT NULL, last_seen_at TEXT NOT NULL, expires_at TEXT NOT NULL, care_recipient_id TEXT, event_group_key TEXT, observation_count INTEGER NOT NULL DEFAULT 1, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE, FOREIGN KEY(care_recipient_id) REFERENCES care_recipients(id) ON DELETE SET NULL);
 CREATE TABLE IF NOT EXISTS face_profiles (id TEXT PRIMARY KEY, home_id TEXT NOT NULL, care_recipient_id TEXT NOT NULL, template_artifact_key TEXT NOT NULL, model_version TEXT NOT NULL, sample_count INTEGER NOT NULL, status TEXT NOT NULL CHECK(status IN ('ready','unavailable','revoked')), created_at TEXT NOT NULL, updated_at TEXT NOT NULL, FOREIGN KEY(home_id) REFERENCES homes(id) ON DELETE CASCADE, FOREIGN KEY(care_recipient_id) REFERENCES care_recipients(id) ON DELETE CASCADE);
 CREATE UNIQUE INDEX IF NOT EXISTS face_profiles_recipient_idx ON face_profiles(home_id, care_recipient_id);
 CREATE INDEX IF NOT EXISTS face_profiles_home_status_idx ON face_profiles(home_id, status);
@@ -458,6 +458,14 @@ class Database:
             if not self._sqlite_migration_applied(18):
                 self.conn.executescript(_migration_file("018_care_planning.sql"))
                 self._record_sqlite_migration(18)
+            if not self._sqlite_migration_applied(19):
+                event_columns = {row[1] for row in self.conn.execute("PRAGMA table_info(events)").fetchall()}
+                if "event_group_key" not in event_columns:
+                    self.conn.execute("ALTER TABLE events ADD COLUMN event_group_key TEXT")
+                if "observation_count" not in event_columns:
+                    self.conn.execute("ALTER TABLE events ADD COLUMN observation_count INTEGER NOT NULL DEFAULT 1")
+                self.conn.execute("CREATE INDEX IF NOT EXISTS events_group_idx ON events(home_id, event_type, event_group_key, last_seen_at)")
+                self._record_sqlite_migration(19)
             # Keep the zero-setup SQLite adapter forward-compatible with a
             # database created before caregiver assignment was introduced.
             plan_columns = {row[1] for row in self.conn.execute("PRAGMA table_info(medication_plans)").fetchall()}
@@ -488,7 +496,15 @@ class Database:
                     row["version"]
                     for row in self.conn.execute("SELECT version FROM schema_migrations").fetchall()
                 }
-                for version, script in _postgres_migrations():
+                migrations = _postgres_migrations()
+                # Older local work used version 16 for event aggregation.
+                # Reapply the upstream idempotent tracking table/index creation
+                # before version 17, without deleting historical migration rows.
+                if 16 in applied:
+                    tracking_script = next(script for version, script in migrations if version == 16)
+                    for statement in _statements(tracking_script):
+                        self.conn.execute(statement)
+                for version, script in migrations:
                     if version in applied:
                         continue
                     for statement in _statements(script):
@@ -548,14 +564,7 @@ class Database:
                 return {"status": "error", "backend": self.backend, "error": type(exc).__name__}
 
     def export_home(self, home_id: str) -> dict:
-        # Export user-visible records, including the minimal rights/audit
-        # trail. Never export bearer-token hashes or one-time pairing hashes.
-        tables = ["homes", "users", "memberships", "consents", "cameras", "rooms", "room_maps", "calibrations", "camera_map_generation_jobs", "objects", "observations", "events", "clips", "event_snapshots", "summaries", "family_invites", "medication_plans", "medication_check_ins", "care_entries", "tracking_devices", "location_points", "safe_places", "location_clear_watermarks", "audit_log", "deletion_requests"]
-        result = {}
-        for table in tables:
-            if table == "homes": query, params = "SELECT * FROM homes WHERE id=?", (home_id,)
-            elif table == "users": query, params = "SELECT u.* FROM users u JOIN memberships m ON m.user_id=u.id WHERE m.home_id=?", (home_id,)
-            elif table == "memberships": query, params = "SELECT * FROM memberships WHERE home_id=?", (home_id,)
-            else: query, params = f"SELECT * FROM {table} WHERE home_id=?", (home_id,)
-            result[table] = self.many(query, params)
-        return result
+        # Authorization belongs to the ordinary household API route.
+        from .privacy_data import export_home_data
+
+        return export_home_data(self, home_id)

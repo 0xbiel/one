@@ -31,6 +31,9 @@ class Detection:
     frame_at: datetime
     track_id: int | None = None
     face_observations: tuple[dict, ...] = ()
+    pose_keypoints: tuple[tuple[float, float, float], ...] = ()
+    pose_confidence: float | None = None
+    pose_model_version: str | None = None
 
     @property
     def center(self) -> tuple[float, float]:
@@ -85,6 +88,7 @@ class LocalServiceDetector:
 
     def __init__(self, service: object):
         self._service = service
+        self.pose_model_version = "local-pose-unavailable"
 
     def detect(self, frame: Frame, candidate_labels: Sequence[str], *, include_faces: bool = False) -> list[Detection]:
         detect = getattr(self._service, "detect", None)
@@ -102,12 +106,58 @@ class LocalServiceDetector:
         version = result.get("model_version")
         if isinstance(version, str) and version:
             self.model_version = version[:120]
+        pose_version = result.get("pose_model_version")
+        if isinstance(pose_version, str) and pose_version:
+            self.pose_model_version = pose_version[:120]
         raw_detections = result.get("detections")
         if not isinstance(raw_detections, list):
             raise RuntimeError("real local vision service returned an invalid response")
         raw_faces = result.get("faces") if include_faces and isinstance(result.get("faces"), list) else []
+        face_assignments: dict[int, list[dict]] = {}
+        if raw_faces:
+            person_boxes: list[tuple[int, tuple[float, float, float, float], float]] = []
+            for detection_index, item in enumerate(raw_detections):
+                if not isinstance(item, dict) or str(item.get("label") or "").strip().lower() != "person":
+                    continue
+                bbox = item.get("bbox")
+                if not isinstance(bbox, list) or len(bbox) != 4:
+                    continue
+                try:
+                    box = tuple(float(value) for value in bbox)
+                except (TypeError, ValueError):
+                    continue
+                if not all(math.isfinite(value) for value in box):
+                    continue
+                x1, y1, x2, y2 = box
+                if x2 <= x1 or y2 <= y1:
+                    continue
+                person_boxes.append((detection_index, box, (x2 - x1) * (y2 - y1)))
+
+            for face in raw_faces:
+                if not isinstance(face, dict) or not isinstance(face.get("bbox"), list) or len(face["bbox"]) != 4:
+                    continue
+                try:
+                    fx1, fy1, fx2, fy2 = (float(value) for value in face["bbox"])
+                except (TypeError, ValueError):
+                    continue
+                if not all(math.isfinite(value) for value in (fx1, fy1, fx2, fy2)) or fx2 <= fx1 or fy2 <= fy1:
+                    continue
+                face_cx, face_cy = (fx1 + fx2) / 2.0, (fy1 + fy2) / 2.0
+                containing = [
+                    (area, detection_index)
+                    for detection_index, (x1, y1, x2, y2), area in person_boxes
+                    if x1 <= face_cx <= x2 and y1 <= face_cy <= y2
+                ]
+                if not containing:
+                    continue
+                # A face observation belongs to exactly one person. Prefer the
+                # tightest containing person box when people overlap, which is
+                # less likely to leak one identity observation onto a bystander.
+                _area, detection_index = min(containing)
+                face_assignments.setdefault(detection_index, []).append(face)
+
         detections: list[Detection] = []
-        for item in raw_detections:
+        for detection_index, item in enumerate(raw_detections):
             if not isinstance(item, dict):
                 continue
             label = item.get("label")
@@ -123,16 +173,42 @@ class LocalServiceDetector:
             values = tuple(float(value) for value in bbox)
             if not all(math.isfinite(value) for value in values):
                 continue
-            associated_faces: list[dict] = []
-            if label == "person":
-                for face in raw_faces:
-                    if not isinstance(face, dict) or not isinstance(face.get("bbox"), list) or len(face["bbox"]) != 4:
-                        continue
-                    fx1, fy1, fx2, fy2 = (float(value) for value in face["bbox"])
-                    face_cx, face_cy = (fx1 + fx2) / 2, (fy1 + fy2) / 2
-                    if values[0] <= face_cx <= values[2] and values[1] <= face_cy <= values[3]:
-                        associated_faces.append(face)
-            detections.append(Detection(label, float(confidence), values, frame.captured_at, face_observations=tuple(associated_faces)))
+            associated_faces = face_assignments.get(detection_index, []) if label.strip().lower() == "person" else []
+            raw_keypoints = item.get("pose_keypoints")
+            pose_keypoints: tuple[tuple[float, float, float], ...] = ()
+            if isinstance(raw_keypoints, list) and len(raw_keypoints) == 17:
+                points: list[tuple[float, float, float]] = []
+                for point in raw_keypoints:
+                    if not isinstance(point, list) or len(point) < 2:
+                        points = []
+                        break
+                    try:
+                        x, y = float(point[0]), float(point[1])
+                        score = float(point[2]) if len(point) >= 3 else 1.0
+                    except (TypeError, ValueError):
+                        points = []
+                        break
+                    if not all(math.isfinite(value) for value in (x, y, score)):
+                        points = []
+                        break
+                    points.append((x, y, max(0.0, min(1.0, score))))
+                if len(points) == 17:
+                    pose_keypoints = tuple(points)
+            pose_confidence = item.get("pose_confidence")
+            if not isinstance(pose_confidence, (int, float)) or not math.isfinite(float(pose_confidence)):
+                pose_confidence = None
+            detections.append(
+                Detection(
+                    label,
+                    float(confidence),
+                    values,
+                    frame.captured_at,
+                    face_observations=tuple(associated_faces),
+                    pose_keypoints=pose_keypoints,
+                    pose_confidence=float(pose_confidence) if pose_confidence is not None else None,
+                    pose_model_version=self.pose_model_version if pose_keypoints else None,
+                )
+            )
         return detections
 
 
@@ -155,6 +231,43 @@ def _iou(a, b) -> float:
     return inter / (area_a + area_b - inter) if area_a + area_b - inter else 0.0
 
 
+def _person_shape_transition(previous, current) -> bool:
+    """Allow a person track to survive the upright-to-horizontal transition.
+
+    A falling person changes the rectangle shape so much that ordinary IoU can
+    drop below the association threshold even when the body has barely moved.
+    This narrowly scoped association is only enabled for a clear posture-shape
+    transition and a nearby centre; ordinary people and object tracks retain
+    the stricter IoU rule.
+    """
+    px1, py1, px2, py2 = previous
+    cx1, cy1, cx2, cy2 = current
+    previous_width, previous_height = px2 - px1, py2 - py1
+    current_width, current_height = cx2 - cx1, cy2 - cy1
+    if min(previous_width, previous_height, current_width, current_height) <= 0:
+        return False
+    previous_aspect = previous_height / previous_width
+    current_aspect = current_height / current_width
+    transitioned = (
+        previous_aspect >= 1.20 and current_aspect <= 0.95
+    ) or (
+        current_aspect >= 1.20 and previous_aspect <= 0.95
+    )
+    if not transitioned:
+        return False
+    previous_center = ((px1 + px2) / 2.0, (py1 + py2) / 2.0)
+    current_center = ((cx1 + cx2) / 2.0, (cy1 + cy2) / 2.0)
+    center_distance = math.hypot(
+        current_center[0] - previous_center[0],
+        current_center[1] - previous_center[1],
+    )
+    allowed_distance = max(
+        48.0,
+        0.42 * max(previous_width, previous_height, current_width, current_height),
+    )
+    return center_distance <= allowed_distance
+
+
 class TemporalStabilityTracker:
     def __init__(self, min_hits: int = 3, window_seconds: float = 4.0, iou_threshold: float = 0.2):
         self.min_hits, self.window_seconds, self.iou_threshold = min_hits, window_seconds, iou_threshold
@@ -163,27 +276,74 @@ class TemporalStabilityTracker:
 
     def update(self, detections: Sequence[Detection]) -> list[Detection]:
         stable: list[Detection] = []
+        assignments: dict[int, _Track] = {}
+        candidates: list[tuple[int, float, float, int, tuple[float, float, float, float], int, _Track]] = []
+        for detection_index, detection in enumerate(detections):
+            dcx, dcy = detection.center
+            for track in self._tracks:
+                if track.label != detection.label:
+                    continue
+                age_seconds = (detection.frame_at - track.last_at).total_seconds()
+                if age_seconds <= 0 or age_seconds > self.window_seconds:
+                    continue
+                overlap = _iou(track.bbox, detection.bbox)
+                ordinary_match = overlap >= self.iou_threshold
+                transition_match = (
+                    detection.label.strip().lower() == "person"
+                    and _person_shape_transition(track.bbox, detection.bbox)
+                )
+                if not ordinary_match and not transition_match:
+                    continue
+                tx1, ty1, tx2, ty2 = track.bbox
+                center_distance = math.hypot(dcx - (tx1 + tx2) / 2.0, dcy - (ty1 + ty2) / 2.0)
+                candidates.append((
+                    0 if ordinary_match else 1,
+                    -overlap,
+                    center_distance,
+                    track.track_id,
+                    detection.bbox,
+                    detection_index,
+                    track,
+                ))
+
+        used_detection_indexes: set[int] = set()
         used_track_ids: set[int] = set()
-        for detection in detections:
-            matches = [
-                track
-                for track in self._tracks
-                if track.track_id not in used_track_ids
-                and track.label == detection.label
-                and _iou(track.bbox, detection.bbox) >= self.iou_threshold
-                and (detection.frame_at - track.last_at).total_seconds() <= self.window_seconds
-            ]
-            match = max(matches, key=lambda track: _iou(track.bbox, detection.bbox), default=None)
+        for *_rank, detection_index, track in sorted(candidates):
+            if detection_index in used_detection_indexes or track.track_id in used_track_ids:
+                continue
+            assignments[detection_index] = track
+            used_detection_indexes.add(detection_index)
+            used_track_ids.add(track.track_id)
+
+        for detection_index, detection in enumerate(detections):
+            match = assignments.get(detection_index)
             if match:
                 match.bbox, match.last_at, match.hits = detection.bbox, detection.frame_at, match.hits + 1
             else:
                 match = _Track(self._next_track_id, detection.label, detection.bbox, 1, detection.frame_at, detection.frame_at)
                 self._next_track_id += 1
                 self._tracks.append(match)
-            used_track_ids.add(match.track_id)
             if match.hits >= self.min_hits:
-                stable.append(Detection(detection.label, detection.confidence, detection.bbox, detection.frame_at, match.track_id, detection.face_observations))
-        self._tracks = [track for track in self._tracks if (datetime.now(timezone.utc) - track.last_at).total_seconds() <= self.window_seconds]
+                stable.append(
+                    Detection(
+                        detection.label,
+                        detection.confidence,
+                        detection.bbox,
+                        detection.frame_at,
+                        match.track_id,
+                        detection.face_observations,
+                        detection.pose_keypoints,
+                        detection.pose_confidence,
+                        detection.pose_model_version,
+                    )
+                )
+        reference_time = max((detection.frame_at for detection in detections), default=datetime.now(timezone.utc))
+        self._tracks = [
+            track
+            for track in self._tracks
+            if reference_time < track.last_at
+            or (reference_time - track.last_at).total_seconds() <= self.window_seconds
+        ]
         return stable
 
 
@@ -301,6 +461,9 @@ class CameraVisionPipeline:
                 "bbox": item.bbox,
                 "track_id": item.track_id,
                 "faces": list(item.face_observations),
+                "pose_keypoints": [list(point) for point in item.pose_keypoints] if item.pose_keypoints else None,
+                "pose_confidence": item.pose_confidence,
+                "pose_model_version": item.pose_model_version,
                 "projection": project_detection(item, frame, calibration, depth_m).__dict__,
             }
             for item in stable
