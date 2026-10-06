@@ -1,0 +1,1 @@
+Verified local demo service and icon source archived before Mac storage cleanup on 2026-10-06. This is a preservation snapshot, not a validated release. Camera appliance and demo frontend source remain in their original folders because some iCloud-managed file reads did not complete.
